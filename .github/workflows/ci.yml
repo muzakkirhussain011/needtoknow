@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "ruff==0.17.1"
+      - run: ruff check .
+      - run: ruff format --check .
+
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: open-policy-agent/setup-opa@v2
+        with: { version: 1.21.2 }
+      - run: opa check --strict policies
+      - run: opa fmt --list --fail policies
+      - name: Policy unit tests with coverage gate
+        run: |
+          opa test policies -v
+          cov=$(opa test policies --coverage --format=json | jq '.coverage')
+          echo "policy coverage: $cov%"
+          awk -v c="$cov" 'BEGIN { exit (c < 90) }'
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env: { POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - uses: open-policy-agent/setup-opa@v2
+        with: { version: 1.21.2 }
+      - name: Start OPA with the repository policies
+        run: |
+          opa run --server --addr=127.0.0.1:8181 --ignore='*_test.rego' policies &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8181/health && break; sleep 1; done
+      - run: pip install -e ".[dev]"
+      - name: Unit and integration tests
+        env:
+          HARIS_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
+          HARIS_TEST_OPA_URL: http://127.0.0.1:8181
+        run: pytest -q -ra
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the runtime image
+        run: docker build --target runtime -t haris-ai-gateway:ci .
