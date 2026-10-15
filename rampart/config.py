@@ -5,16 +5,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime configuration, read from HARIS_* environment variables or a .env file."""
+    """Runtime configuration, read from RAMPART_* environment variables or a .env file."""
 
-    model_config = SettingsConfigDict(env_prefix="HARIS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="RAMPART_", env_file=".env", extra="ignore")
 
     # Storage. Without a database URL the gateway keeps everything in memory (dev and tests only).
     database_url: str | None = None
 
-    # Policy decisions come from an Open Policy Agent server running policies/haris.rego.
+    # Policy decisions come from an Open Policy Agent server running policies/rampart.rego.
     opa_url: str = "http://localhost:8181"
-    opa_decision_path: str = "haris/decision"
+    opa_decision_path: str = "rampart/decision"
 
     # Any OpenAI-compatible chat endpoint: Ollama (/v1), vLLM, llama.cpp server.
     llm_base_url: str = "http://localhost:11434/v1"

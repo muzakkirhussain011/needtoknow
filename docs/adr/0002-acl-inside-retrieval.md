@@ -17,7 +17,7 @@ path) leaks restricted text straight into the prompt.
 - `SET LOCAL hnsw.iterative_scan = relaxed_order` (pgvector 0.8+) lets the HNSW scan continue until
   enough rows pass the filter, instead of returning fewer than *k*.
 - The gateway re-checks every returned chunk against the decision before it is placed in the
-  prompt. A mismatch is skipped and counted in `haris_acl_violations_total`, which should always be
+  prompt. A mismatch is skipped and counted in `rampart_acl_violations_total`, which should always be
   zero and is worth an alert.
 
 ## Consequences

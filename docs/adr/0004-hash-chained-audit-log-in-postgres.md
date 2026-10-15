@@ -18,7 +18,7 @@ and the edit leaves no trace.
   generated from it for querying. Verification hashes the stored text, so JSONB normalisation
   cannot cause false alarms.
 - A trigger rejects `UPDATE` and `DELETE` on the table.
-- `GET /v1/audit/verify` and `haris verify-audit` recompute the chain and report the first record
+- `GET /v1/audit/verify` and `rampart verify-audit` recompute the chain and report the first record
   that does not match.
 
 ## Consequences

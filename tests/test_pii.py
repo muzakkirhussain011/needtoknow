@@ -1,4 +1,4 @@
-from haris.pii import Redactor, _iban_ok, _luhn_ok, redact
+from rampart.pii import Redactor, _iban_ok, _luhn_ok, redact
 
 
 def test_email_phone_and_national_id_are_masked():

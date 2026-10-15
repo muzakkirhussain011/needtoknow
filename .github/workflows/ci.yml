@@ -56,8 +56,8 @@ jobs:
       - run: pip install -e ".[dev]"
       - name: Unit and integration tests
         env:
-          HARIS_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
-          HARIS_TEST_OPA_URL: http://127.0.0.1:8181
+          RAMPART_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
+          RAMPART_TEST_OPA_URL: http://127.0.0.1:8181
         run: pytest -q -ra
 
   docker:
@@ -65,4 +65,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the runtime image
-        run: docker build --target runtime -t haris-ai-gateway:ci .
+        run: docker build --target runtime -t rampart-ai-gateway:ci .
