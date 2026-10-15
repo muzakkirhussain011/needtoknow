@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "needtoknow"
+dynamic = ["version"]
+description = "Permission-aware retrieval for RAG: every user gets only the chunks they are allowed to read."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Syed Muzakkir Hussain" }]
+keywords = ["rag", "retrieval", "authorization", "access-control", "llm", "vector-search", "openfga", "langchain", "llamaindex", "security"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
+]
+# The core has no runtime dependencies. Adapters for external systems are optional extras.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff==0.17.1"]
+
+[project.urls]
+Homepage = "https://github.com/muzakkirhussain011/needtoknow"
+Repository = "https://github.com/muzakkirhussain011/needtoknow"
+Issues = "https://github.com/muzakkirhussain011/needtoknow/issues"
+Changelog = "https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "needtoknow/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["needtoknow"]
+
+[tool.hatch.build.targets.sdist]
+# The source distribution carries the library and its tests only, not the example deployments.
+include = ["needtoknow", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
