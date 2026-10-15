@@ -1,7 +1,7 @@
 # Full local stack: gateway + Postgres/pgvector + OPA + Ollama (CPU is fine for the demo models).
 #   docker compose up -d --build
 #   docker compose exec gateway rampart ingest samples
-#   curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-omar" -H "Content-Type: application/json" \
+#   curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-bob" -H "Content-Type: application/json" \
 #        -d '{"question": "How many days of annual leave do I get?"}'
 services:
   postgres:

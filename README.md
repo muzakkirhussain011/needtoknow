@@ -110,41 +110,42 @@ Only SHA-256 hashes are stored.
 
 | User | Team / department | Clearance | Can read |
 |---|---|---|---|
-| `omar` | platform / engineering | internal | handbook, vendor FAQ, IT runbooks |
-| `aisha` | people-ops / hr | confidential, `pii_reader` | handbook, vendor FAQ, HR policies |
-| `fatima` | treasury / finance | restricted | handbook, vendor FAQ, finance procedures |
-| `sara` | security | internal, `auditor` | handbook, vendor FAQ, audit log |
+| `bob` | platform / engineering | internal | handbook, vendor FAQ, IT runbooks |
+| `alice` | people-ops / hr | confidential, `pii_reader` | handbook, vendor FAQ, HR policies |
+| `carol` | treasury / finance | restricted | handbook, vendor FAQ, finance procedures |
+| `dave` | security | internal, `auditor` | handbook, vendor FAQ, audit log |
 | `intern` | interns / engineering | public | nothing above public; only `gemma3:1b` |
 
 ```bash
 ask() { curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-$1" \
              -H "Content-Type: application/json" -d "$2"; echo; }
 
-# An answer with numbered citations, from the collections Omar may read
-ask omar '{"question": "What counts as a SEV1, and who gets paged?"}'
+# An answer with numbered citations, from the collections Bob may read
+ask bob '{"question": "What counts as a SEV1, and who gets paged?"}'
 
 # Asking for a collection you may not read is a 403 with the reason, not a silent drop
-ask omar '{"question": "What are the salary bands?", "collections": ["hr-policies"]}'
+ask bob '{"question": "What are the salary bands?", "collections": ["hr-policies"]}'
 # {"error":"denied","reasons":["not authorised for collection hr-policies"],"audit_seq":<n>}
 
-# Aisha holds pii_reader: the model only ever sees [EMAIL_1]-style placeholders,
+# Alice holds pii_reader: the model only ever sees [EMAIL_1]-style placeholders,
 # and the real values are restored in her answer
-ask aisha '{"question": "Who do I contact to update an employee record?"}'
+ask alice '{"question": "Who do I contact to update an employee record?"}'
 
 # The vendor FAQ carries an indirect prompt injection; its chunk is quarantined before the model sees it
-ask omar '{"question": "How fast are express deliveries?"}'      # "chunks_quarantined": 1
+ask bob '{"question": "How fast are express deliveries?"}'      # "chunks_quarantined": 1
 
 # Model allow-lists per team
 ask intern '{"question": "How many days of annual leave do I get?"}'
 # {"error":"denied","reasons":["model gemma4:e2b is not approved for team interns", ...],...}
 
 # The audit chain, for auditors
-curl -s localhost:8080/v1/audit/verify -H "Authorization: Bearer demo-key-sara"
+curl -s localhost:8080/v1/audit/verify -H "Authorization: Bearer demo-key-dave"
 # {"ok":true,"checked":<n>,"first_bad_seq":null}
 ```
 
-The dashboard at <http://localhost:8080/dashboard> (user `sara`, password `demo-key-sara`) shows
-usage per team, denial reasons, masked PII by type, quarantined chunks and the chain status.
+For auditors, the gateway also serves an HTML dashboard at `/dashboard` (HTTP Basic, user `dave`,
+password `demo-key-dave` in the demo) with usage per team, denial reasons, masked PII by type,
+quarantined chunks and the audit-chain status.
 
 ### Use it from existing tools
 
@@ -154,7 +155,7 @@ URL and a Rampart key:
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8080/v1", api_key="demo-key-omar")
+client = OpenAI(base_url="http://localhost:8080/v1", api_key="demo-key-bob")
 reply = client.chat.completions.create(
     model="gemma4:e2b",
     messages=[{"role": "user", "content": "What should I check first during a SEV1?"}],
