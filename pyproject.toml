@@ -3,57 +3,61 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rampart-ai-gateway"
-version = "0.1.0"
-description = "A self-hosted AI gateway that lets regulated teams use open-weight LLMs on their own documents, with policy-based access control, PII masking, budgets and a tamper-evident audit trail."
+name = "needtoknow"
+dynamic = ["version"]
+description = "Permission-aware retrieval for RAG: every user gets only the chunks they are allowed to read."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
 authors = [{ name = "Syed Muzakkir Hussain" }]
-keywords = ["llm", "rag", "ai-gateway", "opa", "pgvector", "ollama", "gemma", "pii", "audit", "self-hosted"]
+keywords = ["rag", "retrieval", "authorization", "access-control", "llm", "vector-search", "openfga", "langchain", "llamaindex", "security"]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Framework :: FastAPI",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Security",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
 ]
-dependencies = [
-  "fastapi>=0.115",
-  "uvicorn[standard]>=0.30",
-  "httpx>=0.27",
-  "pydantic>=2.7",
-  "pydantic-settings>=2.3",
-  "pyyaml>=6.0",
-  "psycopg[binary,pool]>=3.2",
-  "prometheus-client>=0.20",
-  "jinja2>=3.1",
-]
+# The core has no runtime dependencies. Adapters for external systems are optional extras.
+dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8.2", "ruff==0.17.1"]
-
-[project.scripts]
-rampart = "rampart.cli:main"
+dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff==0.17.1"]
 
 [project.urls]
-Repository = "https://github.com/muzakkirhussain011/rampart-ai-gateway"
+Homepage = "https://github.com/muzakkirhussain011/needtoknow"
+Repository = "https://github.com/muzakkirhussain011/needtoknow"
+Issues = "https://github.com/muzakkirhussain011/needtoknow/issues"
+Changelog = "https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "needtoknow/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rampart"]
+packages = ["needtoknow"]
+
+[tool.hatch.build.targets.sdist]
+# The source distribution carries the library and its tests only, not the example deployments.
+# Patterns follow .gitignore rules, so they are anchored with "/": a bare "tests" would also match
+# examples/gateway/tests.
+include = ["/needtoknow", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM", "S"]
-ignore = ["S101", "B008"]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S105", "S106"]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF"]
+ignore = ["S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-  "integration: needs a running OPA server or PostgreSQL with pgvector",
-]
+addopts = "-ra"

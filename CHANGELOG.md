@@ -2,21 +2,27 @@
 
 All notable changes are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/).
+[Semantic Versioning](https://semver.org/). From 1.0 on, the public API is stable.
 
 ## [Unreleased]
 
 ### Added
 
-- Request pipeline: authenticate, pseudonymise PII, score prompt injection, policy decision,
-  permission-aware hybrid retrieval, per-chunk ACL re-check and quarantine, generation, output
-  masking, policy-gated PII restore, usage accounting and audit.
-- Rego policy for readable collections, model allow-lists, daily token budgets, PII reveal and
-  injection blocking, with 14 policy tests.
-- PostgreSQL + pgvector store: HNSW and full-text search fused with reciprocal rank fusion, ACL in
-  the query, iterative index scans.
-- Hash-chained, append-only audit log with verification endpoint and CLI.
-- HTTP API including an OpenAI-compatible `/v1/chat/completions`, Prometheus metrics and an
-  auditor dashboard.
-- Docker image, Compose stacks for running and for integration tests, CI and Dependabot.
-- README, threat model and architecture decision records.
+- `PermissionedRetriever` with `prefilter`, `postfilter` and `auto` strategies, sync
+  (`retrieve`) and async (`aretrieve`) entry points sharing one implementation.
+- Failing closed: any authorizer error, wrong number of decisions or non-boolean decision raises
+  `AuthorizationError` and returns nothing.
+- Re-check of pre-filtered results, with `RetrievalResult.violations` counting hits that a
+  backend returned despite the filter.
+- A backend-neutral filter language (`In`, `And`, `Or`) with reference semantics in `matches`;
+  empty `And`/`Or` are rejected because an empty conjunction would mean "allow everything".
+- `MetadataACLAuthorizer` (permissions stored on each chunk) and `FunctionAuthorizer` (your own
+  logic).
+- `InMemoryBackend` with deterministic keyword scoring, for tests and small corpora.
+- Property-based tests (Hypothesis) for the security guarantees on Python 3.10 to 3.13.
+- Contributor documentation: CONTRIBUTING, GOVERNANCE, CODE_OF_CONDUCT, SECURITY.
+
+### Changed
+
+- The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
+  Rampart gateway lives on as an example deployment in `examples/gateway`.
