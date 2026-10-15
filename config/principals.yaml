@@ -1,0 +1,52 @@
+# Demo principals for the fictional company "Najm Logistics".
+# Only SHA-256 hashes of API keys are stored. The demo keys are listed in the README so anyone
+# can try the gateway locally; replace this file (or point HARIS_PRINCIPALS_FILE elsewhere) in a
+# real deployment. Generate a hash with:  haris hash-key <your-key>
+principals:
+  - user_id: aisha
+    name: Aisha (HR business partner)
+    team: people-ops
+    department: hr
+    clearance: confidential
+    roles: [employee, pii_reader]
+    key_sha256: d1789b1fccb824ed44255fc95cde71a50dc2d03034ca3727d249838e850ef338  # demo-key-aisha
+
+  - user_id: omar
+    name: Omar (platform engineer)
+    team: platform
+    department: engineering
+    clearance: internal
+    roles: [employee]
+    key_sha256: 47a547d2585861011532815b6fcfe19a93f7cf40200990cbf0fec670a0ad444d  # demo-key-omar
+
+  - user_id: fatima
+    name: Fatima (treasury lead)
+    team: treasury
+    department: finance
+    clearance: restricted
+    roles: [employee]
+    key_sha256: bd30398602b3b36ca0bd411548740e883a99bad7e4a394ddcbfcdd4beb7a7a69  # demo-key-fatima
+
+  - user_id: sara
+    name: Sara (security auditor)
+    team: security
+    department: security
+    clearance: internal
+    roles: [auditor]
+    key_sha256: 9639780f669a2a165cfb3a1edf9c2dca7c06ad1333b2eb185d71c6e48b293bbc  # demo-key-sara
+
+  - user_id: admin
+    name: Platform admin
+    team: it-admin
+    department: it
+    clearance: restricted
+    roles: [admin]
+    key_sha256: 0de55245c225238646d6fdb99a60b6971bf5eb0b0280237830d66e0a8b54b4ac  # demo-key-admin
+
+  - user_id: intern
+    name: Summer intern
+    team: interns
+    department: engineering
+    clearance: public
+    roles: [employee]
+    key_sha256: f6210baff4bf7ef48d254604db59779a1b607db0622cc3611f90e5a94924ca89  # demo-key-intern

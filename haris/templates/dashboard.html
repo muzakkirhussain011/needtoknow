@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haris dashboard</title>
+<style>
+  :root { --bg:#0f172a; --panel:#111c33; --line:#1e2b47; --text:#e2e8f0; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; --accent:#38bdf8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:20px 28px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; }
+  h1 { margin:0; font-size:20px; } h2 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; }
+  main { padding:24px 28px; display:grid; gap:20px; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; }
+  .wide { grid-column:1 / -1; }
+  .kpis { display:flex; gap:28px; flex-wrap:wrap; } .kpi b { display:block; font-size:28px; } .kpi span { color:var(--muted); }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:500; } td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); } code { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Haris AI Gateway <span class="muted">v{{ version }}</span></h1>
+  <span class="muted">signed in as {{ viewer.user_id }} ({{ viewer.team }})</span>
+</header>
+<main>
+  <section class="wide">
+    <h2>Overview (last 2,000 audit records)</h2>
+    <div class="kpis">
+      <div class="kpi"><b>{{ per_team.values() | sum(attribute='answered') | int }}</b><span>questions answered</span></div>
+      <div class="kpi"><b>{{ per_team.values() | sum(attribute='denied') | int }}</b><span>requests denied by policy</span></div>
+      <div class="kpi"><b>{{ hours_saved }}</b><span>hours saved (est. {{ minutes_per_answer }} min per answer)</span></div>
+      <div class="kpi"><b>{{ quarantined }}</b><span>poisoned chunks withheld</span></div>
+      <div class="kpi"><b class="{{ 'ok' if chain.ok else 'bad' }}">{{ 'intact' if chain.ok else 'BROKEN at #' ~ chain.first_bad_seq }}</b><span>audit chain ({{ chain.checked }} records checked)</span></div>
+    </div>
+  </section>
+  <section>
+    <h2>Usage by team</h2>
+    <table><tr><th>Team</th><th class="num">Answered</th><th class="num">Denied</th><th class="num">Tokens</th></tr>
+    {% for team, t in per_team.items() %}<tr><td>{{ team }}</td><td class="num">{{ t.answered|int }}</td><td class="num">{{ t.denied|int }}</td><td class="num">{{ '{:,}'.format(t.tokens|int) }}</td></tr>{% else %}<tr><td colspan="4" class="muted">No requests yet.</td></tr>{% endfor %}
+    </table>
+  </section>
+  <section>
+    <h2>Denials by reason</h2>
+    <table>{% for reason, n in denial_reasons %}<tr><td>{{ reason }}</td><td class="num">{{ n }}</td></tr>{% else %}<tr><td class="muted">No denials.</td></tr>{% endfor %}</table>
+  </section>
+  <section>
+    <h2>Personal data masked</h2>
+    <table>{% for kind, n in pii %}<tr><td><code>{{ kind }}</code></td><td class="num">{{ n }}</td></tr>{% else %}<tr><td class="muted">Nothing masked yet.</td></tr>{% endfor %}</table>
+  </section>
+  <section class="wide">
+    <h2>Recent audit records</h2>
+    <table><tr><th>#</th><th>Time (UTC)</th><th>User</th><th>Action</th><th>Result</th><th>Question (masked)</th><th>Hash</th></tr>
+    {% for e in recent %}<tr>
+      <td>{{ e.seq }}</td><td class="muted">{{ e.record.ts }}</td><td>{{ e.record.user_id }}</td><td>{{ e.record.action }}</td>
+      <td class="{{ 'ok' if e.record.allowed else 'bad' }}">{{ 'allowed' if e.record.allowed else 'denied: ' ~ (e.record.reasons|join('; ')) }}</td>
+      <td>{{ (e.record.question_masked or '')[:90] }}</td><td class="muted"><code>{{ e.hash[:12] }}</code></td>
+    </tr>{% endfor %}
+    </table>
+  </section>
+</main>
+</body>
+</html>
