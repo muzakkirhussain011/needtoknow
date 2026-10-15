@@ -1,4 +1,4 @@
-"""PostgreSQL schema. Applied idempotently at start-up (`haris init-db` runs the same code)."""
+"""PostgreSQL schema. Applied idempotently at start-up (`rampart init-db` runs the same code)."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
   hash        TEXT NOT NULL UNIQUE
 );
 
-CREATE OR REPLACE FUNCTION haris_audit_append_only() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION rampart_audit_append_only() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'audit_log is append-only';
 END;
@@ -45,7 +45,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS audit_log_append_only ON audit_log;
 CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE ON audit_log
-  FOR EACH ROW EXECUTE FUNCTION haris_audit_append_only();
+  FOR EACH ROW EXECUTE FUNCTION rampart_audit_append_only();
 """
 
 

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "haris-ai-gateway"
+name = "rampart-ai-gateway"
 version = "0.1.0"
 description = "A self-hosted AI gateway that lets regulated teams use open-weight LLMs on their own documents, with policy-based access control, PII masking, budgets and a tamper-evident audit trail."
 readme = "README.md"
@@ -33,13 +33,13 @@ dependencies = [
 dev = ["pytest>=8.2", "ruff==0.17.1"]
 
 [project.scripts]
-haris = "haris.cli:main"
+rampart = "rampart.cli:main"
 
 [project.urls]
-Repository = "https://github.com/muzakkirhussain011/haris-ai-gateway"
+Repository = "https://github.com/muzakkirhussain011/rampart-ai-gateway"
 
 [tool.hatch.build.targets.wheel]
-packages = ["haris"]
+packages = ["rampart"]
 
 [tool.ruff]
 line-length = 120

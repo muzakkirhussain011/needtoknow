@@ -1,6 +1,6 @@
-from haris.documents import Document, InMemoryDocumentStore, chunk_document, keywords, load_markdown_documents
-from haris.identity import SENSITIVITY_LEVELS
-from haris.models import HashingEmbedder
+from rampart.documents import Document, InMemoryDocumentStore, chunk_document, keywords, load_markdown_documents
+from rampart.identity import SENSITIVITY_LEVELS
+from rampart.models import HashingEmbedder
 from tests.conftest import SAMPLES
 
 

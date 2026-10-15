@@ -1,6 +1,6 @@
 import pytest
 
-from haris.injection import HeuristicInjectionScorer
+from rampart.injection import HeuristicInjectionScorer
 
 scorer = HeuristicInjectionScorer()
 

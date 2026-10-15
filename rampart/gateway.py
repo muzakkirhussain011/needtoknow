@@ -23,15 +23,15 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from haris.audit import AuditLog
-from haris.documents import Chunk, Document, DocumentStore, ScoredChunk, chunk_document
-from haris.identity import Principal
-from haris.injection import InjectionScorer
-from haris.metrics import Metrics
-from haris.models import ChatModel, Embedder
-from haris.pii import Redactor
-from haris.policy import Decision, PolicyEngine
-from haris.usage import UsageStore
+from rampart.audit import AuditLog
+from rampart.documents import Chunk, Document, DocumentStore, ScoredChunk, chunk_document
+from rampart.identity import Principal
+from rampart.injection import InjectionScorer
+from rampart.metrics import Metrics
+from rampart.models import ChatModel, Embedder
+from rampart.pii import Redactor
+from rampart.policy import Decision, PolicyEngine
+from rampart.usage import UsageStore
 
 SYSTEM_PROMPT = """You are an internal assistant for company staff.
 Answer ONLY from the numbered context passages. Cite the passages you used like [1] or [2][3].

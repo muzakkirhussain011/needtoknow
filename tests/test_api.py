@@ -1,9 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from haris.app import create_app
-from haris.config import Settings
-from haris.identity import PrincipalDirectory
+from rampart.app import create_app
+from rampart.config import Settings
+from rampart.identity import PrincipalDirectory
 from tests.conftest import ROOT
 
 
@@ -54,7 +54,7 @@ def test_openai_compatible_endpoint(client):
     body = r.json()
     assert body["object"] == "chat.completion"
     assert body["choices"][0]["message"]["role"] == "assistant"
-    assert "citations" in body["haris"]
+    assert "citations" in body["rampart"]
 
 
 def test_audit_requires_auditor_role(client):
@@ -67,9 +67,9 @@ def test_audit_requires_auditor_role(client):
 def test_dashboard_uses_basic_auth(client):
     assert client.get("/dashboard").status_code == 401
     r = client.get("/dashboard", auth=("sara", "demo-key-sara"))
-    assert r.status_code == 200 and "Haris AI Gateway" in r.text
+    assert r.status_code == 200 and "Rampart AI Gateway" in r.text
 
 
 def test_metrics_endpoint(client):
     client.post("/v1/ask", json={"question": "leave?"}, headers=auth("demo-key-omar"))
-    assert "haris_requests_total" in client.get("/metrics").text
+    assert "rampart_requests_total" in client.get("/metrics").text

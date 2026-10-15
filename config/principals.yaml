@@ -1,7 +1,7 @@
 # Demo principals for the fictional company "Najm Logistics".
 # Only SHA-256 hashes of API keys are stored. The demo keys are listed in the README so anyone
-# can try the gateway locally; replace this file (or point HARIS_PRINCIPALS_FILE elsewhere) in a
-# real deployment. Generate a hash with:  haris hash-key <your-key>
+# can try the gateway locally; replace this file (or point RAMPART_PRINCIPALS_FILE elsewhere) in a
+# real deployment. Generate a hash with:  rampart hash-key <your-key>
 principals:
   - user_id: aisha
     name: Aisha (HR business partner)

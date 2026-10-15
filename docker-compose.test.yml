@@ -20,6 +20,6 @@ services:
       postgres: { condition: service_healthy }
       opa: { condition: service_started }
     environment:
-      HARIS_TEST_DATABASE_URL: postgresql://test:test@postgres:5432/test
-      HARIS_TEST_OPA_URL: http://opa:8181
+      RAMPART_TEST_DATABASE_URL: postgresql://test:test@postgres:5432/test
+      RAMPART_TEST_OPA_URL: http://opa:8181
     command: ["sh", "-c", "sleep 2 && pytest -q -ra"]

@@ -1,6 +1,6 @@
 # Security policy
 
-Haris is a security control, so reports are very welcome.
+Rampart is a security control, so reports are very welcome.
 
 ## Reporting a vulnerability
 

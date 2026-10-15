@@ -9,38 +9,38 @@ class Metrics:
     def __init__(self) -> None:
         self.registry = CollectorRegistry()
         self.requests = Counter(
-            "haris_requests_total",
+            "rampart_requests_total",
             "Questions handled, by team and outcome",
             ["team", "outcome"],
             registry=self.registry,
         )
         self.denials = Counter(
-            "haris_policy_denials_total", "Policy denials by reason", ["reason"], registry=self.registry
+            "rampart_policy_denials_total", "Policy denials by reason", ["reason"], registry=self.registry
         )
         self.pii_masked = Counter(
-            "haris_pii_masked_total",
+            "rampart_pii_masked_total",
             "Personal or secret values masked before reaching a model",
             ["kind"],
             registry=self.registry,
         )
         self.chunks_quarantined = Counter(
-            "haris_chunks_quarantined_total",
+            "rampart_chunks_quarantined_total",
             "Retrieved chunks withheld for suspected prompt injection",
             registry=self.registry,
         )
         self.acl_violations = Counter(
-            "haris_acl_violations_total",
+            "rampart_acl_violations_total",
             "Chunks returned by the store outside the policy decision (should stay 0)",
             registry=self.registry,
         )
         self.tokens = Counter(
-            "haris_tokens_total",
+            "rampart_tokens_total",
             "Model tokens by team, model and kind",
             ["team", "model", "kind"],
             registry=self.registry,
         )
         self.stage_latency = Histogram(
-            "haris_stage_seconds",
+            "rampart_stage_seconds",
             "Latency of each pipeline stage",
             ["stage"],
             registry=self.registry,

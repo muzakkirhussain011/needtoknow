@@ -1,6 +1,6 @@
-# Haris AI Gateway
+# Rampart AI Gateway
 
-[![CI](https://github.com/muzakkirhussain011/haris-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/muzakkirhussain011/haris-ai-gateway/actions/workflows/ci.yml)
+[![CI](https://github.com/muzakkirhussain011/rampart-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/muzakkirhussain011/rampart-ai-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![Policy: OPA](https://img.shields.io/badge/policy-OPA%20%2F%20Rego-7d9199.svg)
@@ -9,17 +9,15 @@ A self-hosted AI gateway that lets regulated teams use open-weight LLMs on their
 with policy-as-code access control, PII pseudonymisation, prompt-injection defences, per-team
 budgets and a tamper-evident audit trail.
 
-*Haris* (حارس) is Arabic for *guardian*.
-
 ## Why
 
 Most companies already know staff want to ask an LLM about the handbook, the incident runbook or
 the payment procedure. What stops them is not the model; it is the questions the risk and
 compliance teams ask:
 
-| Question from risk / compliance | What Haris does |
+| Question from risk / compliance | What Rampart does |
 |---|---|
-| Does our data leave the building? | Models run on your own hardware (Ollama, vLLM, llama.cpp). Haris speaks the OpenAI API to them. |
+| Does our data leave the building? | Models run on your own hardware (Ollama, vLLM, llama.cpp). Rampart speaks the OpenAI API to them. |
 | Can an engineer read HR files through the chatbot? | Access is decided per request by an OPA policy (department, clearance, collection). The filter runs **inside** the retrieval query, and every returned chunk is checked again before it reaches the model. |
 | Will personal data end up in prompts and model logs? | Emails, phone numbers, national IDs, IBANs, card numbers and secrets are replaced with placeholders such as `[EMAIL_1]` before anything reaches the model. Only users with the `pii_reader` role see the real values restored in the answer. |
 | A vendor document says "ignore previous instructions". Then what? | Retrieved chunks are scored for injection and quarantined; injected questions are denied by policy. Context is framed as data, never instructions. |
@@ -32,7 +30,7 @@ compliance teams ask:
 flowchart TB
     C["Staff tools<br/>OpenAI SDKs, chat UIs, scripts"] -->|API key| AUTH
 
-    subgraph H["Haris gateway (FastAPI)"]
+    subgraph H["Rampart gateway (FastAPI)"]
         AUTH[Authenticate] --> MASK["Mask PII<br/>score injection"]
         MASK --> DEC{Policy decision}
         DEC -->|allow| RET["Hybrid retrieval<br/>ACL inside the query"]
@@ -49,7 +47,7 @@ flowchart TB
     GEN <-->|OpenAI API| LLM["Open-weight model<br/>Ollama / vLLM"]
 ```
 
-The pipeline lives in [`haris/gateway.py`](haris/gateway.py); each stage is timed and exported as a
+The pipeline lives in [`rampart/gateway.py`](rampart/gateway.py); each stage is timed and exported as a
 Prometheus histogram. Design decisions are recorded as ADRs in [`docs/adr`](docs/adr), and the
 threats each control addresses are in [`docs/threat-model.md`](docs/threat-model.md).
 
@@ -63,7 +61,7 @@ recall up when that filter is selective. See [ADR 0002](docs/adr/0002-acl-inside
 
 ### Policy
 
-All authorisation is in [`policies/haris.rego`](policies/haris.rego), with data in
+All authorisation is in [`policies/rampart.rego`](policies/rampart.rego), with data in
 [`policies/data.json`](policies/data.json). Default deny; every deny reason is returned to the
 caller and written to the audit log.
 
@@ -88,8 +86,8 @@ model server.
 **Model server on another machine** (recommended; a GPU host running Ollama or vLLM):
 
 ```bash
-export HARIS_LLM_BASE_URL=http://gpu-host:11434/v1
-export HARIS_EMBED_BASE_URL=http://gpu-host:11434
+export RAMPART_LLM_BASE_URL=http://gpu-host:11434/v1
+export RAMPART_EMBED_BASE_URL=http://gpu-host:11434
 docker compose up -d --build
 ```
 
@@ -102,7 +100,7 @@ docker compose --profile local-llm up -d --build
 Load the sample documents for *Najm Logistics*, a fictional company:
 
 ```bash
-docker compose exec gateway haris ingest samples
+docker compose exec gateway rampart ingest samples
 ```
 
 ### Try it as different people
@@ -151,7 +149,7 @@ usage per team, denial reasons, masked PII by type, quarantined chunks and the c
 ### Use it from existing tools
 
 `/v1/chat/completions` is OpenAI-compatible, so existing SDKs and chat UIs only need a new base
-URL and a Haris key:
+URL and a Rampart key:
 
 ```python
 from openai import OpenAI
@@ -163,7 +161,7 @@ reply = client.chat.completions.create(
     extra_body={"collections": ["it-runbooks"]},  # optional: narrow the search
 )
 print(reply.choices[0].message.content)
-print(reply.model_extra["haris"]["citations"])
+print(reply.model_extra["rampart"]["citations"])
 ```
 
 ## API
@@ -171,15 +169,15 @@ print(reply.model_extra["haris"]["citations"])
 | Method and path | Who | Purpose |
 |---|---|---|
 | `POST /v1/ask` | any user | Question over the documents the caller may read; returns answer, citations, usage, masked PII counts, audit sequence and stage timings |
-| `POST /v1/chat/completions` | any user | OpenAI-compatible wrapper around the same pipeline (extra `haris` block in the response) |
+| `POST /v1/chat/completions` | any user | OpenAI-compatible wrapper around the same pipeline (extra `rampart` block in the response) |
 | `GET /v1/me` | any user | Who you are, which collections you can read, whether PII is revealed to you |
 | `POST /v1/documents` | `admin` | Ingest documents (chunked, embedded, upserted) |
 | `GET /v1/audit` | `auditor`, `admin` | Recent audit records |
 | `GET /v1/audit/verify` | `auditor`, `admin` | Recompute the hash chain |
 | `GET /dashboard` | `auditor`, `admin` | HTML overview (HTTP Basic) |
-| `GET /metrics` | scraper | Prometheus metrics (`haris_requests_total`, `haris_policy_denials_total`, `haris_pii_masked_total`, `haris_chunks_quarantined_total`, `haris_acl_violations_total`, `haris_tokens_total`, `haris_stage_seconds`) |
+| `GET /metrics` | scraper | Prometheus metrics (`rampart_requests_total`, `rampart_policy_denials_total`, `rampart_pii_masked_total`, `rampart_chunks_quarantined_total`, `rampart_acl_violations_total`, `rampart_tokens_total`, `rampart_stage_seconds`) |
 
-CLI: `haris serve`, `haris ingest <dir>`, `haris hash-key <key>`, `haris verify-audit`.
+CLI: `rampart serve`, `rampart ingest <dir>`, `rampart hash-key <key>`, `rampart verify-audit`.
 
 ## Configuration
 
@@ -187,17 +185,17 @@ Environment variables (or a `.env` file):
 
 | Variable | Default | Notes |
 |---|---|---|
-| `HARIS_DATABASE_URL` | unset | PostgreSQL with pgvector. Unset means in-memory stores (development and tests only). |
-| `HARIS_OPA_URL` | `http://localhost:8181` | OPA server loaded with `policies/`. If OPA is unreachable, requests fail closed with 503. |
-| `HARIS_LLM_BASE_URL` | `http://localhost:11434/v1` | Any OpenAI-compatible chat endpoint |
-| `HARIS_LLM_API_KEY` | `not-needed-for-ollama` | Sent as a bearer token to the model server |
-| `HARIS_DEFAULT_MODEL` | `gemma4:e2b` | Used when a request names no model; the policy has its own default |
-| `HARIS_EMBED_BASE_URL` | `http://localhost:11434` | Ollama `/api/embed` |
-| `HARIS_EMBED_MODEL`, `HARIS_EMBED_DIM` | `embeddinggemma`, `768` | The vector column is created with this dimension |
-| `HARIS_PRINCIPALS_FILE` | `config/principals.yaml` | Users, teams, roles and API key hashes |
-| `HARIS_TOP_K`, `HARIS_MAX_CONTEXT_CHARS` | `5`, `6000` | Retrieval depth and context budget |
-| `HARIS_CHUNK_INJECTION_THRESHOLD` | `0.5` | Chunks scoring at or above this are quarantined |
-| `HARIS_MINUTES_SAVED_PER_ANSWER` | `6.0` | Only used for the dashboard's time-saved estimate |
+| `RAMPART_DATABASE_URL` | unset | PostgreSQL with pgvector. Unset means in-memory stores (development and tests only). |
+| `RAMPART_OPA_URL` | `http://localhost:8181` | OPA server loaded with `policies/`. If OPA is unreachable, requests fail closed with 503. |
+| `RAMPART_LLM_BASE_URL` | `http://localhost:11434/v1` | Any OpenAI-compatible chat endpoint |
+| `RAMPART_LLM_API_KEY` | `not-needed-for-ollama` | Sent as a bearer token to the model server |
+| `RAMPART_DEFAULT_MODEL` | `gemma4:e2b` | Used when a request names no model; the policy has its own default |
+| `RAMPART_EMBED_BASE_URL` | `http://localhost:11434` | Ollama `/api/embed` |
+| `RAMPART_EMBED_MODEL`, `RAMPART_EMBED_DIM` | `embeddinggemma`, `768` | The vector column is created with this dimension |
+| `RAMPART_PRINCIPALS_FILE` | `config/principals.yaml` | Users, teams, roles and API key hashes |
+| `RAMPART_TOP_K`, `RAMPART_MAX_CONTEXT_CHARS` | `5`, `6000` | Retrieval depth and context budget |
+| `RAMPART_CHUNK_INJECTION_THRESHOLD` | `0.5` | Chunks scoring at or above this are quarantined |
+| `RAMPART_MINUTES_SAVED_PER_ANSWER` | `6.0` | Only used for the dashboard's time-saved estimate |
 
 ## Development
 
@@ -218,7 +216,7 @@ The tests are written as security properties rather than happy paths, for exampl
 `test_postgres_audit_log_is_append_only_and_verifies`.
 
 ```
-haris/
+rampart/
   gateway.py     the request pipeline
   policy.py      OPA client (fails closed)
   documents.py   chunking, in-memory and pgvector hybrid stores

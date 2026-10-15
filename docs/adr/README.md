@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Short records of decisions that shape Haris, in the format: context, decision, consequences.
+Short records of decisions that shape Rampart, in the format: context, decision, consequences.
 
 | # | Decision | Status |
 |---|---|---|

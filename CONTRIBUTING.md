@@ -5,8 +5,8 @@ Thanks for taking the time. Bug reports, policy ideas and pull requests are all 
 ## Set up
 
 ```bash
-git clone https://github.com/muzakkirhussain011/haris-ai-gateway.git
-cd haris-ai-gateway
+git clone https://github.com/muzakkirhussain011/rampart-ai-gateway.git
+cd rampart-ai-gateway
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q

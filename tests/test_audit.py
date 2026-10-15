@@ -1,4 +1,4 @@
-from haris.audit import GENESIS_HASH, InMemoryAuditLog, canonical_json, chain_hash
+from rampart.audit import GENESIS_HASH, InMemoryAuditLog, canonical_json, chain_hash
 
 
 def test_chain_links_each_record_to_the_previous_one():

@@ -1,5 +1,5 @@
 {
-  "haris_config": {
+  "rampart_config": {
     "default_model": "gemma4:e2b",
     "injection_block_threshold": 0.8,
     "collections": {

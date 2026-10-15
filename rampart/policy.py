@@ -2,7 +2,7 @@
 
 The gateway never decides access in Python. It sends OPA a description of the request (who, what,
 which model, today's usage, risk signals) and acts on the decision. The rules live in
-policies/haris.rego and policies/data.json, are unit-tested with `opa test`, and change through
+policies/rampart.rego and policies/data.json, are unit-tested with `opa test`, and change through
 code review like any other code.
 """
 
@@ -48,7 +48,7 @@ class PolicyUnavailable(RuntimeError):
 
 
 class OpaPolicyEngine:
-    def __init__(self, base_url: str, decision_path: str = "haris/decision", timeout_s: float = 5.0):
+    def __init__(self, base_url: str, decision_path: str = "rampart/decision", timeout_s: float = 5.0):
         self._client = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_s)
         self._path = f"/v1/data/{decision_path.strip('/')}"
 

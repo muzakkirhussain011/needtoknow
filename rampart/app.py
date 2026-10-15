@@ -27,17 +27,17 @@ from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
-from haris import __version__
-from haris.audit import InMemoryAuditLog, PostgresAuditLog
-from haris.config import Settings, get_settings
-from haris.documents import Document, InMemoryDocumentStore, PgVectorDocumentStore
-from haris.gateway import Gateway, PolicyDenied
-from haris.identity import Principal, PrincipalDirectory
-from haris.injection import HeuristicInjectionScorer
-from haris.metrics import Metrics
-from haris.models import OllamaEmbedder, OpenAICompatibleChat
-from haris.policy import OpaPolicyEngine, PolicyUnavailable
-from haris.usage import InMemoryUsageStore, PostgresUsageStore
+from rampart import __version__
+from rampart.audit import InMemoryAuditLog, PostgresAuditLog
+from rampart.config import Settings, get_settings
+from rampart.documents import Document, InMemoryDocumentStore, PgVectorDocumentStore
+from rampart.gateway import Gateway, PolicyDenied
+from rampart.identity import Principal, PrincipalDirectory
+from rampart.injection import HeuristicInjectionScorer
+from rampart.metrics import Metrics
+from rampart.models import OllamaEmbedder, OpenAICompatibleChat
+from rampart.policy import OpaPolicyEngine, PolicyUnavailable
+from rampart.usage import InMemoryUsageStore, PostgresUsageStore
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -47,7 +47,7 @@ def build_gateway(settings: Settings, metrics: Metrics) -> tuple[Gateway, Any]:
     if settings.database_url:
         from psycopg_pool import ConnectionPool
 
-        from haris.db import init_schema
+        from rampart.db import init_schema
 
         pool = ConnectionPool(settings.database_url, min_size=1, max_size=10, open=True)
         init_schema(pool, settings.embed_dim)
@@ -97,7 +97,7 @@ class ChatMessage(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str | None = None
     messages: list[ChatMessage]
-    collections: list[str] = Field(default_factory=list)  # Haris extension; other fields are ignored
+    collections: list[str] = Field(default_factory=list)  # Rampart extension; other fields are ignored
 
 
 def create_app(
@@ -120,7 +120,7 @@ def create_app(
         if pool is not None:
             pool.close()
 
-    app = FastAPI(title="Haris AI Gateway", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Rampart AI Gateway", version=__version__, lifespan=lifespan)
 
     def gw(request: Request) -> Gateway:
         return request.app.state.gateway
@@ -196,13 +196,13 @@ def create_app(
         history = [m.model_dump() for m in body.messages[:-1] if m.role in ("user", "assistant")]
         a = gw(request).ask(p, users[-1].content, body.collections, body.model, history=history)
         return {
-            "id": f"haris-{a.audit_seq}",
+            "id": f"rampart-{a.audit_seq}",
             "object": "chat.completion",
             "created": int(time.time()),
             "model": a.model,
             "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": a.answer}}],
             "usage": {**a.usage, "total_tokens": sum(a.usage.values())},
-            "haris": {
+            "rampart": {
                 "citations": [c.__dict__ for c in a.citations],
                 "audit_seq": a.audit_seq,
                 "pii_masked": a.pii_masked,
@@ -238,7 +238,7 @@ def create_app(
         s = g.audit.verify()
         return {"ok": s.ok, "checked": s.checked, "first_bad_seq": s.first_bad_seq}
 
-    basic = HTTPBasic(realm="Haris dashboard")
+    basic = HTTPBasic(realm="Rampart dashboard")
 
     @app.get("/dashboard", response_class=HTMLResponse)
     def dashboard(request: Request, creds: Annotated[HTTPBasicCredentials, Depends(basic)]) -> HTMLResponse:

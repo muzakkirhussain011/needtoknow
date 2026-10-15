@@ -1,26 +1,26 @@
-# Haris authorisation policy.
+# Rampart authorisation policy.
 #
-# Input (built by haris/gateway.py):
+# Input (built by rampart/gateway.py):
 #   input.action        "ask" | "describe" | "ingest" | "audit"
 #   input.principal     {user_id, team, department, clearance, roles, disabled}
 #   input.request       {model, collections}          # collections: [] means "everything I may read"
 #   input.usage         {team_tokens_today}
 #   input.signals       {injection_score, injection_signals, pii_kinds}
 #
-# Data (policies/data.json, loaded at data.haris_config):
+# Data (policies/data.json, loaded at data.rampart_config):
 #   collections: name -> {departments: [..] | ["*"], sensitivity}
 #   teams:       name -> {models: [..], daily_token_budget}
 #   default_model, injection_block_threshold
 #
 # Everything is denied unless a rule below allows it.
 
-package haris
+package rampart
 
 import rego.v1
 
 levels := {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
 
-cfg := data.haris_config
+cfg := data.rampart_config
 
 principal := input.principal
 

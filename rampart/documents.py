@@ -17,7 +17,7 @@ from typing import Protocol
 
 import yaml
 
-from haris.identity import SENSITIVITY_LEVELS
+from rampart.identity import SENSITIVITY_LEVELS
 
 RRF_K = 60  # standard reciprocal-rank-fusion constant
 

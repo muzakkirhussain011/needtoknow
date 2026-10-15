@@ -4,15 +4,15 @@ from pathlib import Path
 
 import pytest
 
-from haris.audit import InMemoryAuditLog
-from haris.documents import InMemoryDocumentStore, load_markdown_documents
-from haris.gateway import Gateway
-from haris.identity import Principal
-from haris.injection import HeuristicInjectionScorer
-from haris.metrics import Metrics
-from haris.models import Completion, HashingEmbedder
-from haris.policy import CallablePolicyEngine, Decision
-from haris.usage import InMemoryUsageStore
+from rampart.audit import InMemoryAuditLog
+from rampart.documents import InMemoryDocumentStore, load_markdown_documents
+from rampart.gateway import Gateway
+from rampart.identity import Principal
+from rampart.injection import HeuristicInjectionScorer
+from rampart.metrics import Metrics
+from rampart.models import Completion, HashingEmbedder
+from rampart.policy import CallablePolicyEngine, Decision
+from rampart.usage import InMemoryUsageStore
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
@@ -32,7 +32,7 @@ LEVEL = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
 
 
 def simple_policy(inp: dict) -> Decision:
-    """A small stand-in for policies/haris.rego, enough to exercise the pipeline in unit tests.
+    """A small stand-in for policies/rampart.rego, enough to exercise the pipeline in unit tests.
     The real policy is tested with `opa test` and in tests/test_integration_opa.py."""
     p = inp["principal"]
     action = inp["action"]

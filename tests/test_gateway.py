@@ -1,7 +1,7 @@
 import pytest
 
-from haris.documents import Chunk, ScoredChunk
-from haris.gateway import PolicyDenied
+from rampart.documents import Chunk, ScoredChunk
+from rampart.gateway import PolicyDenied
 from tests.conftest import AISHA, OMAR
 
 
@@ -64,7 +64,7 @@ def test_store_bug_cannot_leak_restricted_chunks(gateway, chat):
     gateway.store.search = lambda *a, **k: [ScoredChunk(leaked, 1.0)]  # simulate a broken store
     gateway.ask(OMAR, "payment approvals")
     assert "CFO approval" not in chat.calls[-1][-1]["content"]
-    violations = gateway.metrics.registry.get_sample_value("haris_acl_violations_total")
+    violations = gateway.metrics.registry.get_sample_value("rampart_acl_violations_total")
     assert violations == 1.0
 
 

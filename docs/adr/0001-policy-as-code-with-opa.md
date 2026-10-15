@@ -11,7 +11,7 @@ code release, and nobody outside engineering can review what the rules actually 
 
 ## Decision
 
-All authorisation decisions come from one Rego policy (`policies/haris.rego`) with its data in
+All authorisation decisions come from one Rego policy (`policies/rampart.rego`) with its data in
 `policies/data.json`, evaluated by an Open Policy Agent server. The gateway sends one input document
 per request (principal, action, request, usage today, risk signals) and acts only on the returned
 decision: allowed collections, sensitivity ceiling, model, whether PII may be revealed, remaining

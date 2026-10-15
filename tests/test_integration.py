@@ -9,20 +9,20 @@ import uuid
 
 import pytest
 
-from haris.audit import PostgresAuditLog
-from haris.documents import PgVectorDocumentStore, chunk_document, load_markdown_documents
-from haris.identity import SENSITIVITY_LEVELS
-from haris.models import HashingEmbedder
-from haris.policy import OpaPolicyEngine
+from rampart.audit import PostgresAuditLog
+from rampart.documents import PgVectorDocumentStore, chunk_document, load_markdown_documents
+from rampart.identity import SENSITIVITY_LEVELS
+from rampart.models import HashingEmbedder
+from rampart.policy import OpaPolicyEngine
 from tests.conftest import OMAR, SAMPLES
 
-OPA_URL = os.environ.get("HARIS_TEST_OPA_URL")
-DB_URL = os.environ.get("HARIS_TEST_DATABASE_URL")
+OPA_URL = os.environ.get("RAMPART_TEST_OPA_URL")
+DB_URL = os.environ.get("RAMPART_TEST_DATABASE_URL")
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.skipif(not OPA_URL, reason="HARIS_TEST_OPA_URL not set")
+@pytest.mark.skipif(not OPA_URL, reason="RAMPART_TEST_OPA_URL not set")
 def test_real_policy_matches_expectations():
     engine = OpaPolicyEngine(OPA_URL)
     d = engine.decide(
@@ -49,10 +49,10 @@ def test_real_policy_matches_expectations():
 @pytest.fixture(scope="module")
 def pool():
     if not DB_URL:
-        pytest.skip("HARIS_TEST_DATABASE_URL not set")
+        pytest.skip("RAMPART_TEST_DATABASE_URL not set")
     from psycopg_pool import ConnectionPool
 
-    from haris.db import init_schema
+    from rampart.db import init_schema
 
     p = ConnectionPool(DB_URL, min_size=1, max_size=4, open=True)
     init_schema(p, 256)
