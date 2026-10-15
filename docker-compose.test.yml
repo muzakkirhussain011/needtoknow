@@ -1,0 +1,25 @@
+# Runs unit and integration tests against a real OPA server and a real PostgreSQL + pgvector.
+#   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment: { POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: test }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 3s
+      retries: 30
+
+  opa:
+    image: openpolicyagent/opa:1.21.2-static
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--ignore=*_test.rego", "/policies"]
+    volumes: ["./policies:/policies:ro"]
+
+  tests:
+    build: { context: ., target: test }
+    depends_on:
+      postgres: { condition: service_healthy }
+      opa: { condition: service_started }
+    environment:
+      HARIS_TEST_DATABASE_URL: postgresql://test:test@postgres:5432/test
+      HARIS_TEST_OPA_URL: http://opa:8181
+    command: ["sh", "-c", "sleep 2 && pytest -q -ra"]

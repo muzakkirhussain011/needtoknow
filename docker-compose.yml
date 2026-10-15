@@ -1,0 +1,54 @@
+# Full local stack: gateway + Postgres/pgvector + OPA + Ollama (CPU is fine for the demo models).
+#   docker compose up -d --build
+#   docker compose exec gateway haris ingest samples
+#   curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-omar" -H "Content-Type: application/json" \
+#        -d '{"question": "How many days of annual leave do I get?"}'
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: haris
+      POSTGRES_PASSWORD: haris-dev-only
+      POSTGRES_DB: haris
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haris"]
+      interval: 5s
+      retries: 20
+
+  opa:
+    image: openpolicyagent/opa:1.21.2-static
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-level=error", "--ignore=*_test.rego", "/policies"]
+    volumes: ["./policies:/policies:ro"]
+
+  # Optional local model server. Prefer a GPU host: set HARIS_LLM_BASE_URL / HARIS_EMBED_BASE_URL
+  # to any Ollama or vLLM endpoint and skip this profile. Local: docker compose --profile local-llm up -d
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [local-llm]
+    volumes: [ollama:/root/.ollama]
+
+  # One-shot: pulls the chat and embedding models into the ollama volume.
+  ollama-pull:
+    image: ollama/ollama:latest
+    profiles: [local-llm]
+    depends_on: [ollama]
+    environment: { OLLAMA_HOST: "ollama:11434" }
+    entrypoint: ["sh", "-c", "ollama pull gemma4:e2b && ollama pull embeddinggemma"]
+    restart: "no"
+
+  gateway:
+    build: { context: ., target: runtime }
+    depends_on:
+      postgres: { condition: service_healthy }
+      opa: { condition: service_started }
+    environment:
+      HARIS_DATABASE_URL: postgresql://haris:haris-dev-only@postgres:5432/haris
+      HARIS_OPA_URL: http://opa:8181
+      HARIS_LLM_BASE_URL: ${HARIS_LLM_BASE_URL:-http://ollama:11434/v1}
+      HARIS_EMBED_BASE_URL: ${HARIS_EMBED_BASE_URL:-http://ollama:11434}
+    ports: ["8080:8080"]
+
+volumes:
+  pgdata:
+  ollama:
