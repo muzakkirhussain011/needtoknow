@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "haris-ai-gateway"
+version = "0.1.0"
+description = "A self-hosted AI gateway that lets regulated teams use open-weight LLMs on their own documents, with policy-based access control, PII masking, budgets and a tamper-evident audit trail."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Syed Muzakkir Hussain" }]
+keywords = ["llm", "rag", "ai-gateway", "opa", "pgvector", "ollama", "gemma", "pii", "audit", "self-hosted"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Framework :: FastAPI",
+  "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "pyyaml>=6.0",
+  "psycopg[binary,pool]>=3.2",
+  "prometheus-client>=0.20",
+  "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "ruff==0.17.1"]
+
+[project.scripts]
+haris = "haris.cli:main"
+
+[project.urls]
+Repository = "https://github.com/muzakkirhussain011/haris-ai-gateway"
+
+[tool.hatch.build.targets.wheel]
+packages = ["haris"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "S"]
+ignore = ["S101", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: needs a running OPA server or PostgreSQL with pgvector",
+]
