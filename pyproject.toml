@@ -46,7 +46,9 @@ packages = ["needtoknow"]
 
 [tool.hatch.build.targets.sdist]
 # The source distribution carries the library and its tests only, not the example deployments.
-include = ["needtoknow", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+# Patterns follow .gitignore rules, so they are anchored with "/": a bare "tests" would also match
+# examples/gateway/tests.
+include = ["/needtoknow", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
