@@ -1,0 +1,20 @@
+name: Feature request
+description: Propose a change or a new control
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can a team not do today, or what risk is not covered?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+  - type: textarea
+    id: security
+    attributes:
+      label: Effect on access control, PII handling or the audit trail
+      description: Who gains or loses access? What new data is stored or sent to the model?
