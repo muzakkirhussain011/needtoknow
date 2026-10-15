@@ -49,11 +49,13 @@ Python 3.10 or newer. Adapters for external systems install as optional extras.
 ```python
 from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
-backend = InMemoryBackend([
-    Document("handbook", "Annual leave is 25 days.", {"allowed_groups": ["*"]}),
-    Document("salaries", "Salary bands for 2026 ...", {"allowed_groups": ["hr"]}),
-    Document("runbook", "Roll back a failed deploy ...", {"allowed_groups": ["engineering"]}),
-])
+backend = InMemoryBackend(
+    [
+        Document("handbook", "Annual leave is 25 days.", {"allowed_groups": ["*"]}),
+        Document("salaries", "Salary bands for 2026 ...", {"allowed_groups": ["hr"]}),
+        Document("runbook", "Roll back a failed deploy ...", {"allowed_groups": ["engineering"]}),
+    ]
+)
 retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 
 result = retriever.retrieve("leave salary bands", Subject("bob", groups=["engineering"]), k=3)
@@ -83,7 +85,7 @@ class MyBackend:
     supports_filters = True  # set False if search() ignores `filter`
 
     def search(self, query: str, k: int, filter=None) -> list[Hit]:
-        ...  # translate `filter` (In / And / Or) into your store's native filter
+        """Return hits best first. Translate `filter` (In / And / Or) into your store's filter."""
 ```
 
 An authorizer answers two questions:
@@ -91,10 +93,10 @@ An authorizer answers two questions:
 ```python
 class MyAuthorizer:
     def check(self, subject, hits, action="read") -> list[bool]:
-        ...  # one decision per hit
+        """One decision per hit, in order. Raise on any doubt: the retriever fails closed."""
 
     def filter_for(self, subject, action="read"):
-        ...  # a Filter selecting everything the subject may read, or None
+        """A Filter selecting everything the subject may read, or None if you cannot express one."""
 ```
 
 Either can add `async` versions (`asearch`, `acheck`, `afilter_for`); otherwise the sync methods
