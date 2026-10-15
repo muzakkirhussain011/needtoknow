@@ -14,7 +14,7 @@ from rampart.documents import PgVectorDocumentStore, chunk_document, load_markdo
 from rampart.identity import SENSITIVITY_LEVELS
 from rampart.models import HashingEmbedder
 from rampart.policy import OpaPolicyEngine
-from tests.conftest import OMAR, SAMPLES
+from tests.conftest import BOB, SAMPLES
 
 OPA_URL = os.environ.get("RAMPART_TEST_OPA_URL")
 DB_URL = os.environ.get("RAMPART_TEST_DATABASE_URL")
@@ -28,7 +28,7 @@ def test_real_policy_matches_expectations():
     d = engine.decide(
         {
             "action": "ask",
-            "principal": OMAR.to_policy_input(),
+            "principal": BOB.to_policy_input(),
             "request": {"model": "gemma4:e2b", "collections": []},
             "usage": {"team_tokens_today": 0},
         }
@@ -38,7 +38,7 @@ def test_real_policy_matches_expectations():
     denied = engine.decide(
         {
             "action": "ask",
-            "principal": OMAR.to_policy_input(),
+            "principal": BOB.to_policy_input(),
             "request": {"collections": ["finance-procedures"]},
             "usage": {"team_tokens_today": 0},
         }

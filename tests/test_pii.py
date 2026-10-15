@@ -2,8 +2,8 @@ from rampart.pii import Redactor, _iban_ok, _luhn_ok, redact
 
 
 def test_email_phone_and_national_id_are_masked():
-    r = redact("Contact khalid.harbi@najm-logistics.example or +966 55 123 4567, ID 1023456789.")
-    assert "khalid.harbi" not in r.text
+    r = redact("Contact daniel.brooks@najm-logistics.example or +966 55 123 4567, ID 1023456789.")
+    assert "daniel.brooks" not in r.text
     assert "+966" not in r.text
     assert "1023456789" not in r.text
     assert r.counts == {"EMAIL": 1, "PHONE": 1, "NATIONAL_ID": 1}

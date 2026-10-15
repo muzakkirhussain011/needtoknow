@@ -18,9 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
 
 ADMIN = Principal("admin", "Admin", "it-admin", "it", "restricted", ("admin",))
-AISHA = Principal("aisha", "Aisha", "people-ops", "hr", "confidential", ("employee", "pii_reader"))
-OMAR = Principal("omar", "Omar", "platform", "engineering", "internal", ("employee",))
-SARA = Principal("sara", "Sara", "security", "security", "internal", ("auditor",))
+ALICE = Principal("alice", "Alice", "people-ops", "hr", "confidential", ("employee", "pii_reader"))
+BOB = Principal("bob", "Bob", "platform", "engineering", "internal", ("employee",))
+DAVE = Principal("dave", "Dave", "security", "security", "internal", ("auditor",))
 
 READABLE = {
     "hr": ["company-handbook", "hr-policies", "vendor-faq"],

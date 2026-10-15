@@ -5,7 +5,7 @@ import rego.v1
 import data.rampart
 
 hr_user := {
-	"user_id": "aisha",
+	"user_id": "alice",
 	"team": "people-ops",
 	"department": "hr",
 	"clearance": "confidential",
@@ -14,7 +14,7 @@ hr_user := {
 }
 
 engineer := {
-	"user_id": "omar",
+	"user_id": "bob",
 	"team": "platform",
 	"department": "engineering",
 	"clearance": "internal",
@@ -23,7 +23,7 @@ engineer := {
 }
 
 finance_lead := {
-	"user_id": "fatima",
+	"user_id": "carol",
 	"team": "treasury",
 	"department": "finance",
 	"clearance": "restricted",

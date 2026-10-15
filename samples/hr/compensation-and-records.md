@@ -11,7 +11,7 @@ Salary reviews happen every March. Out-of-cycle increases need approval from the
 
 # Updating an employee record
 
-Employee record changes are made in the HR system by the HR business partner. Example record for the fictional employee Khalid Al-Harbi: national ID 1023456789, work email khalid.harbi@najm-logistics.example, mobile +966 55 123 4567. Never send these details by email; share them only through the HR system.
+Employee record changes are made in the HR system by the HR business partner. Example record for the fictional employee Daniel Brooks: national ID 1023456789, work email daniel.brooks@najm-logistics.example, mobile +966 55 123 4567. Never send these details by email; share them only through the HR system.
 
 # Probation
 
