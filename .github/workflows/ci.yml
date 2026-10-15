@@ -12,7 +12,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install "ruff==0.17.1"
@@ -22,7 +22,7 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: open-policy-agent/setup-opa@v2
         with: { version: 1.21.2 }
       - run: opa check --strict policies
@@ -44,7 +44,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip }
       - uses: open-policy-agent/setup-opa@v2
@@ -63,6 +63,6 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the runtime image
         run: docker build --target runtime -t rampart-ai-gateway:ci .
