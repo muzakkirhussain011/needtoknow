@@ -1,12 +1,12 @@
 name: Feature request
-description: Propose a change or a new control
+description: Propose a feature, adapter or change
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
       label: The problem
-      description: What can a team not do today, or what risk is not covered?
+      description: What can you not do today? Which vector store, permission system or framework is involved?
     validations:
       required: true
   - type: textarea
@@ -16,5 +16,5 @@ body:
   - type: textarea
     id: security
     attributes:
-      label: Effect on access control, PII handling or the audit trail
-      description: Who gains or loses access? What new data is stored or sent to the model?
+      label: Effect on the security guarantees
+      description: Could this change what a subject may see, or how failures are handled?

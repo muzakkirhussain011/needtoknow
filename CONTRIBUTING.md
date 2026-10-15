@@ -1,40 +1,58 @@
-# Contributing
+# Contributing to needtoknow
 
-Thanks for taking the time. Bug reports, policy ideas and pull requests are all welcome.
+Thank you for helping. Bug reports, adapter ideas, documentation fixes and pull requests are all
+welcome, from first-time contributors too. Look for issues labelled **good first issue**.
 
 ## Set up
 
 ```bash
-git clone https://github.com/muzakkirhussain011/rampart-ai-gateway.git
-cd rampart-ai-gateway
-python -m venv .venv && . .venv/bin/activate
+git clone https://github.com/muzakkirhussain011/needtoknow.git
+cd needtoknow
+python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 pytest -q
+ruff check . && ruff format --check .
 ```
 
-Policy tests need the [OPA CLI](https://www.openpolicyagent.org/docs/latest/#running-opa):
-`opa test policies -v`. Integration tests need Docker:
+The core needs no services, no GPU and no network. Adapter integration tests start their service
+(PostgreSQL, OpenFGA, ...) with Docker; each adapter's docs say how.
 
-```bash
-docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
-```
+## What makes a good pull request
 
-No model or GPU is needed for any test; the unit tests use a fake model and a deterministic
-embedder.
-
-## Pull requests
-
-- Keep each pull request to one change, with a test that fails without it.
-- Security-relevant behaviour is tested as a property ("a denied request never reaches the
-  model"), not only as a happy path.
-- **Policy changes** (`policies/`) need Rego tests; CI fails below 90% policy coverage. Explain in
-  the description who gains or loses access.
-- `ruff check .`, `ruff format --check .`, `opa fmt --list --fail policies` and the tests must pass.
-- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
-  (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `build:`, `chore:`).
+- **One change per pull request**, with a test that fails without it.
+- **Security behaviour is tested as a property, not an example.** If you add a backend or an
+  authorizer, add it to the property-based suite (see `tests/test_properties.py`): for random
+  corpora, permissions, subjects and queries it must never return a chunk the subject may not
+  read, and it must agree with the in-memory reference implementation.
+- **Fail closed.** An authorizer that cannot decide raises `AuthorizationError`. Never return
+  "allow" on errors, timeouts or unexpected responses.
+- **No new core dependencies.** Integrations with external systems are optional extras
+  (`pip install needtoknow[openfga]`), imported only inside their own module.
+- **Public API changes** need an issue first. After 1.0 the public API follows semantic
+  versioning: no breaking changes without a deprecation period.
 - Add a line to `CHANGELOG.md` under *Unreleased* for anything a user would notice.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
+  (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `refactor:`, `chore:`).
+
+## Adding an adapter
+
+A backend implements `search(query, k, filter=None) -> list[Hit]` and sets `supports_filters`.
+Translate the `In` / `And` / `Or` filter into the store's native filter; the in-memory backend and
+`needtoknow.filters.matches` define the semantics you must match, including "a missing field
+never matches". An authorizer implements `check(subject, hits, action)` and, when the permission
+system can enumerate what a subject may read, `filter_for(subject, action)`.
 
 ## Design changes
 
-For a change to how access control, PII handling or the audit trail works, open an issue first.
-Significant decisions are recorded in `docs/adr/`.
+Significant decisions are recorded as architecture decision records in [`docs/adr`](docs/adr).
+Propose larger changes in an issue or discussion first, so that design questions are settled
+before code is written.
+
+## Conduct and governance
+
+Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). How decisions are made and
+how contributors become maintainers is described in [GOVERNANCE.md](GOVERNANCE.md).
+
+## Reporting security issues
+
+Please do not open public issues for vulnerabilities. See [SECURITY.md](SECURITY.md).
