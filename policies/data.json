@@ -1,0 +1,21 @@
+{
+  "haris_config": {
+    "default_model": "gemma4:e2b",
+    "injection_block_threshold": 0.8,
+    "collections": {
+      "company-handbook": { "departments": ["*"], "sensitivity": "internal" },
+      "vendor-faq": { "departments": ["*"], "sensitivity": "internal" },
+      "it-runbooks": { "departments": ["it", "engineering"], "sensitivity": "internal" },
+      "hr-policies": { "departments": ["hr"], "sensitivity": "confidential" },
+      "finance-procedures": { "departments": ["finance"], "sensitivity": "restricted" }
+    },
+    "teams": {
+      "people-ops": { "models": ["gemma4:e2b", "gemma3:1b"], "daily_token_budget": 200000 },
+      "platform": { "models": ["gemma4:e2b", "gemma3:1b"], "daily_token_budget": 300000 },
+      "treasury": { "models": ["gemma4:e2b"], "daily_token_budget": 150000 },
+      "security": { "models": ["gemma4:e2b"], "daily_token_budget": 50000 },
+      "it-admin": { "models": ["gemma4:e2b", "gemma3:1b"], "daily_token_budget": 100000 },
+      "interns": { "models": ["gemma3:1b"], "daily_token_budget": 2000 }
+    }
+  }
+}
