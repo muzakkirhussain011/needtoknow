@@ -29,7 +29,7 @@ compliance teams ask:
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     C["Staff tools<br/>OpenAI SDKs, chat UIs, scripts"] -->|API key| AUTH
 
     subgraph H["Haris gateway (FastAPI)"]
