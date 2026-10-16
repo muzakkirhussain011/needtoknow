@@ -63,6 +63,7 @@ operations
 integrations/index
 integrations/pgvector
 integrations/chroma
+integrations/elasticsearch
 integrations/qdrant
 integrations/opa
 integrations/openfga

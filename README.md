@@ -132,6 +132,20 @@ create_collection(client, "docs", dim=768)
 backend = QdrantBackend(client, "docs", embed=my_embedding_model)
 ```
 
+**Elasticsearch and OpenSearch** (`pip install "needtoknow[elasticsearch]"` or `[opensearch]`).
+The filter runs inside the kNN search. Permissions are matched on a type-tagged keyword field, so
+the integer `1` and the string `"1"` stay different values, as the reference semantics require.
+
+```python
+from elasticsearch import Elasticsearch
+
+from needtoknow.backends.elasticsearch import ElasticsearchBackend, create_index
+
+client = Elasticsearch("http://localhost:9200")
+create_index(client, "docs", dim=768)
+backend = ElasticsearchBackend(client, "docs", embed=my_embedding_model)
+```
+
 **Open Policy Agent** (no extra dependency). Your Rego policy returns one decision per chunk, and
 can optionally return a filter so the vector store does the filtering. A complete policy is in
 [`examples/opa/needtoknow.rego`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/opa/needtoknow.rego).

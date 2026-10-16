@@ -19,6 +19,14 @@ All notable changes are recorded here. The format follows
   keyword payload indexes on the permission fields, points use LangChain's Qdrant layout so existing
   collections work, and `AsyncQdrantClient` gives a native `aretrieve`. Tested with the conformance kit
   against a real Qdrant server and Qdrant's local mode. Extra: `needtoknow[qdrant]`.
+- `needtoknow.backends.elasticsearch` and `needtoknow.backends.opensearch`: kNN search with the
+  permission filter applied during the search. Permissions are matched on one type-tagged keyword
+  field (`needtoknow_terms`), because keyword fields compare strings and would otherwise match the
+  integer `1` against `"1"`; metadata is stored unindexed and returned exactly, and never adds
+  mappings. `create_index` sets up the mapping, `permission_terms` lets other ingestion pipelines
+  write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
+  against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
+  `needtoknow[opensearch]`.
 
 ## [1.1.0] - 2026-10-16
 
