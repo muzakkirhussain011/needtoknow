@@ -15,6 +15,9 @@ All notable changes are recorded here. The format follows
 - `needtoknow.authorizers.CircuitBreaker`: pauses requests to a permission service that keeps
   failing, then probes; pass it as `circuit_breaker=`.
 - `ssl_context=` on both authorizers, for your own CA or mutual TLS.
+- A load benchmark (`benchmarks/load_bench.py`): a million MS MARCO passages on pgvector, recall
+  and latency by selectivity, throughput with concurrent users, and the cost of OPA as the
+  permission service with and without caching. CI runs a small version against real services.
 - Fault-injection tests: under any sequence of injected faults, retrieval through OPA returns
   exactly the permitted top-k or raises `AuthorizationError`.
 

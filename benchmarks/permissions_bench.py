@@ -106,8 +106,9 @@ def hashing_embed(texts: Sequence[str], rng: np.random.Generator, dim: int = 128
 
 
 def model_embed(
-    name: str, docs: Sequence[str], queries: Sequence[str], batch_size: int
+    name: str, docs: Sequence[str], queries: Sequence[str], batch_size: int, query_prefix: str = ""
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Embed with a sentence-transformers model; `query_prefix` is for models that want one (BGE)."""
     import torch
     from sentence_transformers import SentenceTransformer
 
@@ -116,7 +117,8 @@ def model_embed(
     if device == "cuda":
         model.half()
     model.max_seq_length = min(model.max_seq_length or 512, 512)
-    prompt = "query" if "query" in (model.prompts or {}) else None
+    prompt = "query" if "query" in (model.prompts or {}) and not query_prefix else None
+    queries = [query_prefix + q for q in queries]
     options = {"batch_size": batch_size, "normalize_embeddings": True, "convert_to_numpy": True}
     gpu = torch.cuda.get_device_name(0) if device == "cuda" else "no GPU"
     log(f"embedding {len(docs)} chunks and {len(queries)} queries with {name} on {device} ({gpu})")
@@ -417,14 +419,16 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def embed_corpus(args: argparse.Namespace, docs: list[str], queries: list[str], rng: np.random.Generator) -> Any:
     if args.embedder == "hashing":
         return hashing_embed(docs, rng), hashing_embed(queries, rng)
+    prefix = getattr(args, "query_prefix", "")
     cache = None
     if args.cache:
-        slug = re.sub(r"[^\w.-]+", "_", f"{args.dataset}-{args.embedder}-{len(docs)}-{len(queries)}-{args.seed}")
+        tag = hashlib.blake2b(prefix.encode(), digest_size=4).hexdigest()
+        slug = re.sub(r"[^\w.-]+", "_", f"{args.dataset}-{args.embedder}-{len(docs)}-{len(queries)}-{args.seed}-{tag}")
         cache = args.cache / f"{slug}.npz"
         if cache.exists():
             saved = np.load(cache)
             return saved["docs"], saved["queries"]
-    doc_vecs, query_vecs = model_embed(args.embedder, docs, queries, args.batch_size)
+    doc_vecs, query_vecs = model_embed(args.embedder, docs, queries, args.batch_size, prefix)
     if cache:
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez(cache, docs=doc_vecs, queries=query_vecs)

@@ -45,6 +45,18 @@ The embeddings need a GPU, so the full run happens on Kaggle, not on a laptop.
 3. Run all cells. `kaggle_setup.sh` installs PostgreSQL and builds pgvector; the benchmark then
    writes `results.json` and `results.md` to `/kaggle/working`.
 
+## Load benchmark
+
+`load_bench.py` measures needtoknow at scale on PostgreSQL + pgvector: the first million passages
+of BEIR MS MARCO with real MS MARCO questions, embedded with BAAI/bge-small-en-v1.5. It reports
+how long loading and indexing take, recall and latency by permission selectivity, throughput as
+concurrent users grow, and what Open Policy Agent costs as the permission service, with and without
+`CachingAuthorizer`. Run it with [`kaggle_load.ipynb`](kaggle_load.ipynb), which also starts OPA
+with the example policy and gives PostgreSQL enough memory for a million rows.
+
+CI runs a small synthetic version against real PostgreSQL and OPA with `--check`, which fails on
+any leak or error.
+
 ## Run anywhere, without a model
 
 ```bash
