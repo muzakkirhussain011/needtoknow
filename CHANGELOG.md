@@ -6,6 +6,23 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- The OPA and OpenFGA authorizers reuse HTTP connections (one per thread) instead of opening one per
+  request, and replace a connection the server closed while idle.
+- Transient failures are retried once by default (`retries=`): refused or reset connections,
+  missing responses, HTTP 502, 503 and 504. Timeouts and other errors are not retried.
+- `needtoknow.authorizers.CircuitBreaker`: pauses requests to a permission service that keeps
+  failing, then probes; pass it as `circuit_breaker=`.
+- `ssl_context=` on both authorizers, for your own CA or mutual TLS.
+- Fault-injection tests: under any sequence of injected faults, retrieval through OPA returns
+  exactly the permitted top-k or raises `AuthorizationError`.
+
+### Changed
+
+- The authorizers no longer follow HTTP redirects; a redirect is an error, so retrieval fails
+  closed.
+
 ## [1.0.0] - 2026-10-16
 
 The first stable release. The public API in the

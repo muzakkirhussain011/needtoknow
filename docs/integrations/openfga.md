@@ -61,6 +61,8 @@ must come from authentication, not from the client.
 
 Every failure raises `AuthorizationError`: an unreachable server, a timeout (`timeout=`, 2 seconds
 by default), an unexpected response, or an action with no configured relation. `headers=` adds
-headers to every request, for example an API token.
+headers to every request, for example an API token. Connections are reused and transient failures
+retried once (`retries=`); `circuit_breaker=` and `ssl_context=` work as described under
+[resilience](../operations.md#resilience-of-remote-permission-services).
 
 For high traffic, wrap it in a [`CachingAuthorizer`](../operations.md#permission-caching).

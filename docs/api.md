@@ -70,6 +70,9 @@ modules and need their extra.
 .. autoclass:: needtoknow.authorizers.opa.OPAAuthorizer
 
 .. autoclass:: needtoknow.authorizers.openfga.OpenFGAAuthorizer
+
+.. autoclass:: needtoknow.authorizers.CircuitBreaker
+   :members: is_open
 ```
 
 ## Events, audit and tracing

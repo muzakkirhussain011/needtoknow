@@ -12,18 +12,19 @@ No extra dependency: it calls OpenFGA's HTTP API with the standard library.
 
 The resource id is `hit.metadata[resource_field]` (a document id shared by its chunks), or the
 chunk id when `resource_field` is None. A chunk without its resource id is denied. Pre-filtering
-needs `resource_field`. Every failure raises `AuthorizationError`.
+needs `resource_field`. Every failure raises `AuthorizationError`. Connections are reused,
+transient failures are retried once, and a `CircuitBreaker` can pause requests to a failing
+server; see `needtoknow.authorizers`.
 """
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
+import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
+from needtoknow.authorizers._http import CircuitBreaker, JsonClient
 from needtoknow.authz import AuthorizationError
 from needtoknow.filters import Filter, In
 from needtoknow.types import Hit, Subject
@@ -36,7 +37,8 @@ class OpenFGAAuthorizer:
 
     `relations` maps actions to relations (default `{"read": "viewer"}`). Users are
     `<user_type>:<subject id>` and objects `<object_type>:<resource id>`, where the resource id is
-    the metadata field `resource_field` (or the chunk id when it is None). Every failure raises
+    the metadata field `resource_field` (or the chunk id when it is None). `retries`,
+    `circuit_breaker` and `ssl_context` work as in `OPAAuthorizer`. Every failure raises
     `AuthorizationError`.
     """
 
@@ -57,12 +59,23 @@ class OpenFGAAuthorizer:
         batch_size: int = 50,
         timeout: float = 2.0,
         headers: Mapping[str, str] | None = None,
+        retries: int = 1,
+        circuit_breaker: CircuitBreaker | None = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
-        if urlsplit(url).scheme not in ("http", "https"):
-            raise ValueError("the OpenFGA url must start with http:// or https://")
         if batch_size < 1 or list_objects_limit < 1:
             raise ValueError("batch_size and list_objects_limit must be positive")
-        self.base = f"{url.rstrip('/')}/stores/{quote(store_id, safe='')}"
+        self._client = JsonClient(
+            url,
+            service="OpenFGA",
+            timeout=timeout,
+            headers=headers or {},
+            retries=retries,
+            breaker=circuit_breaker,
+            ssl_context=ssl_context,
+        )
+        self._store_path = f"/stores/{quote(store_id, safe='')}"
+        self.base = self._client.url + self._store_path
         self.model_id = authorization_model_id
         self.relations = dict(relations or {"read": "viewer"})
         self.object_type = object_type
@@ -74,22 +87,13 @@ class OpenFGAAuthorizer:
         self.list_objects_limit = list_objects_limit
         self.batch_size = batch_size
         self.timeout = timeout
-        self.headers = {"Content-Type": "application/json", **(headers or {})}
 
     # ---- helpers ---------------------------------------------------------------------------
 
     def _post(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         if self.model_id:
             payload = {**payload, "authorization_model_id": self.model_id}
-        # The scheme is restricted to http(s) in __init__, so these calls cannot open file:// or others.
-        request = urllib.request.Request(  # noqa: S310
-            f"{self.base}/{endpoint}", data=json.dumps(payload).encode(), headers=self.headers, method="POST"
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
-                document = json.loads(response.read())
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-            raise AuthorizationError(f"OpenFGA {endpoint} failed: {exc}") from exc
+        document = self._client.post_json(f"{self._store_path}/{endpoint}", payload, f"OpenFGA {endpoint}")
         if not isinstance(document, dict):
             raise AuthorizationError(f"OpenFGA {endpoint} returned an unexpected response")
         return document
