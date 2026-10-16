@@ -177,3 +177,18 @@ def test_native_async_search_matches_sync(engine):
     async_result, sync_result = asyncio.run(run())
     engine["client"].indices.delete(index=name)
     assert async_result == sync_result and len(async_result.hits) == 4
+
+
+def test_a_subject_in_ten_thousand_groups(engine):
+    name = _new_index(engine)
+    backend = engine["backend"](engine["client"], name, EMBED)
+    backend.add(
+        [
+            Document("mine", "leave policy", {"allowed_groups": ["g9999"]}),
+            Document("other", "leave policy", {"allowed_groups": ["hr"]}),
+        ]
+    )
+    subject = Subject("ann", [f"g{i}" for i in range(10_000)])
+    result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
+    engine["client"].indices.delete(index=name)
+    assert [h.id for h in result.hits] == ["mine"]

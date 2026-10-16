@@ -58,6 +58,8 @@ _INTS = (1, 2, 3)
 _WORDS = ("policy", "leave", "salary", "incident", "deploy", "vendor", "budget", "report")
 _USERS = ("alice", "bob", "carol", "dave")
 _GROUPS = ("eng", "hr", "sales", "legal")
+# Values no generated document holds, for filters and subjects with hundreds of values.
+_MANY: list[str | int] = [*(f"other-{i}" for i in range(150)), *range(1000, 1150)]
 
 BackendFactory = Callable[[Sequence[Document]], SearchBackend]
 
@@ -92,7 +94,7 @@ class HashingEmbedder:
 
 
 def _value(rng: random.Random) -> Any:
-    kind = rng.randrange(5)
+    kind = rng.randrange(7)
     if kind == 0:
         return rng.choice(_STRINGS)
     if kind == 1:
@@ -101,7 +103,11 @@ def _value(rng: random.Random) -> Any:
         return rng.choice((True, False))  # never matched: filter values are only strings and integers
     if kind == 3:
         return rng.sample(_STRINGS, rng.randint(0, len(_STRINGS)))
-    return rng.sample(_INTS, rng.randint(0, len(_INTS)))
+    if kind == 4:
+        return rng.sample(_INTS, rng.randint(0, len(_INTS)))
+    if kind == 5:
+        return [rng.sample(_STRINGS, 1)]  # a nested list: its inner values never match
+    return {"value": rng.choice(_STRINGS)}  # an object: never matched either
 
 
 def random_documents(rng: random.Random, n: int) -> list[Document]:
@@ -119,7 +125,9 @@ def random_documents(rng: random.Random, n: int) -> list[Document]:
 def random_filter(rng: random.Random, depth: int = 2) -> Filter:
     """A filter over the fields `random_documents` uses, nested up to `depth` levels of And/Or."""
     if depth <= 0 or rng.random() < 0.4:
-        values = [rng.choice((*_STRINGS, *_INTS)) for _ in range(rng.randint(0, 3))]
+        values: list[str | int] = [rng.choice((*_STRINGS, *_INTS)) for _ in range(rng.randint(0, 3))]
+        if rng.random() < 0.1:
+            values += _MANY  # hundreds of values that match nothing, as for a subject in many groups
         return In(rng.choice(_FIELDS), values)
     clauses = [random_filter(rng, depth - 1) for _ in range(rng.randint(1, 3))]
     return And(*clauses) if rng.random() < 0.5 else Or(*clauses)
@@ -139,7 +147,10 @@ def _acl_documents(rng: random.Random, n: int) -> list[Document]:
 
 
 def _subject(rng: random.Random) -> Subject:
-    return Subject(rng.choice(_USERS), rng.sample(_GROUPS, rng.randint(0, 3)))
+    groups = rng.sample(_GROUPS, rng.randint(0, 3))
+    if rng.random() < 0.2:
+        groups += [str(v) for v in _MANY]  # a subject in hundreds of other groups
+    return Subject(rng.choice(_USERS), groups)
 
 
 def _may_read(subject: Subject, metadata: Mapping[str, Any]) -> bool:

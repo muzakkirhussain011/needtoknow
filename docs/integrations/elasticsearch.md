@@ -90,4 +90,5 @@ permissions, so the re-check denies it.
 ## Limits
 
 Both engines cap k at 10,000. A `terms` query holds at most `index.max_terms_count` values (65,536
-by default), which bounds how many groups a single subject's filter can name.
+by default), which bounds how many groups a single subject's filter can name; see
+[Operations](../operations.md#subjects-in-very-many-groups).

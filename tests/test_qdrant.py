@@ -167,3 +167,20 @@ def test_native_async_search_matches_sync():
     async_result, sync_result = asyncio.run(run())
     client.delete_collection(name)
     assert async_result == sync_result and len(async_result.hits) == 4
+
+
+def test_a_subject_in_ten_thousand_groups():
+    client = qdrant_client.QdrantClient(url=URL) if URL else qdrant_client.QdrantClient(":memory:")
+    name = f"ntk_{uuid.uuid4().hex}"
+    create_collection(client, name, EMBED.dim)
+    backend = QdrantBackend(client, name, EMBED)
+    backend.add(
+        [
+            Document("mine", "leave policy", {"allowed_groups": ["g9999"]}),
+            Document("other", "leave policy", {"allowed_groups": ["hr"]}),
+        ]
+    )
+    subject = Subject("ann", [f"g{i}" for i in range(10_000)])
+    result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
+    client.delete_collection(name)
+    assert [h.id for h in result.hits] == ["mine"]

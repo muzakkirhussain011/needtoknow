@@ -19,25 +19,37 @@ from typing import Any
 from needtoknow.filters import And, Filter, In, Or, _ordered
 from needtoknow.types import Document, Hit
 
-__all__ = ["PgVectorBackend", "create_schema", "filter_to_sql"]
+__all__ = ["MANY_VALUES", "PgVectorBackend", "create_schema", "filter_to_sql"]
 
 Embed = Callable[[str], Sequence[float]]
+
+MANY_VALUES = 100
+"""Above this many values, an `In` is sent as two array parameters rather than two per value."""
 
 
 def filter_to_sql(f: Filter | None) -> tuple[str, list[Any]]:
     """Translate a filter into a condition on the `metadata` jsonb column, with bound parameters.
 
     Each value becomes two containment tests: scalar equality (`{"field": v}`) and array
-    membership (`{"field": [v]}`). jsonb containment compares by type, matching the reference
+    membership (`{"field": [v]}`), which the GIN index on `metadata` serves. Above
+    `MANY_VALUES` values (a subject in thousands of groups) the test takes two array parameters
+    instead of two per value, so the query stays small and far below PostgreSQL's limit of 65,535
+    parameters. jsonb equality and containment compare by type either way, matching the reference
     semantics in `needtoknow.filters.matches`.
     """
     if f is None:
         return "TRUE", []
     if isinstance(f, In):
-        if not f.values:
+        values = _ordered(f.values)
+        if not values:
             return "FALSE", []
+        if len(values) > MANY_VALUES:
+            scalars = [json.dumps(v) for v in values]
+            members = [json.dumps([v]) for v in values]
+            sql = "(metadata -> %s = ANY(%s::jsonb[]) OR metadata -> %s @> ANY(%s::jsonb[]))"
+            return sql, [f.field, scalars, f.field, members]
         tests, params = [], []
-        for value in _ordered(f.values):
+        for value in values:
             tests += ["metadata @> %s::jsonb", "metadata @> %s::jsonb"]
             params += [json.dumps({f.field: value}), json.dumps({f.field: [value]})]
         return "(" + " OR ".join(tests) + ")", params

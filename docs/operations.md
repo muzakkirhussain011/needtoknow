@@ -82,6 +82,30 @@ response, or a 5xx one), rejects calls at once for 30 seconds, then lets one pro
 closes it, failure opens it again. `breaker.is_open` is there for monitoring, and one breaker can be
 shared by every authorizer that calls the same service.
 
+## Subjects in very many groups
+
+In large organisations one user can belong to thousands of directory groups. With
+`MetadataACLAuthorizer` the pre-filter names all of them, and with OpenFGA or SpiceDB it lists every
+document the user may read, so filters can grow large. How each backend sends a large filter, and
+what CI tests:
+
+| Backend | A large `In` | Tested in CI |
+|---|---|---|
+| pgvector | Up to 100 values: one GIN-indexed containment test per value. Above that: two array parameters, so the query stays small and far below PostgreSQL's limit of 65,535 parameters (the GIN index does not serve that clause; the HNSW scan filters as it goes) | a subject in 40,000 groups |
+| Qdrant | One `MatchAny` per value type | 10,000 groups |
+| Elasticsearch, OpenSearch | One `terms` query, at most `index.max_terms_count` values (65,536 by default) | 10,000 groups |
+| Chroma | `$in`, plus one equality clause per value of a list field: large filters slow every query | 300 values |
+| OpenFGA, SpiceDB | The pre-filter lists documents, up to `list_objects_limit` / `lookup_limit` (1,000); beyond that the retriever post-filters | |
+
+Every backend also runs the conformance kit with filters of 300 values and subjects in hundreds of
+groups. To keep filters small:
+
+- Copy only the groups that grant access to documents into the chunks' permissions, and give the
+  `Subject` only those groups; most directory groups (distribution lists, building access) are
+  irrelevant to retrieval.
+- Use coarser groups where the source allows it: one department rather than its fifty teams.
+- Wrap the authorizer in `CachingAuthorizer`, so a large filter is computed once per `ttl`.
+
 ## Audit events
 
 Every `retrieve` and `aretrieve` call, including failed ones, produces one `RetrievalEvent` and
