@@ -67,6 +67,11 @@ modules and need their extra.
 .. autoclass:: needtoknow.CachingAuthorizer
    :members: invalidate
 
+.. autoclass:: needtoknow.caching.SharedCache
+   :members: get_many, set_many, delete_prefix
+
+.. autoclass:: needtoknow.caching.RedisCache
+
 .. autoclass:: needtoknow.authorizers.opa.OPAAuthorizer
 
 .. autoclass:: needtoknow.authorizers.openfga.OpenFGAAuthorizer
