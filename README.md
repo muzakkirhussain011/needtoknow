@@ -1,12 +1,19 @@
-<a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/needtoknow-3d.webp" alt="needtoknow logo: a document whose readable lines are highlighted and one line is redacted" width="160" align="right"></a>
+<h1 align="center">
+  <a href="https://muzakkirhussain011.github.io/needtoknow/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/lockup-dark.webp">
+      <img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/lockup-light.webp" alt="needtoknow" width="440">
+    </picture>
+  </a>
+</h1>
 
-# needtoknow
-
-[![CI](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg)](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml)
-[![Docs](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg)](https://muzakkirhussain011.github.io/needtoknow/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE)
-![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
-![Dependencies: none](https://img.shields.io/badge/core%20dependencies-none-brightgreen.svg)
+<p align="center">
+  <a href="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
+  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/core%20dependencies-none-brightgreen.svg" alt="Dependencies: none">
+</p>
 
 **Permission-aware retrieval for RAG.** Every user gets only the chunks they are allowed to read,
 whatever vector store, permission system or framework you use.

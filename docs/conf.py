@@ -29,8 +29,9 @@ html_theme_options = {
     "source_repository": "https://github.com/muzakkirhussain011/needtoknow",
     "source_branch": "main",
     "source_directory": "docs/",
-    "light_logo": "brand/needtoknow-3d.webp",
-    "dark_logo": "brand/needtoknow-3d.webp",
+    "light_logo": "brand/lockup-light.webp",
+    "dark_logo": "brand/lockup-dark.webp",
+    "sidebar_hide_name": True,  # the lockup carries the name
 }
 
 # Brand assets and the front page's 3D logo (hero3d.js, with three.js vendored in _static/vendor).

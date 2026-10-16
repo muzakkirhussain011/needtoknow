@@ -1,6 +1,6 @@
-/* The 3D logo above the project name in the sidebar. */
+/* The logo lockup (3D mark and name) at the top of the sidebar. */
 .sidebar-logo {
-  max-width: 132px;
+  max-width: 200px;
 }
 
 /* The 3D hero on the front page (see hero3d.js). The still render is shown until the live model
