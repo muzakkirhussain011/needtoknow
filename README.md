@@ -8,15 +8,28 @@
 </h1>
 
 <p align="center">
-  <a href="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
-  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/core%20dependencies-none-brightgreen.svg" alt="Dependencies: none">
+  <strong>Permission-aware retrieval for RAG.</strong><br>
+  Every user gets only the chunks they are allowed to read,<br>
+  whatever vector store, permission system or framework you use.
 </p>
 
-**Permission-aware retrieval for RAG.** Every user gets only the chunks they are allowed to read,
-whatever vector store, permission system or framework you use.
+<p align="center">
+  <a href="https://pypi.org/project/needtoknow/"><img src="https://img.shields.io/pypi/v/needtoknow?color=0e9f8e" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/needtoknow/"><img src="https://img.shields.io/pypi/pyversions/needtoknow" alt="Python versions"></a>
+  <a href="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/needtoknow"><img src="https://api.securityscorecards.dev/projects/github.com/muzakkirhussain011/needtoknow/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <a href="https://muzakkirhussain011.github.io/needtoknow/"><b>Documentation</b></a> ·
+  <a href="https://muzakkirhussain011.github.io/needtoknow/quickstart.html">Quickstart</a> ·
+  <a href="https://muzakkirhussain011.github.io/needtoknow/integrations/index.html">Integrations</a> ·
+  <a href="https://muzakkirhussain011.github.io/needtoknow/benchmarks.html">Benchmarks</a> ·
+  <a href="https://muzakkirhussain011.github.io/needtoknow/security.html">Security model</a> ·
+  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md">Changelog</a>
+</p>
 
 ```python
 from needtoknow import PermissionedRetriever, MetadataACLAuthorizer, Subject
@@ -25,11 +38,6 @@ retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 result = retriever.retrieve("What are this year's salary bands?", Subject("bob", groups=["engineering"]), k=5)
 # result.hits holds only chunks Bob may read. HR documents never reach the prompt.
 ```
-
-**[Documentation](https://muzakkirhussain011.github.io/needtoknow/)** ·
-[Security model](https://muzakkirhussain011.github.io/needtoknow/security.html) ·
-[Benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html) ·
-[Changelog](https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md)
 
 ## Why
 
@@ -83,6 +91,13 @@ print(result.strategy, result.complete)  # prefilter True
 
 ## How it works
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/how-it-works-dark.svg">
+    <img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/how-it-works-light.svg" alt="Your app sends the query and the user to needtoknow, which asks the permission system for a filter, runs it inside the vector store's search, checks every hit again and passes only permitted chunks to the LLM prompt" width="820">
+  </picture>
+</p>
+
 | Strategy | When | Cost | Result |
 |---|---|---|---|
 | `prefilter` | The authorizer can return a filter and the backend supports filters | One search | The exact top-k of what the subject may read |
@@ -95,6 +110,24 @@ Every call returns a `RetrievalResult` with the hits plus `strategy`, `examined`
 ## Integrations
 
 Each integration is an optional extra, so the core stays dependency-free.
+
+| Integration | Kind | Install | Where permissions apply |
+|---|---|---|---|
+| [PostgreSQL + pgvector](https://muzakkirhussain011.github.io/needtoknow/integrations/pgvector.html) | Vector store | `needtoknow[pgvector]` | Inside the SQL query |
+| [Qdrant](https://muzakkirhussain011.github.io/needtoknow/integrations/qdrant.html) | Vector store | `needtoknow[qdrant]` | Qdrant's `query_filter` |
+| [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
+| [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
+| [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
+| [SpiceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/spicedb.html) | Permission system | none | LookupResources pre-filter, bulk checks |
+| [Cerbos](https://muzakkirhussain011.github.io/needtoknow/integrations/cerbos.html) | Permission system | none | Pre-filter from query plans |
+| [Open Policy Agent](https://muzakkirhussain011.github.io/needtoknow/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
+| [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
+| [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
+
+Setup for each, with code:
+
+<details>
+<summary><b>PostgreSQL + pgvector</b></summary>
 
 **PostgreSQL + pgvector** (`pip install "needtoknow[pgvector]"`, pgvector 0.8+). The permission
 filter runs inside the SQL query as JSON containment tests, served by a GIN index, and iterative
@@ -110,6 +143,11 @@ create_schema(pool, dim=768)
 backend = PgVectorBackend(pool, embed=my_embedding_model)  # embed: str -> list[float]
 backend.add(documents)
 ```
+
+</details>
+
+<details>
+<summary><b>Chroma</b></summary>
 
 **Chroma** (`pip install "needtoknow[chroma]"`). The filter becomes Chroma's `where` clause. Each
 value in a permission list is stored as its own field rather than as a Chroma array, and an exact
@@ -127,6 +165,11 @@ collection = chromadb.PersistentClient(path="./chroma").get_or_create_collection
 backend = ChromaBackend(collection)  # uses the collection's embedding function
 ```
 
+</details>
+
+<details>
+<summary><b>Qdrant</b></summary>
+
 **Qdrant** (`pip install "needtoknow[qdrant]"`). The filter becomes Qdrant's `query_filter`, served
 by payload indexes on the permission fields. Points use the layout of LangChain's Qdrant
 integration, so a collection built with LangChain can be searched with permissions as it is.
@@ -140,6 +183,11 @@ client = QdrantClient(url="http://localhost:6333")
 create_collection(client, "docs", dim=768)
 backend = QdrantBackend(client, "docs", embed=my_embedding_model)
 ```
+
+</details>
+
+<details>
+<summary><b>Elasticsearch and OpenSearch</b></summary>
 
 **Elasticsearch and OpenSearch** (`pip install "needtoknow[elasticsearch]"` or `[opensearch]`).
 The filter runs inside the kNN search. Permissions are matched on a type-tagged keyword field, so
@@ -155,6 +203,11 @@ create_index(client, "docs", dim=768)
 backend = ElasticsearchBackend(client, "docs", embed=my_embedding_model)
 ```
 
+</details>
+
+<details>
+<summary><b>Open Policy Agent</b></summary>
+
 **Open Policy Agent** (no extra dependency). Your Rego policy returns one decision per chunk, and
 can optionally return a filter so the vector store does the filtering. A complete policy is in
 [`examples/opa/needtoknow.rego`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/opa/needtoknow.rego).
@@ -164,6 +217,11 @@ from needtoknow.authorizers.opa import OPAAuthorizer
 
 authorizer = OPAAuthorizer("http://localhost:8181", filter_path="needtoknow/filter")
 ```
+
+</details>
+
+<details>
+<summary><b>OpenFGA</b></summary>
 
 **OpenFGA** (no extra dependency). Relationship-based access control in the Google Zanzibar style.
 Checks run in batches; for pre-filtering, ListObjects returns every document the user may view,
@@ -176,6 +234,11 @@ from needtoknow.authorizers.openfga import OpenFGAAuthorizer
 authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
 ```
 
+</details>
+
+<details>
+<summary><b>SpiceDB</b></summary>
+
 **SpiceDB** (no extra dependency). Zanzibar-style permissions through SpiceDB's HTTP API.
 CheckBulkPermissions decides each chunk, LookupResources gives the pre-filter, and the subject's
 groups are checked as subject sets (`group:<name>#member`), so memberships from your identity
@@ -186,6 +249,11 @@ from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
 
 authorizer = SpiceDBAuthorizer("http://localhost:8443", token=spicedb_key, resource_field="doc_id")
 ```
+
+</details>
+
+<details>
+<summary><b>Cerbos</b></summary>
 
 **Cerbos** (no extra dependency). Each chunk is a Cerbos resource whose attributes are its
 metadata. Pre-filters come from Cerbos query plans: the conditions a vector store can apply
@@ -199,6 +267,11 @@ from needtoknow.authorizers.cerbos import CerbosAuthorizer
 authorizer = CerbosAuthorizer("http://localhost:3592")
 ```
 
+</details>
+
+<details>
+<summary><b>LangChain</b></summary>
+
 **LangChain** (`pip install "needtoknow[langchain]"`). `NeedToKnowRetriever` is a LangChain
 retriever, so it works in chains, agents and LangGraph tools; `LangChainVectorStoreBackend` turns
 any LangChain vector store into a needtoknow backend (post-filtered).
@@ -210,9 +283,16 @@ retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, authori
 docs = retriever.invoke("What are this year's salary bands?", subject=Subject("bob", ["sales"]))
 ```
 
+</details>
+
+<details>
+<summary><b>LlamaIndex</b></summary>
+
 **LlamaIndex** (`pip install "needtoknow[llamaindex]"`). `NeedToKnowRetriever` for query and chat
 engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
 existing index. Runnable examples for both frameworks are in [`examples/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples).
+
+</details>
 
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
@@ -301,8 +381,10 @@ the LangChain and LlamaIndex integrations, caching, audit events and tracing. Th
 [API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) follows semantic
 versioning: no breaking change without a major version and a deprecation period first.
 
-Next, in rough order: permission sync from Google Drive, SharePoint and Confluence; Qdrant and
-Elasticsearch backends; SpiceDB and Cerbos authorizers. Contributions are welcome; see
+Since 1.0, 1.1 added resilient connections to remote permission services and signed, verifiable
+releases. The Qdrant, Elasticsearch and OpenSearch backends and the SpiceDB and Cerbos authorizers
+are on `main` for the next minor release. Next, in rough order: permission sync from Google Drive,
+SharePoint and Confluence, and more vector stores. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
@@ -311,6 +393,17 @@ Elasticsearch backends; SpiceDB and Cerbos authorizers. Contributions are welcom
 on the same ideas: OPA policies, pgvector hybrid search with the ACL inside the query, PII
 pseudonymisation, prompt-injection quarantine and a hash-chained audit log. It is being ported onto
 this library.
+
+## Community and support
+
+- **Questions and bugs:** [GitHub issues](https://github.com/muzakkirhussain011/needtoknow/issues).
+- **Security reports:** privately, as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md)
+  describes; it also shows how to verify a release's signatures.
+- **Contributing:** [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md),
+  [GOVERNANCE.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/GOVERNANCE.md) and the
+  [code of conduct](https://github.com/muzakkirhussain011/needtoknow/blob/main/CODE_OF_CONDUCT.md).
+- **Citing:** [CITATION.cff](https://github.com/muzakkirhussain011/needtoknow/blob/main/CITATION.cff),
+  or "Cite this repository" on GitHub.
 
 ## License
 

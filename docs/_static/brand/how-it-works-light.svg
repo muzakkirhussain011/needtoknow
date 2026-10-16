@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 380" width="920" height="380" role="img" aria-labelledby="t d">
+  <title id="t">How needtoknow works</title>
+  <desc id="d">Your app or agent sends a query and the user to needtoknow. needtoknow asks the permission system for a filter or a check per chunk, runs the filter inside the vector store's search, checks every hit again, and passes only permitted chunks to the LLM prompt.</desc>
+  <style>
+    .box { fill: #f6f8fa; stroke: #d1d9e0; stroke-width: 1.5; }
+    .core { fill: #ffffff; stroke: #0e9f8e; stroke-width: 2; }
+    .h { font: 600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .title { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .s { font: 400 12.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #59636e; }
+    .step { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .num { fill: #0e9f8e; }
+    .numt { font: 700 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #ffffff; }
+    .accent { fill: #0e9f8e; }
+    .line { stroke: #8c959f; stroke-width: 1.6; fill: none; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M1 1 L9 5 L1 9" fill="none" stroke="#8c959f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <rect class="box" x="16" y="110" width="160" height="96" rx="14"/>
+  <text class="h" x="96" y="152" text-anchor="middle">Your app or agent</text>
+  <text class="s" x="96" y="176" text-anchor="middle">query + who is asking</text>
+
+  <path class="line" d="M178 158 H234" marker-end="url(#a)"/>
+
+  <rect class="core" x="240" y="20" width="440" height="232" rx="18"/>
+  <text class="title" x="460" y="54" text-anchor="middle">need<tspan class="accent">to</tspan>know</text>
+
+  <circle class="num" cx="276" cy="94" r="13"/>
+  <text class="numt" x="276" y="98.5" text-anchor="middle">1</text>
+  <text class="step" x="302" y="91">Ask the permission system</text>
+  <text class="s" x="302" y="110">a filter for this user, or a decision per chunk</text>
+
+  <circle class="num" cx="276" cy="152" r="13"/>
+  <text class="numt" x="276" y="156.5" text-anchor="middle">2</text>
+  <text class="step" x="302" y="149">Filter inside the search</text>
+  <text class="s" x="302" y="168">the nearest chunks the user may read, however few</text>
+
+  <circle class="num" cx="276" cy="210" r="13"/>
+  <text class="numt" x="276" y="214.5" text-anchor="middle">3</text>
+  <text class="step" x="302" y="207">Check, then return</text>
+  <text class="s" x="302" y="226">every hit checked again; any error fails closed</text>
+
+  <path class="line" d="M682 158 H738" marker-end="url(#a)"/>
+
+  <rect class="box" x="744" y="110" width="160" height="96" rx="14"/>
+  <text class="h" x="824" y="152" text-anchor="middle">Your LLM prompt</text>
+  <text class="s" x="824" y="176" text-anchor="middle">permitted chunks only</text>
+
+  <path class="line" d="M346 256 V286" marker-start="url(#a)" marker-end="url(#a)"/>
+  <path class="line" d="M574 256 V286" marker-start="url(#a)" marker-end="url(#a)"/>
+
+  <rect class="box" x="240" y="290" width="212" height="76" rx="12"/>
+  <text class="h" x="346" y="313" text-anchor="middle">Permission system</text>
+  <text class="s" x="346" y="334" text-anchor="middle">OpenFGA · SpiceDB</text>
+  <text class="s" x="346" y="352" text-anchor="middle">Cerbos · Open Policy Agent</text>
+
+  <rect class="box" x="468" y="290" width="212" height="76" rx="12"/>
+  <text class="h" x="574" y="313" text-anchor="middle">Vector store</text>
+  <text class="s" x="574" y="334" text-anchor="middle">pgvector · Qdrant · Chroma</text>
+  <text class="s" x="574" y="352" text-anchor="middle">Elasticsearch · OpenSearch</text>
+</svg>
