@@ -2,7 +2,8 @@
 
 How well does permission-aware retrieval work with real embeddings, and what does each strategy
 cost? This page measures it on a real corpus, against exact ground truth, across the range of how
-much of the corpus a user may read.
+much of the corpus a user may read, and then [at a million chunks](#at-a-million-chunks-under-load)
+with concurrent users and a remote permission service.
 
 ## What is measured
 
@@ -150,19 +151,110 @@ For users who may read most of a Chroma collection, `strategy="postfilter"` is m
 100% readable). For users who may read little of it, pre-filtering is the only strategy that finds
 their documents.
 
-## Limits of this benchmark
+## At a million chunks, under load
 
-One corpus, one embedding model and 200 queries; indexes at their default settings; one query at a
-time on a 4-CPU machine, with no concurrent load; local Chroma, not Chroma's distributed or cloud
-service; and the permission service in-process (`MetadataACLAuthorizer`), so the latency of a remote
-OPA or OpenFGA is not included. Index tuning (pgvector `ef_search`, Chroma's HNSW parameters) moves
-both recall and latency, and is worth measuring on your own data with the same harness.
+The runs above measure quality on a mid-sized corpus, one query at a time, with the permission
+check in-process. The load benchmark asks what changes at a size closer to production: a million
+chunks in PostgreSQL, several users at once, and the permission service over HTTP.
+
+| | |
+|---|---|
+| Corpus | The first 1,000,000 passages of BEIR MS MARCO; 300 MS MARCO questions |
+| Embeddings | BAAI/bge-small-en-v1.5 (384 dimensions), on a Kaggle T4 GPU |
+| Backend | PostgreSQL 16 + pgvector 0.8.7: GIN and HNSW indexes at default settings, 4 GB of shared buffers |
+| Permissions | The random layout above, 1,000 teams |
+| Machine | Kaggle, 4 CPUs, shared by PostgreSQL, Open Policy Agent and the benchmark's client threads |
+
+Run on 2026-10-16. Every number, with p95 and p99 latencies, is in the
+[full load results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
+
+**Loading.** A binary `COPY` loaded the million rows in 36 s. The GIN index on the permission
+metadata took 6 s and the HNSW index 4 min 25 s; table and indexes take 4.1 GB.
+
+**No leaks.** None of the 2,400 retrievals checked one at a time returned a forbidden chunk, and
+none of about 19,000 retrievals under concurrent load failed. (The concurrent runs count errors;
+they do not check results.)
+
+### Recall@10 and latency
+
+One query at a time. Median milliseconds per retrieval.
+
+| Readable | Postfilter recall | Prefilter recall | Postfilter p50 | Prefilter p50 |
+|---|---|---|---|---|
+| 0.1% | 0.094 | 0.972 | 62.6 | 11.0 |
+| 1% | 0.833 | 0.933 | 59.4 | 21.2 |
+| 10% | 0.915 | 0.883 | 9.0 | 4.3 |
+| 100% | 0.895 | 0.895 | 2.8 | 3.2 |
+
+### Throughput
+
+Users pre-filtering at 1% readable, 20 seconds per setting.
+
+| Concurrent users | Requests/s | p50 ms | p99 ms |
+|---|---|---|---|
+| 1 | 44.5 | 21.5 | 44.8 |
+| 2 | 82.7 | 23.0 | 49.6 |
+| 4 | 129.2 | 28.9 | 72.1 |
+| 8 | 121.9 | 60.2 | 173.1 |
+| 16 | 112.1 | 128.2 | 430.8 |
+
+### A remote permission service
+
+The same load, with the pre-filter computed by `MetadataACLAuthorizer` in-process, by Open Policy
+Agent over HTTP (the example policy in `examples/opa`), and by OPA behind `CachingAuthorizer`.
+
+| Authorizer | Requests/s, 1 user | p50 ms, 1 user | Requests/s, 16 users | p50 ms, 16 users |
+|---|---|---|---|---|
+| In-process | 43.5 | 21.4 | 113.4 | 128.1 |
+| OPA over HTTP | 39.1 | 23.9 | 104.8 | 140.3 |
+| OPA, `CachingAuthorizer(ttl=60)` | 41.4 | 22.6 | 114.2 | 127.1 |
+
+### What the load results show
+
+**The index's own settings set the ceiling.** At 100% readable both strategies return the index's
+top 10, and here that is 0.895 of the exact top 10, against 0.977 on FiQA: a larger corpus searched
+with pgvector's default `hnsw.ef_search` of 40. Pre-filtering stayed between 0.88 and 0.97 at every
+selectivity. Raising pgvector's `hnsw.ef_search` trades latency for recall in both strategies, and
+is worth measuring on your own data with this harness.
+
+**At 10% readable, post-filtering found more of the top 10 than pre-filtering** (0.915 against
+0.883). Post-filtering asks the index for more candidates when too few pass (40, then 160), and the
+deeper search most likely finds neighbours the default search depth misses. For selective users the
+order reverses sharply, as on FiQA: at 0.1% readable post-filtering found 0.094 of the top 10 and
+pre-filtering 0.972. `strategy="auto"` pre-filters, which is the choice that never collapses.
+
+**Pre-filtering is fast where it matters most.** The most selective users were served in 11 ms
+(0.1%) and 21 ms (1%) at the median, against about 60 ms for post-filtering, which has to examine
+up to 1,000 candidates for them.
+
+**One machine saturated at four users.** Throughput grew with users up to 129 requests/s at 4,
+then fell slightly as further users queued: at 16, latency rose to 128 ms median and 431 ms at the
+99th percentile. PostgreSQL and the benchmark's client shared the machine's 4 CPUs, so this is the
+capacity of that machine, not a limit of needtoknow; more database cores or read replicas add
+capacity.
+
+**A permission service over HTTP cost 8 to 10% of throughput, and caching recovered all of it.**
+With OPA computing each user's filter, a single user's retrieval took 2.5 ms longer at the
+median. With
+`CachingAuthorizer` in front, throughput matched the in-process authorizer, because each user's
+filter was fetched from OPA once a minute rather than once per query. The price is that a revoked
+permission can take up to the `ttl` to apply (see [Operations](operations.md)).
+
+## Limits of these benchmarks
+
+Two corpora, two embedding models and a few hundred queries each; indexes at their default
+settings; a single 4-CPU machine, which in the load benchmark ran PostgreSQL, OPA and the client
+together, so no network sat between them; local Chroma, not Chroma's distributed or cloud service;
+OpenFGA not measured; and under concurrent load, errors counted but results not checked. Index
+tuning (pgvector `ef_search`, Chroma's HNSW parameters) moves both recall and latency, and is worth
+measuring on your own data with the same harnesses.
 
 ## Reproduce it
 
-The harness is
-[`benchmarks/permissions_bench.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/permissions_bench.py).
+The harnesses are
+[`benchmarks/permissions_bench.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/permissions_bench.py)
+and
+[`benchmarks/load_bench.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/load_bench.py).
 [`benchmarks/README.md`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/README.md)
-explains how to run the full benchmark on Kaggle, or a small version anywhere without a model. CI
-runs the small version against real Chroma and PostgreSQL on every change, and fails if any
-strategy leaks.
+explains how to run both on Kaggle, or small versions anywhere without a model. CI runs the small
+versions against real Chroma, PostgreSQL and OPA on every change, and fails if any strategy leaks.

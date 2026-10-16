@@ -17,6 +17,13 @@ make -s -C /tmp/pgvector PG_CONFIG="/usr/lib/postgresql/${PG}/bin/pg_config" > /
 make -s -C /tmp/pgvector PG_CONFIG="/usr/lib/postgresql/${PG}/bin/pg_config" install > /dev/null
 
 service postgresql start
+if [ "${PG_TUNE:-0}" = "1" ]; then
+  # For the million-chunk load benchmark: give PostgreSQL memory the defaults (128 MB) do not.
+  su postgres -c "psql -q -c \"ALTER SYSTEM SET shared_buffers = '4GB'\""
+  su postgres -c "psql -q -c \"ALTER SYSTEM SET effective_cache_size = '16GB'\""
+  su postgres -c "psql -q -c \"ALTER SYSTEM SET max_parallel_workers_per_gather = 2\""
+  service postgresql restart
+fi
 su postgres -c "psql -q -c \"DROP DATABASE IF EXISTS bench\""
 su postgres -c "psql -q -c \"DROP ROLE IF EXISTS bench\""
 su postgres -c "psql -q -c \"CREATE ROLE bench WITH LOGIN SUPERUSER PASSWORD 'bench'\""

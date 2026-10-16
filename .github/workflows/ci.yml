@@ -47,7 +47,7 @@ jobs:
         run: |
           docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz && break; sleep 1; done
-      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]" opentelemetry-sdk
+      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]" opentelemetry-sdk pgvector
       - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, OPA and OpenFGA)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
@@ -65,6 +65,14 @@ jobs:
           python benchmarks/permissions_bench.py --teams 100 --docs 3000 --queries 15 \
             --selectivity 0.01,0.1,1 --check --out bench.json --markdown bench.md
           cat bench.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Load benchmark harness (synthetic smoke run against real PostgreSQL and OPA)
+        env:
+          NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
+        run: |
+          python benchmarks/load_bench.py --docs 3000 --queries 20 --selectivity 0.01,1 --users 1,4 \
+            --seconds 2 --opa-url http://127.0.0.1:8181 --check --out load.json --markdown load.md
+          python benchmarks/load_bench.py --render load.json --markdown rendered.md && cmp load.md rendered.md
+          cat load.md >> "$GITHUB_STEP_SUMMARY"
 
   library:
     name: library (Python ${{ matrix.python }})
