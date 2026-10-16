@@ -22,6 +22,18 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12", cache: pip }
+      # Every extra, so the adapters are checked against the real libraries' types.
+      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]"
+      - name: mypy --strict
+        run: mypy
+
   test:
     name: test
     runs-on: ubuntu-latest
@@ -53,7 +65,10 @@ jobs:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
           NEEDTOKNOW_TEST_OPENFGA_URL: http://127.0.0.1:8080
-        run: pytest -q -ra
+        run: |
+          pytest -q -ra --cov --cov-report=
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          coverage report --fail-under=90
       - name: Runnable examples
         run: |
           python examples/langchain_quickstart.py

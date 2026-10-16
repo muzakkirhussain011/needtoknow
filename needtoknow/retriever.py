@@ -162,7 +162,7 @@ class PermissionedRetriever:
                 while True:
                     op = plan.send(self._run(op, subject))
             except StopIteration as done:
-                result = done.value
+                result: RetrievalResult = done.value
         except Exception as exc:
             self._emit(query, subject, k, started, clock, None, exc)
             raise
@@ -183,7 +183,7 @@ class PermissionedRetriever:
                 while True:
                     op = plan.send(await self._arun(op, subject))
             except StopIteration as done:
-                result = done.value
+                result: RetrievalResult = done.value
         except Exception as exc:
             self._emit(query, subject, k, started, clock, None, exc)
             raise
