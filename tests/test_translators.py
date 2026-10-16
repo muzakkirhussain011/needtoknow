@@ -7,7 +7,7 @@ import json
 import pytest
 
 from needtoknow import And, In, Or
-from needtoknow.backends.chroma import EMPTY_MARKER, NEVER, _clean_metadata, filter_to_where
+from needtoknow.backends.chroma import JSON_KEY, NEVER, _decode_metadata, _encode_metadata, filter_to_where
 from needtoknow.backends.pgvector import filter_to_sql
 
 # ---- PostgreSQL ------------------------------------------------------------------------------
@@ -40,21 +40,21 @@ def test_sql_edge_cases():
 # ---- Chroma ----------------------------------------------------------------------------------
 
 
-def test_where_splits_value_types_and_adds_contains_for_arrays():
+def test_where_splits_value_types_and_tests_one_key_per_list_value():
     assert filter_to_where(In("groups", {"hr", 7, "eng"})) == {
         "$or": [
             {"groups": {"$in": [7]}},
             {"groups": {"$in": ["eng", "hr"]}},
-            {"groups": {"$contains": 7}},
-            {"groups": {"$contains": "eng"}},
-            {"groups": {"$contains": "hr"}},
+            {"groups::i:7": {"$eq": True}},
+            {"groups::s:eng": {"$eq": True}},
+            {"groups::s:hr": {"$eq": True}},
         ]
     }
 
 
 def test_where_never_has_a_single_clause_and_or():
     where = filter_to_where(And(In("team", {"a"})))
-    assert where == {"$or": [{"team": {"$in": ["a"]}}, {"team": {"$contains": "a"}}]}
+    assert where == {"$or": [{"team": {"$in": ["a"]}}, {"team::s:a": {"$eq": True}}]}
 
 
 def test_where_handles_filters_that_match_nothing():
@@ -62,19 +62,28 @@ def test_where_handles_filters_that_match_nothing():
     assert filter_to_where(And(In("team", {"a"}), In("level", []))) is NEVER
     assert filter_to_where(Or(In("team", []), In("level", []))) is NEVER
     assert filter_to_where(Or(In("team", []), In("level", {1}))) == {
-        "$or": [{"level": {"$in": [1]}}, {"level": {"$contains": 1}}]
+        "$or": [{"level": {"$in": [1]}}, {"level::i:1": {"$eq": True}}]
     }
 
 
-def test_chroma_metadata_is_cleaned_or_rejected():
-    assert _clean_metadata("d", {"a": None, "b": [], "c": ["x"], "d": 3, "e": True}) == {
-        "c": ["x"],
-        "d": 3,
-        "e": True,
+def test_chroma_metadata_never_uses_arrays_and_round_trips_exactly():
+    metadata = {"groups": ["hr", 7, True, 1.5], "team": "eng", "flag": True, "score": 0.5, "none": None, "empty": []}
+    stored = _encode_metadata("d", metadata)
+    assert not any(isinstance(v, list) for v in stored.values())
+    assert {k: v for k, v in stored.items() if k != JSON_KEY} == {
+        "groups::s:hr": True,
+        "groups::i:7": True,
+        "team": "eng",
     }
+    assert _decode_metadata(stored) == metadata
+
+
+def test_chroma_records_without_a_trusted_copy_carry_no_permissions():
+    assert _decode_metadata({"allowed_groups": "*"}) == {}
+    assert _decode_metadata(None) == {}
+
+
+@pytest.mark.parametrize("bad", [{"a::b": 1}, {JSON_KEY: "x"}, {"": 1}, {"blob": object()}])
+def test_chroma_metadata_keys_and_values_are_validated(bad):
     with pytest.raises(ValueError):
-        _clean_metadata("d", {"mixed": ["x", 1]})
-    with pytest.raises(ValueError):
-        _clean_metadata("d", {"nested": {"x": 1}})
-    with pytest.raises(ValueError):
-        _clean_metadata("d", {EMPTY_MARKER: True})
+        _encode_metadata("d", bad)

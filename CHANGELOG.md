@@ -24,8 +24,11 @@ All notable changes are recorded here. The format follows
 - `needtoknow.backends.pgvector`: PostgreSQL + pgvector backend with the permission filter in the
   query as JSON containment tests (GIN-indexable), iterative HNSW scans, `create_schema`, and a
   native async search when given an async pool. Extra: `needtoknow[pgvector]`.
-- `needtoknow.backends.chroma`: Chroma 1.5+ backend translating filters into `where` clauses
-  (`$in` for single values, `$contains` for lists). Extra: `needtoknow[chroma]`.
+- `needtoknow.backends.chroma`: Chroma backend translating filters into `where` clauses. It never
+  stores Chroma array metadata: in chromadb 1.5.9 (local mode) array metadata from records in other
+  collections was observed attached to records and used by `where` filters. List values become
+  one boolean field each, and search results are rebuilt from an exact JSON copy of the metadata,
+  so the re-check always sees the true permissions. Extra: `needtoknow[chroma]`.
 - `needtoknow.authorizers.opa`: Open Policy Agent authorizer using only the standard library, with
   per-chunk decisions and optional policy-provided filters; every failure fails closed. Example
   policy in `examples/opa`.

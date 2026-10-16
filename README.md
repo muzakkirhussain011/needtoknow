@@ -95,8 +95,10 @@ backend = PgVectorBackend(pool, embed=my_embedding_model)  # embed: str -> list[
 backend.add(documents)
 ```
 
-**Chroma** (`pip install "needtoknow[chroma]"`, Chroma 1.5+). The filter becomes Chroma's `where`
-clause, using `$in` for single values and `$contains` for permission lists.
+**Chroma** (`pip install "needtoknow[chroma]"`). The filter becomes Chroma's `where` clause. Each
+value in a permission list is stored as its own field rather than as a Chroma array, and an exact
+copy of the metadata is kept for the re-check: in chromadb 1.5.9 array metadata was seen attaching
+to records in other collections, which for permissions would be a leak.
 
 ```python
 import chromadb

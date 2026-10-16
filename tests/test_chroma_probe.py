@@ -1,4 +1,10 @@
-"""Diagnostic: are Chroma collections isolated when they reuse record ids? Raw chromadb calls only."""
+"""Upstream behaviour the Chroma backend is designed around. Raw chromadb calls only.
+
+In chromadb 1.5.9 (local mode), a record can come back with array-valued metadata that belongs to
+records in other collections, and `where` filters use it. Scalars stay isolated. needtoknow's
+Chroma backend therefore never stores arrays (see needtoknow/backends/chroma.py). This test is
+expected to fail while the upstream behaviour persists; if it starts passing, Chroma has fixed it.
+"""
 
 from __future__ import annotations
 
@@ -20,12 +26,12 @@ def _seen(collection):
     return {"query": (q["documents"][0], q["metadatas"][0]), "get": (g["documents"], g["metadatas"])}
 
 
+@pytest.mark.xfail(reason="chromadb attaches array metadata from other collections' records", strict=False)
 @pytest.mark.parametrize("delete_first", [False, True])
-@pytest.mark.parametrize("first_meta", [{"g": "A"}, {"groups": ["A", "*"]}])
-def test_probe_second_collection_sees_only_its_own_record(delete_first, first_meta):
+def test_probe_array_metadata_stays_in_its_own_collection(delete_first):
     client = chromadb.EphemeralClient()
     a = _new(client)
-    a.upsert(ids=["x"], embeddings=VECTOR, metadatas=[first_meta], documents=["from A"])
+    a.upsert(ids=["x"], embeddings=VECTOR, metadatas=[{"groups": ["A", "*"]}], documents=["from A"])
     if delete_first:
         client.delete_collection(a.name)
     b = _new(client)
