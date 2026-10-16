@@ -29,7 +29,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -105,6 +106,27 @@ _log = logging.getLogger("needtoknow")
 _Plan = Generator[_Op, Any, RetrievalResult]
 
 
+class _Timings:
+    """Seconds spent in the backend and in the authorizer during one retrieval."""
+
+    def __init__(self) -> None:
+        self.search = self.authorize = 0.0
+        self.searches = 0
+
+    @contextmanager
+    def measure(self, op: _Op) -> Iterator[None]:
+        start = time.perf_counter()
+        try:
+            yield
+        finally:  # a failed operation still took its time
+            elapsed = time.perf_counter() - start
+            if isinstance(op, _Search):
+                self.search += elapsed
+                self.searches += 1
+            else:
+                self.authorize += elapsed
+
+
 class PermissionedRetriever:
     """Searches a backend and returns only the hits the subject may read.
 
@@ -159,19 +181,21 @@ class PermissionedRetriever:
         Raises `AuthorizationError` when the authorizer fails or gives a malformed answer, and
         `ValueError` for invalid arguments. Nothing is returned in either case.
         """
-        started, clock = time.time(), time.perf_counter()
+        started, clock, timings = time.time(), time.perf_counter(), _Timings()
         try:
             plan = self._plan(query, subject, k)
             try:
                 op = next(plan)
                 while True:
-                    op = plan.send(self._run(op, subject))
+                    with timings.measure(op):
+                        value = self._run(op, subject)
+                    op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
         except Exception as exc:
-            self._emit(query, subject, k, started, clock, None, exc)
+            self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
-        self._emit(query, subject, k, started, clock, result, None)
+        self._emit(query, subject, k, started, clock, timings, result, None)
         return result
 
     async def aretrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
@@ -180,19 +204,21 @@ class PermissionedRetriever:
         It uses the backend's `asearch` and the authorizer's `afilter_for` and `acheck` when they
         exist, and runs the sync methods in a thread otherwise.
         """
-        started, clock = time.time(), time.perf_counter()
+        started, clock, timings = time.time(), time.perf_counter(), _Timings()
         try:
             plan = self._plan(query, subject, k)
             try:
                 op = next(plan)
                 while True:
-                    op = plan.send(await self._arun(op, subject))
+                    with timings.measure(op):
+                        value = await self._arun(op, subject)
+                    op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
         except Exception as exc:
-            self._emit(query, subject, k, started, clock, None, exc)
+            self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
-        self._emit(query, subject, k, started, clock, result, None)
+        self._emit(query, subject, k, started, clock, timings, result, None)
         return result
 
     def _emit(
@@ -202,6 +228,7 @@ class PermissionedRetriever:
         k: int,
         started: float,
         clock: float,
+        timings: _Timings,
         result: RetrievalResult | None,
         error: Exception | None,
     ) -> None:
@@ -221,6 +248,9 @@ class PermissionedRetriever:
             error=type(error).__name__ if error else None,
             query_hmac=query_fingerprint(query, self.audit_key) if self.audit_key else None,
             started_at=started,
+            search_ms=round(timings.search * 1000, 3),
+            authorize_ms=round(timings.authorize * 1000, 3),
+            searches=timings.searches,
         )
         for observer in self.observers:
             try:

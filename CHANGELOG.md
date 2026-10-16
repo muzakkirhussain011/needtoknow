@@ -35,6 +35,12 @@ All notable changes are recorded here. The format follows
   write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
   against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
   `needtoknow[opensearch]`.
+- `needtoknow.backends.milvus`: a Milvus backend, with the permission filter applied inside the
+  vector search. Permissions are matched on a type-tagged array field, as on the search engines,
+  and the values are passed as Milvus filter parameters, never written into the expression, so a
+  group name cannot change what a filter selects. `create_collection` sets up the schema and
+  indexes, searches use strong consistency by default, and `AsyncMilvusClient` gives a native
+  `aretrieve`. Tested with the conformance kit against Milvus 3.0.2. Extra: `needtoknow[milvus]`.
 - `needtoknow.authorizers.spicedb.SpiceDBAuthorizer`: SpiceDB over its HTTP API, with no extra
   dependency. CheckBulkPermissions in batches (answers matched by the request they echo),
   LookupResources for the pre-filter (post-filtering when the list may be truncated or is
@@ -65,6 +71,14 @@ All notable changes are recorded here. The format follows
   ignored; and a failing shared cache is only ever a miss.
 - The conformance kit also generates nested lists and objects in metadata, filters of 300 values,
   and subjects in hundreds of groups.
+- `needtoknow.otel.OpenTelemetryMetrics`: retrieval metrics for dashboards and alerts. The
+  `gen_ai.client.operation.duration` histogram from the OpenTelemetry GenAI conventions, retrievals
+  by outcome, time spent in the backend and in the authorizer, chunks returned, examined and denied,
+  and violations. Attributes have a handful of values each; subjects, queries and chunks are never
+  recorded.
+- `RetrievalEvent.search_ms`, `authorize_ms` and `searches`: where the time of each retrieval went,
+  also on spans and in audit lines. Spans also carry the GenAI conventions' `gen_ai.operation.name`,
+  `gen_ai.retrieval.top_k` and `error.type`; their name is unchanged.
 
 ### Changed
 

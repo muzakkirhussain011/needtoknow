@@ -21,28 +21,45 @@ Given an authorizer that answers correctly:
    finding k permitted hits, the result says `complete=False`.
 5. **Audit events contain no content.** `RetrievalEvent`, `JsonLinesAudit` and the OpenTelemetry
    spans record ids, counts and outcomes, never query text or chunk text. The query appears only as
-   an HMAC, and only when you supply a key.
+   an HMAC, and only when you supply a key. OpenTelemetry metrics record no ids at all.
 
 ## What it relies on
 
 **The authorizer is the source of truth.** needtoknow enforces decisions; it does not make them.
 If your policy or your relationship tuples grant too much, needtoknow returns too much.
 
-**Permission metadata must be correct and current.** With `MetadataACLAuthorizer`, and with any
-authorizer that reads chunk metadata (`OPAAuthorizer` sends it to the policy, `OpenFGAAuthorizer`
-reads the resource id from it), the permissions copied onto chunks at ingestion time are what get
-enforced. When a document's sharing changes, re-index its chunks. How quickly you do that is your
-revocation delay for those chunks.
+**Permission metadata must be correct and current.** With `MetadataACLAuthorizer` and
+`TenantAuthorizer`, and with any authorizer that reads chunk metadata (`OPAAuthorizer` and
+`CerbosAuthorizer` send it to the policy, `OpenFGAAuthorizer` and `SpiceDBAuthorizer` read the
+resource id from it), the permissions copied onto chunks at ingestion time are what get enforced.
+When a document's sharing changes, re-index its chunks. How quickly you do that is your revocation
+delay for those chunks.
 
 **The backend returns the metadata it stored.** The re-check protects against a backend that ignores
 the filter, not against one that returns different metadata than it stored. The pgvector backend
-returns the stored `jsonb` column. The Chroma backend rebuilds metadata from an exact JSON copy
-rather than from Chroma's own fields, because of a Chroma bug that can attach a deleted collection's
-metadata to new records ([details](integrations/chroma.md#how-metadata-is-stored)).
+returns the stored `jsonb` column, Qdrant the point's payload, and Elasticsearch and OpenSearch the
+document's `_source`, where metadata is stored unindexed. The Chroma backend rebuilds metadata from
+an exact JSON copy rather than from Chroma's own fields, because of a Chroma bug that can attach a
+deleted collection's metadata to new records ([details](integrations/chroma.md#how-metadata-is-stored)).
+Elasticsearch and OpenSearch filter on a separate field, `needtoknow_terms`, but the re-check reads
+the metadata, so if the two ever disagree a chunk can be hidden, never leaked.
 
 **Caching delays revocation by at most `ttl`.** `CachingAuthorizer` keeps decisions for `ttl`
 seconds (30 by default), so a revoked permission can keep granting access for up to that long.
 Choose `ttl` as a policy decision, and call `invalidate()` when you know permissions changed.
+
+**A shared cache is trusted with decisions.** With `CachingAuthorizer(shared=RedisCache(...))`,
+whoever can write to that Redis can plant a decision, unless you set `signing_key`: then every value
+carries an HMAC-SHA256 over its key and content, and anything unsigned, tampered with or copied
+under another key is ignored. Keep that Redis private to the application either way. Key names are
+digests, so the subjects and chunks are not readable from a key listing. A failing Redis is only
+ever a miss. `invalidate()` clears Redis at once and reaches other replicas within `local_ttl` (1
+second by default).
+
+**A scope only narrows the search.** `scope_for` (from `TenantAuthorizer` inside `AllOf`, for
+example) limits which chunks post-filtering searches, and every candidate is still checked. A scope
+wider than the truth costs only speed; a scope narrower than the truth hides chunks the subject may
+read, but never returns one it may not.
 
 ## The subject must come from authentication
 
@@ -72,9 +89,10 @@ and metrics; do not show them to end users.
 **Query privacy.** Queries still go to your embedding model and vector store. Audit events omit
 them, but the rest of your stack sees them.
 
-**Authentication and transport security.** Use TLS and credentials for OPA, OpenFGA and your
-database. Both HTTP authorizers accept `headers` for an `Authorization` header and refuse URLs that
-are not `http://` or `https://`.
+**Authentication and transport security.** Use TLS and credentials for your permission service,
+your vector store and Redis. The HTTP authorizers (OPA, OpenFGA, SpiceDB, Cerbos) accept `headers`
+for an `Authorization` header (`SpiceDBAuthorizer` also takes its preshared key as `token`) and
+refuse URLs that are not `http://` or `https://`.
 
 ## Reporting a vulnerability
 

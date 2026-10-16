@@ -10,6 +10,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [Elasticsearch](elasticsearch.md#elasticsearch) | Backend | `needtoknow[elasticsearch]` | Yes, inside the kNN search |
 | [OpenSearch](elasticsearch.md#opensearch) | Backend | `needtoknow[opensearch]` | Yes, inside the k-NN search |
 | [Qdrant](qdrant.md) | Backend | `needtoknow[qdrant]` | Yes, as a `query_filter` |
+| [Milvus](milvus.md) | Backend | `needtoknow[milvus]` | Yes, inside the vector search, with parameterized filters |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |

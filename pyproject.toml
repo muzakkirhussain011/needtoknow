@@ -37,6 +37,7 @@ chroma = ["chromadb>=1.5"]
 elasticsearch = ["elasticsearch>=8.12"]
 opensearch = ["opensearch-py>=2.4"]
 qdrant = ["qdrant-client>=1.15"]
+milvus = ["pymilvus>=2.6"]
 redis = ["redis>=5"]
 langchain = ["langchain-core>=1.0"]
 llamaindex = ["llama-index-core>=0.12"]
@@ -83,6 +84,10 @@ files = ["needtoknow"]
 python_version = "3.10"
 strict = true
 warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["pymilvus", "pymilvus.*"]
+ignore_missing_imports = true  # pymilvus has no py.typed marker
 
 [tool.coverage.run]
 source = ["needtoknow"]
