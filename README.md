@@ -118,6 +118,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [Milvus](https://muzakkirhussain011.github.io/needtoknow/integrations/milvus.html) | Vector store | `needtoknow[milvus]` | Inside the vector search, with parameterized filters |
 | [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
 | [Weaviate](https://muzakkirhussain011.github.io/needtoknow/integrations/weaviate.html) | Vector store | `needtoknow[weaviate]` | Inside the vector search |
+| [Redis](https://muzakkirhussain011.github.io/needtoknow/integrations/redis.html) | Vector store | `needtoknow[redis]` | In the same KNN query, on hex-encoded terms |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -245,6 +246,25 @@ from needtoknow.backends.weaviate import WeaviateBackend, create_collection
 client = weaviate.connect_to_local()
 create_collection(client, "Chunks")
 backend = WeaviateBackend(client, "Chunks", embed=my_embedding_model)
+```
+
+</details>
+
+<details>
+<summary><b>Redis</b></summary>
+
+**Redis** (`pip install "needtoknow[redis]"`). A KNN query on the Redis Query Engine (Redis 8 or
+later, or Redis Stack) with the permission filter in the same query. Permission terms are stored
+hex-encoded, so no group name can add query syntax and case never merges two values.
+
+```python
+import redis
+
+from needtoknow.backends.redis import RedisBackend, create_index
+
+client = redis.Redis.from_url(REDIS_URL)
+create_index(client, "chunks", dim=768)
+backend = RedisBackend(client, "chunks", embed=my_embedding_model)
 ```
 
 </details>

@@ -181,6 +181,15 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.weaviate.permission_terms
 
 .. autofunction:: needtoknow.backends.weaviate.point_id
+
+.. autoclass:: needtoknow.backends.redis.RedisBackend
+   :members: add, delete, search, asearch
+
+.. autofunction:: needtoknow.backends.redis.create_index
+
+.. autofunction:: needtoknow.backends.redis.filter_to_query
+
+.. autofunction:: needtoknow.backends.redis.permission_terms
 ```
 
 ## Frameworks
