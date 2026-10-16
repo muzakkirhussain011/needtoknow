@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-16
+
+The README, and so the PyPI page, opens with the logo lockup, centred, with a dark version for
+dark themes. The library is unchanged from 1.1.0.
+
 ## [1.1.1] - 2026-10-16
 
 The README, and so the project's PyPI page, shows the project logo. The library is unchanged from
@@ -144,7 +149,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
