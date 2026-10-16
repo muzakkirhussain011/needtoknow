@@ -61,6 +61,14 @@ All notable changes are recorded here. The format follows
   ignored; and a failing shared cache is only ever a miss.
 - The conformance kit also generates nested lists and objects in metadata, filters of 300 values,
   and subjects in hundreds of groups.
+- `needtoknow.otel.OpenTelemetryMetrics`: retrieval metrics for dashboards and alerts. The
+  `gen_ai.client.operation.duration` histogram from the OpenTelemetry GenAI conventions, retrievals
+  by outcome, time spent in the backend and in the authorizer, chunks returned, examined and denied,
+  and violations. Attributes have a handful of values each; subjects, queries and chunks are never
+  recorded.
+- `RetrievalEvent.search_ms`, `authorize_ms` and `searches`: where the time of each retrieval went,
+  also on spans and in audit lines. Spans also carry the GenAI conventions' `gen_ai.operation.name`,
+  `gen_ai.retrieval.top_k` and `error.type`; their name is unchanged.
 
 ### Changed
 

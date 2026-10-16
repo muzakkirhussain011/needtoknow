@@ -44,6 +44,12 @@ class RetrievalEvent:
     query_hmac: str | None = None
     started_at: float = 0.0
     """Unix time when the call started."""
+    search_ms: float = 0.0
+    """Time spent in the backend, over every search of this call."""
+    authorize_ms: float = 0.0
+    """Time spent in the authorizer: filters, scopes and checks."""
+    searches: int = 0
+    """Backend searches made: one when pre-filtering, more when post-filtering fetched again."""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

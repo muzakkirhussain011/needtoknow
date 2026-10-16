@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import time
 
 import pytest
 from helpers import corpora, oracle_top_k, queries, subjects
@@ -199,6 +200,92 @@ def test_opentelemetry_spans_hold_counts_not_content():
     (span,) = exporter.get_finished_spans()
     assert span.name == "needtoknow.retrieve"
     assert span.attributes["needtoknow.strategy"] == "prefilter" and span.attributes["needtoknow.returned"] == 1
+    assert span.attributes["gen_ai.operation.name"] == "retrieval" and span.attributes["gen_ai.retrieval.top_k"] == 5
+    assert span.attributes["needtoknow.searches"] == 1 and "error.type" not in span.attributes
     assert "needtoknow.subject.id" not in span.attributes
     assert all("leave" not in str(v) for v in span.attributes.values())
     assert span.end_time >= span.start_time
+
+
+class SlowBackend(InMemoryBackend):
+    def search(self, query, k, filter=None):
+        time.sleep(0.01)
+        return super().search(query, k, filter)
+
+
+@pytest.mark.parametrize("run", ["sync", "async"])
+def test_events_time_the_backend_and_the_authorizer(run):
+    events = []
+    docs = [Document(f"d{i}", "leave", {"allowed_groups": ["hr"] if i else ["eng"]}) for i in range(40)]
+    retriever = PermissionedRetriever(
+        SlowBackend(docs), MetadataACLAuthorizer(), strategy="postfilter", overfetch=2, observers=[events.append]
+    )
+    if run == "sync":
+        retriever.retrieve("leave", BOB, k=2)
+    else:
+        asyncio.run(retriever.aretrieve("leave", BOB, k=2))
+    (event,) = events
+    assert event.searches > 1  # post-filtering fetched again, looking for a second readable chunk
+    assert event.search_ms >= 10 * event.searches
+    assert 0 < event.authorize_ms < event.duration_ms
+    assert event.search_ms + event.authorize_ms <= event.duration_ms + 0.01
+
+
+def test_a_failed_retrieval_still_reports_the_time_spent():
+    events = []
+    authz = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
+    retriever = PermissionedRetriever(SlowBackend(DOCS), authz, observers=[events.append])
+    with pytest.raises(AuthorizationError):
+        retriever.retrieve("leave", BOB)
+    assert events[0].searches == 1 and events[0].search_ms >= 10 and events[0].authorize_ms > 0
+
+
+def _points(reader):
+    points = {}
+    for resource in reader.get_metrics_data().resource_metrics:
+        for scope in resource.scope_metrics:
+            for metric in scope.metrics:
+                points[metric.name] = list(metric.data.data_points)
+    return points
+
+
+def test_opentelemetry_metrics_count_outcomes_and_never_identify_anyone():
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+
+    from needtoknow.otel import GENAI_DURATION_BUCKETS, OpenTelemetryMetrics
+
+    reader = InMemoryMetricReader()
+    observer = OpenTelemetryMetrics(MeterProvider(metric_readers=[reader]).get_meter("test"))
+    ok = PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[observer])
+    ok.retrieve("leave salary", BOB)
+    ok.retrieve("leave salary", Subject("ann", ["hr"]))
+    failing = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
+    with pytest.raises(AuthorizationError):
+        PermissionedRetriever(InMemoryBackend(DOCS), failing, observers=[observer]).retrieve("leave", BOB)
+
+    points = _points(reader)
+    assert set(points) == {
+        "gen_ai.client.operation.duration",
+        "needtoknow.retrievals",
+        "needtoknow.search.duration",
+        "needtoknow.authorize.duration",
+        "needtoknow.chunks.returned",
+        "needtoknow.chunks.examined",
+        "needtoknow.chunks.denied",
+        "needtoknow.violations",
+    }
+    outcomes = {p.attributes["needtoknow.outcome"]: p.value for p in points["needtoknow.retrievals"]}
+    assert outcomes == {"complete": 2, "error": 1}
+    (error,) = [p for p in points["needtoknow.retrievals"] if "error.type" in p.attributes]
+    assert error.attributes["error.type"] == "AuthorizationError"
+    durations = points["gen_ai.client.operation.duration"]
+    assert all(p.attributes["gen_ai.operation.name"] == "retrieval" for p in durations)
+    assert sum(p.count for p in durations) == 3
+    assert tuple(durations[0].explicit_bounds) == GENAI_DURATION_BUCKETS
+    assert sum(p.value for p in points["needtoknow.chunks.returned"]) == 3  # bob 1, ann 2
+    assert [p.value for p in points["needtoknow.violations"]] == [0, 0]  # recorded, so alerts have a series
+    for metric in points.values():
+        for point in metric:
+            assert not {"bob", "ann", "leave", "salary"} & {str(v) for v in point.attributes.values()}
