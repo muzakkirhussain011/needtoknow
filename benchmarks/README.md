@@ -4,7 +4,7 @@
 strategy and permission selectivity, how many of the true top-k permitted chunks come back
 (recall@k), whether any forbidden chunk does (leaks), how often the result is complete, and how
 long a retrieval takes. Results and their discussion are in the
-[documentation](../docs/benchmarks.md).
+[documentation](../docs/benchmarks.md); the full tables of each run are in [`results/`](results).
 
 ## What is compared
 

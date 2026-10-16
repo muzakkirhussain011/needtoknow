@@ -109,13 +109,20 @@ not available.
 |---|---|
 | `hits` | Permitted chunks, best first, at most `k` |
 | `strategy` | The strategy that actually ran |
-| `complete` | `True` when `hits` is the full top-k of what the subject may read |
+| `complete` | `False` when needtoknow knows results may be missing (see below) |
 | `examined` | Candidates the authorizer checked |
 | `denied` | Post-filtered candidates the subject may not read |
 | `violations` | Pre-filtered hits the re-check rejected |
 
 `violations` should always be 0. Anything else means the backend returned chunks outside the
 filter, and deserves an alert: the re-check removed them, but the backend has a bug.
+
+`complete=False` means needtoknow knows results may be missing: post-filtering stopped at
+`max_candidates`, or the re-check removed hits. `complete=True` trusts the backend's ranking. An
+approximate index (HNSW and similar) can return fewer or different results than an exact search,
+and no caller can tell that apart from "the user may read fewer than k chunks". How much each
+backend misses is measured in the [benchmarks](benchmarks.md); for pgvector, keep iterative index
+scans on (the default), which is what keeps a selective filter from cutting results short.
 
 ## The guarantees
 

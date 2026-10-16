@@ -43,7 +43,7 @@ What came back:
 |---|---|
 | `hits` | The permitted chunks, best first, at most `k` |
 | `strategy` | `prefilter` (the filter ran inside the search) or `postfilter` (candidates were checked after it) |
-| `complete` | `True` when `hits` is the full top-k of what Bob may read |
+| `complete` | `False` when results may be missing, for example because post-filtering reached its candidate limit |
 | `examined`, `denied` | Candidates the authorizer checked, and how many of them Bob may not read |
 | `violations` | Pre-filtered hits the re-check rejected. Always 0 unless the backend ignored the filter |
 

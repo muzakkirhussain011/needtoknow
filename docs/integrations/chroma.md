@@ -54,6 +54,15 @@ Chroma's `$in` lists hold a single type) and an `$eq: true` test on each value's
 `And` and `Or` become `$and` and `$or`. A filter that can match nothing, such as `In(field, [])`,
 skips the query entirely.
 
-A permission filter with many values becomes a large `where` clause. Granting access through
-hierarchical groups (team, department, division) rather than hundreds of individual groups keeps
-it small.
+## Performance
+
+In the [benchmarks](../benchmarks.md) (57,600 chunks, local Chroma 1.5.9), pre-filtered queries kept
+recall at 0.990 or better, but took 200 to 900 ms against about 18 ms unfiltered, rising with the
+number of groups in the filter. So:
+
+- When users may read a small part of the collection, keep the default (`auto`, which pre-filters):
+  it is the only strategy that finds their documents.
+- When users may read most of it, `strategy="postfilter"` returns the same results far faster
+  (20 ms instead of 876 ms when everything was readable).
+- Grant access through a few broad groups (team, department, division) rather than hundreds of
+  individual groups, which keeps the `where` document small.

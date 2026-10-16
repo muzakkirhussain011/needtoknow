@@ -206,6 +206,20 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 3. stay safe when the backend ignores the filter, and
 4. give identical results through `retrieve` and `aretrieve`.
 
+## Benchmarks
+
+On 57,600 real chunks (BEIR FiQA, Qwen3-Embedding-0.6B), across 33,000 retrievals, no needtoknow
+strategy returned a single forbidden chunk. Filtering inside the search kept recall@10 at 0.949 or
+better on pgvector for users who may read anywhere from 0.06% to 100% of the corpus, including when
+what they may read is far from what they ask about. Filtering after a top-10 search found almost
+nothing for selective permissions. Method, tables and caveats: [docs/benchmarks.md](docs/benchmarks.md).
+
+| Readable (far from the query) | Naive top-k, then filter | needtoknow postfilter | needtoknow prefilter (pgvector) |
+|---|---|---|---|
+| 0.9% | 0.000 | 0.048 | 0.995 |
+| 4.8% | 0.000 | 0.314 | 0.950 |
+| 20% | 0.041 | 0.974 | 0.949 |
+
 ## Roadmap to 1.0
 
 `needtoknow` is in active development towards a 1.0 release with a stable API.
@@ -215,7 +229,7 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 - [x] Authorizers: OPA, OpenFGA
 - [x] Frameworks: LangChain and LlamaIndex retrievers
 - [x] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
-- [ ] Benchmarks with real embeddings; documentation site
+- [x] Benchmarks with real embeddings; documentation site (in [`docs/`](docs))
 
 After 1.0: permission sync from Google Drive, SharePoint and Confluence; Qdrant, Elasticsearch,
 SpiceDB and Cerbos adapters. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).

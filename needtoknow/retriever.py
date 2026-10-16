@@ -72,7 +72,9 @@ class RetrievalResult:
     """Pre-filtered hits that failed the re-check. Should always be 0; anything else means the
     backend did not apply the filter and deserves an alert."""
     complete: bool
-    """True when `hits` is the full top-k of what the subject may read."""
+    """False when needtoknow knows results may be missing: post-filtering stopped at
+    `max_candidates`, or the re-check removed pre-filtered hits. It trusts the backend's ranking,
+    so it cannot see results an approximate index failed to return."""
 
 
 # Operations the algorithm asks its driver to perform.

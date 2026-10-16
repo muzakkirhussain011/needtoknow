@@ -82,7 +82,7 @@ the call and parented to the span that was current when it ran.
 | `needtoknow.action`, `needtoknow.k` | As requested |
 | `needtoknow.strategy` | The strategy that ran |
 | `needtoknow.returned`, `needtoknow.examined`, `needtoknow.denied`, `needtoknow.violations` | Counts |
-| `needtoknow.complete` | Whether the result is the full top-k |
+| `needtoknow.complete` | As `RetrievalResult.complete` |
 | `needtoknow.error` | The exception type; the span status is then ERROR |
 | `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 

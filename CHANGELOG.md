@@ -66,6 +66,10 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- `RetrievalResult.complete` is documented precisely: it is `False` when needtoknow knows results
+  may be missing, and it trusts the backend's ranking, so it cannot see results an approximate index
+  failed to return. The benchmarks measure how often that happens.
+
 - Filter values must be strings or integers, and metadata values of other types (booleans,
   floats) never match. This keeps every backend's answer identical to the reference.
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
