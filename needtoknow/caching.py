@@ -23,7 +23,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from needtoknow.authz import Authorizer
+from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.filters import Filter
 from needtoknow.types import Hit, Subject
 
@@ -106,29 +106,32 @@ class CachingAuthorizer:
         self._put(key, _NONE if result is None else result)
         return result
 
-    def _split(self, subject: Subject, hits: Sequence[Hit], action: str) -> tuple[list[Any], list[int]]:
+    def _cached(self, subject: Subject, hits: Sequence[Hit], action: str) -> tuple[list[Any], list[bool | None]]:
         keys = [("check", subject, action, _hit_key(h)) for h in hits]
-        decisions = [self._get(k) for k in keys]
-        return [keys, decisions], [i for i, d in enumerate(decisions) if d is None]
+        return keys, [self._get(k) for k in keys]
 
-    def _merge(self, parts: list[Any], missing: list[int], fresh: Sequence[bool]) -> list[bool]:
-        keys, decisions = parts
+    def _merge(self, keys: list[Any], cached: list[bool | None], fresh: Sequence[bool]) -> list[bool]:
         fresh = list(fresh)
-        if len(fresh) != len(missing):
-            # Leave it to the retriever's validation to reject; never cache a malformed answer.
-            return fresh
-        for i, decision in zip(missing, fresh, strict=True):
-            if isinstance(decision, bool):
-                self._put(keys[i], decision)
-            decisions[i] = decision
+        missing = sum(known is None for known in cached)
+        if len(fresh) != missing:
+            # Fail closed here: answers for the uncached hits that do not line up with them could,
+            # merged with the cached ones, still have the right total length for the retriever.
+            raise AuthorizationError(f"authorizer returned {len(fresh)} decisions for {missing} hits")
+        answers = iter(fresh)
+        decisions: list[bool] = []
+        for key, known in zip(keys, cached, strict=True):
+            if known is None:
+                known = next(answers)
+                if isinstance(known, bool):  # never cache a malformed answer; the retriever rejects it
+                    self._put(key, known)
+            decisions.append(known)
         return decisions
 
     def check(self, subject: Subject, hits: Sequence[Hit], action: str = "read") -> list[bool]:
-        parts, missing = self._split(subject, hits, action)
-        if not missing:
-            return parts[1]
-        fresh = self.authorizer.check(subject, [hits[i] for i in missing], action)
-        return self._merge(parts, missing, fresh)
+        keys, cached = self._cached(subject, hits, action)
+        todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
+        fresh = self.authorizer.check(subject, todo, action) if todo else []
+        return self._merge(keys, cached, fresh)
 
     async def afilter_for(self, subject: Subject, action: str = "read") -> Filter | None:
         key = ("filter", subject, action)
@@ -136,6 +139,7 @@ class CachingAuthorizer:
         if cached is not None:
             return None if cached is _NONE else cached
         inner = getattr(self.authorizer, "afilter_for", None)
+        result: Filter | None
         if inner is not None:
             result = await inner(subject, action)
         else:
@@ -144,13 +148,13 @@ class CachingAuthorizer:
         return result
 
     async def acheck(self, subject: Subject, hits: Sequence[Hit], action: str = "read") -> list[bool]:
-        parts, missing = self._split(subject, hits, action)
-        if not missing:
-            return parts[1]
-        todo = [hits[i] for i in missing]
+        keys, cached = self._cached(subject, hits, action)
+        todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
+        if not todo:
+            return self._merge(keys, cached, [])
         inner = getattr(self.authorizer, "acheck", None)
         if inner is not None:
             fresh = await inner(subject, todo, action)
         else:
             fresh = await asyncio.to_thread(self.authorizer.check, subject, todo, action)
-        return self._merge(parts, missing, fresh)
+        return self._merge(keys, cached, fresh)

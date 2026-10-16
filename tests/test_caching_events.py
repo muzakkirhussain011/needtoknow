@@ -116,6 +116,21 @@ def test_errors_and_malformed_answers_are_never_cached():
             retriever.retrieve("leave", BOB)
 
 
+@pytest.mark.parametrize("run", ["sync", "async"])
+def test_a_wrong_number_of_answers_for_the_uncached_hits_fails_closed(run):
+    # d0 is cached as denied. Asked about the two uncached hits, the authorizer answers three
+    # times: merged naively, three answers have the length of the whole batch and would grant d0.
+    answers = iter([[False], [True, True, True]])
+    authz = CachingAuthorizer(FunctionAuthorizer(lambda subject, hits, action: next(answers)))
+    hits = [Hit(f"d{i}", "t", 1.0, {}) for i in range(3)]
+    assert authz.check(BOB, hits[:1]) == [False]
+    with pytest.raises(AuthorizationError, match="3 decisions for 2 hits"):
+        if run == "sync":
+            authz.check(BOB, hits)
+        else:
+            asyncio.run(authz.acheck(BOB, hits))
+
+
 def test_async_paths_use_the_cache():
     inner = Counting()
     retriever = PermissionedRetriever(InMemoryBackend(DOCS), CachingAuthorizer(inner))
