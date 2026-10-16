@@ -97,8 +97,10 @@ backend.add(documents)
 
 **Chroma** (`pip install "needtoknow[chroma]"`). The filter becomes Chroma's `where` clause. Each
 value in a permission list is stored as its own field rather than as a Chroma array, and an exact
-copy of the metadata is kept for the re-check: in chromadb 1.5.9 array metadata was seen attaching
-to records in other collections, which for permissions would be a leak.
+copy of the metadata is kept for the re-check: in chromadb 1.5.x, deleting a collection leaves its
+array metadata behind for new records in other collections to pick up
+([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/pull/7725)), which for
+permissions would be a leak.
 
 ```python
 import chromadb

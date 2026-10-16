@@ -25,8 +25,9 @@ All notable changes are recorded here. The format follows
   query as JSON containment tests (GIN-indexable), iterative HNSW scans, `create_schema`, and a
   native async search when given an async pool. Extra: `needtoknow[pgvector]`.
 - `needtoknow.backends.chroma`: Chroma backend translating filters into `where` clauses. It never
-  stores Chroma array metadata: in chromadb 1.5.9 (local mode) array metadata from records in other
-  collections was observed attached to records and used by `where` filters. List values become
+  stores Chroma array metadata: in chromadb 1.5.x (local mode) a deleted collection's array
+  metadata surfaces on new records in other collections and is used by `where` filters
+  (chroma-core/chroma#7594). List values become
   one boolean field each, and search results are rebuilt from an exact JSON copy of the metadata,
   so the re-check always sees the true permissions. Extra: `needtoknow[chroma]`.
 - `needtoknow.authorizers.opa`: Open Policy Agent authorizer using only the standard library, with

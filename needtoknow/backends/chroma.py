@@ -5,9 +5,10 @@ chromadb itself.
 
 How metadata is stored, and why
 -------------------------------
-needtoknow does not use Chroma's array metadata. In chromadb 1.5.9 (local mode) array-valued
-metadata from records in other collections was observed attached to records that never had it, and
-used by `where` filtering. For permission data that is a leak, so:
+needtoknow does not use Chroma's array metadata. In chromadb 1.5.x (local mode), deleting a collection
+leaves its array metadata behind and SQLite reuses record ids, so new records in other collections
+come back with those arrays and `where` filters use them (chroma-core/chroma#7594). For permission
+data that is a leak, so:
 
 * string and integer values are stored as ordinary scalar fields (`team: "eng"`);
 * each string or integer inside a list becomes its own boolean field

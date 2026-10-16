@@ -1,7 +1,8 @@
 """Upstream behaviour the Chroma backend is designed around. Raw chromadb calls only.
 
-In chromadb 1.5.9 (local mode), a record can come back with array-valued metadata that belongs to
-records in other collections, and `where` filters use it. Scalars stay isolated. needtoknow's
+In chromadb 1.5.x (local mode), deleting a collection leaves its array metadata behind and SQLite
+reuses record ids, so new records in other collections come back with those arrays and `where`
+filters use them (chroma-core/chroma#7594). Scalars stay isolated. needtoknow's
 Chroma backend therefore never stores arrays (see needtoknow/backends/chroma.py). This test is
 expected to fail while the upstream behaviour persists; if it starts passing, Chroma has fixed it.
 """
@@ -26,7 +27,7 @@ def _seen(collection):
     return {"query": (q["documents"][0], q["metadatas"][0]), "get": (g["documents"], g["metadatas"])}
 
 
-@pytest.mark.xfail(reason="chromadb attaches array metadata from other collections' records", strict=False)
+@pytest.mark.xfail(reason="chroma-core/chroma#7594: deleted collections leave array metadata behind", strict=False)
 @pytest.mark.parametrize("delete_first", [False, True])
 def test_probe_array_metadata_stays_in_its_own_collection(delete_first):
     client = chromadb.EphemeralClient()
