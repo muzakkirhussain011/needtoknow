@@ -34,6 +34,16 @@ All notable changes are recorded here. The format follows
   per-chunk decisions and optional policy-provided filters; every failure fails closed. Example
   policy in `examples/opa`.
 - `filter_to_dict` / `filter_from_dict` for a JSON form of filters.
+- `needtoknow.authorizers.openfga`: OpenFGA authorizer over the HTTP API (no extra dependency):
+  batched BatchCheck, ListObjects pre-filtering that falls back to post-filtering when the list may
+  be truncated, and the subject's groups sent as contextual tuples. Tested against a real OpenFGA
+  for random relationship graphs.
+- `needtoknow.langchain`: `NeedToKnowRetriever` (a LangChain retriever; refuses to run without a
+  subject) and `LangChainVectorStoreBackend` (any LangChain vector store, post-filtered).
+  Extra: `needtoknow[langchain]`.
+- `needtoknow.llamaindex`: `NeedToKnowRetriever`, `PermissionNodePostprocessor` and
+  `LlamaIndexBackend`. Extra: `needtoknow[llamaindex]`.
+- Runnable examples for LangChain and LlamaIndex, executed in CI.
 - Conformance tests: every backend must return exactly the documents the reference semantics
   select, for random metadata and nested filters, and never leak through the retriever. CI runs
   them against real PostgreSQL, Chroma and OPA.

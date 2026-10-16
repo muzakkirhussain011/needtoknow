@@ -41,12 +41,21 @@ jobs:
         run: |
           opa run --server --addr=127.0.0.1:8181 examples/opa &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8181/health && break; sleep 1; done
-      - run: pip install -e ".[dev,pgvector,chroma]"
-      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma and OPA)
+      - name: Start OpenFGA
+        run: |
+          docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz && break; sleep 1; done
+      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex]"
+      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, OPA and OpenFGA)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
+          NEEDTOKNOW_TEST_OPENFGA_URL: http://127.0.0.1:8080
         run: pytest -q -ra
+      - name: Runnable examples
+        run: |
+          python examples/langchain_quickstart.py
+          python examples/llamaindex_quickstart.py
 
   library:
     name: library (Python ${{ matrix.python }})
