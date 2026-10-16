@@ -31,6 +31,8 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff==0.17.1"]
+pgvector = ["psycopg[binary,pool]>=3.2"]
+chroma = ["chromadb>=1.5"]
 
 [project.urls]
 Homepage = "https://github.com/muzakkirhussain011/needtoknow"

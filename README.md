@@ -76,6 +76,54 @@ print(result.strategy, result.complete)  # prefilter True
 Every call returns a `RetrievalResult` with the hits plus `strategy`, `examined`, `denied`,
 `violations` (pre-filtered hits the re-check rejected, which should always be 0) and `complete`.
 
+## Integrations
+
+Each integration is an optional extra, so the core stays dependency-free.
+
+**PostgreSQL + pgvector** (`pip install "needtoknow[pgvector]"`, pgvector 0.8+). The permission
+filter runs inside the SQL query as JSON containment tests, served by a GIN index, and iterative
+index scans keep HNSW returning k rows under selective filters.
+
+```python
+from psycopg_pool import ConnectionPool
+
+from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+pool = ConnectionPool("postgresql://localhost/app")
+create_schema(pool, dim=768)
+backend = PgVectorBackend(pool, embed=my_embedding_model)  # embed: str -> list[float]
+backend.add(documents)
+```
+
+**Chroma** (`pip install "needtoknow[chroma]"`). The filter becomes Chroma's `where` clause. Each
+value in a permission list is stored as its own field rather than as a Chroma array, and an exact
+copy of the metadata is kept for the re-check: in chromadb 1.5.x, deleting a collection leaves its
+array metadata behind for new records in other collections to pick up
+([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/pull/7725)), which for
+permissions would be a leak.
+
+```python
+import chromadb
+
+from needtoknow.backends.chroma import ChromaBackend
+
+collection = chromadb.PersistentClient(path="./chroma").get_or_create_collection("docs")
+backend = ChromaBackend(collection)  # uses the collection's embedding function
+```
+
+**Open Policy Agent** (no extra dependency). Your Rego policy returns one decision per chunk, and
+can optionally return a filter so the vector store does the filtering. A complete policy is in
+[`examples/opa/needtoknow.rego`](examples/opa/needtoknow.rego).
+
+```python
+from needtoknow.authorizers.opa import OPAAuthorizer
+
+authorizer = OPAAuthorizer("http://localhost:8181", filter_path="needtoknow/filter")
+```
+
+Filter values are strings or integers, the types permission identifiers use. That keeps every
+backend's answer identical to the reference semantics, which the test suite checks for each one.
+
 ## Bring your own backend or permission system
 
 A backend is any object with a `search` method:
@@ -117,8 +165,9 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 `needtoknow` is in active development towards a 1.0 release with a stable API.
 
 - [x] Core: filters, strategies, failing closed, re-checks, async
-- [ ] Backends: pgvector, Chroma
-- [ ] Authorizers: OpenFGA, OPA
+- [x] Backends: pgvector, Chroma
+- [x] Authorizers: OPA
+- [ ] Authorizers: OpenFGA
 - [ ] Frameworks: LangChain and LlamaIndex retrievers
 - [ ] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
 - [ ] Benchmarks with real embeddings; documentation site
