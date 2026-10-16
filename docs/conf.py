@@ -52,6 +52,7 @@ html_theme_options = {
                 {"title": "Combining and tenants", "url": "combining", "summary": "Layered rules, multi-tenancy"},
                 {"title": "Security model", "url": "security", "summary": "What is guaranteed and what is assumed"},
                 {"title": "Operations", "url": "operations", "summary": "Caching, audit, tracing, failure modes"},
+                {"title": "Production checklist", "url": "production", "summary": "Launch checks, failure modes"},
                 {"title": "Benchmarks", "url": "benchmarks", "summary": "Recall, latency and throughput, measured"},
             ],
         },
@@ -62,6 +63,7 @@ html_theme_options = {
                 {"title": "Overview", "url": "integrations/index", "summary": "Every backend and authorizer"},
                 {"title": "PostgreSQL + pgvector", "url": "integrations/pgvector", "summary": "Filter inside SQL"},
                 {"title": "Qdrant", "url": "integrations/qdrant", "summary": "Filter as a query_filter"},
+                {"title": "Milvus", "url": "integrations/milvus", "summary": "Parameterized filters"},
                 {"title": "Elasticsearch, OpenSearch", "url": "integrations/elasticsearch", "summary": "Filtered kNN"},
                 {"title": "OpenFGA", "url": "integrations/openfga", "summary": "Relationship-based access"},
                 {"title": "Open Policy Agent", "url": "integrations/opa", "summary": "Policy as code"},
@@ -81,11 +83,13 @@ html_context = {
     "source_docs_path": "/docs/",
 }
 # Only sidebars that work offline: the theme's repository-stats sidebar would make every reader's
-# browser call the GitHub API, and the site makes no third-party requests (fonts included, see
-# _templates/partials/webfonts.html).
+# browser call the GitHub API, and the site makes no third-party requests (fonts: see
+# _templates/partials/webfonts.html; icons: see _static/ntk-icons.js).
 html_sidebars = {"**": ["sidebars/localtoc.html", "sidebars/edit-this-page.html"]}
 
 # Brand assets and the front page's 3D logo (hero3d.js, with three.js vendored in _static/vendor).
 html_static_path = ["_static"]
 html_css_files = ["brand.css"]
+# The theme's script is added at priority 500; the icons must be registered before it starts.
+html_js_files = [("ntk-icons.js", {"priority": 400})]
 html_favicon = "_static/brand/favicon.svg"

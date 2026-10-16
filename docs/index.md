@@ -41,8 +41,8 @@ sits between your application and your vector store, and closes that gap.
 :gutter: 3
 
 :::{grid-item-card} {octicon}`stack;1.4em;sd-text-primary` Works with what you have
-pgvector, Qdrant, Elasticsearch, OpenSearch, Chroma or any LangChain or LlamaIndex store; OpenFGA,
-SpiceDB, Cerbos, Open Policy Agent or your own rules. The core has no dependencies.
+pgvector, Qdrant, Milvus, Elasticsearch, OpenSearch, Chroma or any LangChain or LlamaIndex store;
+OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The core has no dependencies.
 :::
 
 :::{grid-item-card} {octicon}`goal;1.4em;sd-text-primary` Exact where it matters
@@ -175,6 +175,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 :::{grid-item-card} {octicon}`database;1.2em;sd-text-primary` Vector stores
 - [PostgreSQL + pgvector](integrations/pgvector.md)
 - [Qdrant](integrations/qdrant.md)
+- [Milvus](integrations/milvus.md)
 - [Elasticsearch and OpenSearch](integrations/elasticsearch.md)
 - [Chroma](integrations/chroma.md)
 - Any [LangChain](integrations/langchain.md) or [LlamaIndex](integrations/llamaindex.md) store
@@ -266,6 +267,7 @@ concepts
 combining
 security
 operations
+production
 ```
 
 ```{toctree}

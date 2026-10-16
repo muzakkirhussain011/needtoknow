@@ -115,6 +115,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 |---|---|---|---|
 | [PostgreSQL + pgvector](https://muzakkirhussain011.github.io/needtoknow/integrations/pgvector.html) | Vector store | `needtoknow[pgvector]` | Inside the SQL query |
 | [Qdrant](https://muzakkirhussain011.github.io/needtoknow/integrations/qdrant.html) | Vector store | `needtoknow[qdrant]` | Qdrant's `query_filter` |
+| [Milvus](https://muzakkirhussain011.github.io/needtoknow/integrations/milvus.html) | Vector store | `needtoknow[milvus]` | Inside the vector search, with parameterized filters |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -182,6 +183,26 @@ from needtoknow.backends.qdrant import QdrantBackend, create_collection
 client = QdrantClient(url="http://localhost:6333")
 create_collection(client, "docs", dim=768)
 backend = QdrantBackend(client, "docs", embed=my_embedding_model)
+```
+
+</details>
+
+<details>
+<summary><b>Milvus</b></summary>
+
+**Milvus** (`pip install "needtoknow[milvus]"`). The filter runs inside Milvus's vector search.
+Permissions are matched on a type-tagged array field, and the values are passed as filter
+parameters, never written into the expression, so a group name cannot change what a filter
+selects.
+
+```python
+from pymilvus import MilvusClient
+
+from needtoknow.backends.milvus import MilvusBackend, create_collection
+
+client = MilvusClient(uri="http://localhost:19530")
+create_collection(client, "docs", dim=768)
+backend = MilvusBackend(client, "docs", embed=my_embedding_model)
 ```
 
 </details>
@@ -382,8 +403,8 @@ the LangChain and LlamaIndex integrations, caching, audit events and tracing. Th
 versioning: no breaking change without a major version and a deprecation period first.
 
 Since 1.0, 1.1 added resilient connections to remote permission services and signed, verifiable
-releases. The Qdrant, Elasticsearch and OpenSearch backends and the SpiceDB and Cerbos authorizers
-are on `main` for the next minor release. Next, in rough order: permission sync from Google Drive,
+releases. The Qdrant, Milvus, Elasticsearch and OpenSearch backends and the SpiceDB and Cerbos
+authorizers are on `main` for the next minor release. Next, in rough order: permission sync from Google Drive,
 SharePoint and Confluence, and more vector stores. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
