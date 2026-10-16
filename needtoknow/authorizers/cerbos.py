@@ -193,7 +193,7 @@ class CerbosAuthorizer:
         decisions: list[bool] = []
         for start in range(0, len(hits), self.batch_size):
             batch = hits[start : start + self.batch_size]
-            resources = [
+            resources: list[dict[str, Any]] = [
                 {
                     "resource": self._versioned(
                         {"kind": self.resource_kind, "id": self._resource_id(h), "attr": dict(h.metadata)}
