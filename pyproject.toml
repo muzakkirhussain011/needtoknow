@@ -31,7 +31,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff==0.17.1"]
+dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff==0.17.1", "mypy==2.4.0", "pytest-cov==7.1.0"]
 pgvector = ["psycopg[binary,pool]>=3.2"]
 chroma = ["chromadb>=1.5"]
 langchain = ["langchain-core>=1.0"]
@@ -69,3 +69,18 @@ ignore = ["S101"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.mypy]
+files = ["needtoknow"]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+
+[tool.coverage.run]
+source = ["needtoknow"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "\.\.\.$"]
