@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import math
+import re
 from collections.abc import Sequence
 
 from hypothesis import strategies as st
 
-from needtoknow import Document, Hit, InMemoryBackend, Subject
+from needtoknow import And, Document, Filter, Hit, In, InMemoryBackend, Or, Subject, matches
 
 USERS = ["alice", "bob", "carol", "dave", "erin"]
 GROUPS = ["eng", "hr", "sales", "finance", "legal"]
@@ -52,3 +55,62 @@ class FilterIgnoringBackend(InMemoryBackend):
 
     def search(self, query, k, filter=None):
         return super().search(query, k, None)
+
+
+class HashingEmbedder:
+    """Deterministic bag-of-words embeddings for tests. No model, no network."""
+
+    def __init__(self, dim: int = 16) -> None:
+        self.dim = dim
+
+    def __call__(self, text: str) -> list[float]:
+        # A small constant keeps every vector non-zero (cosine distance is undefined for zero vectors).
+        vec = [1e-3] * self.dim
+        for token in re.findall(r"\w+", text.lower()):
+            digest = hashlib.blake2b(token.encode(), digest_size=8).digest()
+            vec[int.from_bytes(digest[:4], "big") % self.dim] += 1.0 if digest[4] & 1 else -1.0
+        norm = math.sqrt(sum(v * v for v in vec))
+        return [v / norm for v in vec]
+
+
+# ---- conformance: random metadata and filters ------------------------------------------------
+# Every backend must return exactly the documents `needtoknow.filters.matches` says match.
+
+FIELDS = ["team", "level", "allowed_users", "allowed_groups", "tags"]
+VALUES = ["a", "b", "c", 1, 2]
+QUERY = "doc"  # every conformance document contains it, so keyword scoring never drops one
+
+_scalars = st.sampled_from(VALUES)
+_field_values = st.one_of(
+    _scalars,
+    st.booleans(),  # never matched by any filter: filters only hold strings and integers
+    st.lists(st.sampled_from(["a", "b", "c"]), max_size=3, unique=True),
+    st.lists(st.sampled_from([1, 2, 3]), max_size=3, unique=True),
+)
+
+
+@st.composite
+def labelled_docs(draw, max_size: int = 20) -> list[Document]:
+    n = draw(st.integers(min_value=0, max_value=max_size))
+    docs = []
+    for i in range(n):
+        keys = draw(st.lists(st.sampled_from(FIELDS), max_size=4, unique=True))
+        metadata = {key: draw(_field_values) for key in keys}
+        words = draw(st.lists(st.sampled_from(WORDS), max_size=4))
+        docs.append(Document(f"doc-{i:03d}", " ".join(["doc", *words]), metadata))
+    return docs
+
+
+_in_filters = st.builds(In, st.sampled_from(FIELDS), st.lists(_scalars, max_size=3))
+filters = st.recursive(
+    _in_filters,
+    lambda children: st.one_of(
+        st.lists(children, min_size=1, max_size=3).map(lambda cs: And(*cs)),
+        st.lists(children, min_size=1, max_size=3).map(lambda cs: Or(*cs)),
+    ),
+    max_leaves=6,
+)
+
+
+def expected_ids(docs: Sequence[Document], f: Filter) -> set[str]:
+    return {d.id for d in docs if matches(f, d.metadata)}
