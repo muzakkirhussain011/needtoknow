@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       # Every extra, so the adapters are checked against the real libraries' types.
-      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]"
+      - run: pip install -e ".[dev,pgvector,chroma,elasticsearch,opensearch,langchain,llamaindex,otel]"
       - name: mypy --strict
         run: mypy
 
@@ -47,6 +47,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
+      - name: Start Elasticsearch and OpenSearch (they boot while the rest is installed)
+        run: |
+          docker run -d --name elasticsearch -p 9200:9200 -e discovery.type=single-node \
+            -e xpack.security.enabled=false -e ES_JAVA_OPTS="-Xms512m -Xmx512m" \
+            docker.elastic.co/elasticsearch/elasticsearch:9.5.5
+          docker run -d --name opensearch -p 9201:9200 -e discovery.type=single-node \
+            -e DISABLE_SECURITY_PLUGIN=true -e DISABLE_INSTALL_DEMO_CONFIG=true \
+            -e OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m" opensearchproject/opensearch:3.9.0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
@@ -59,12 +67,23 @@ jobs:
         run: |
           docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz && break; sleep 1; done
-      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]" opentelemetry-sdk pgvector
-      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, OPA and OpenFGA)
+      - run: pip install -e ".[dev,pgvector,chroma,elasticsearch,opensearch,langchain,llamaindex,otel]" opentelemetry-sdk pgvector "elasticsearch[async]" "opensearch-py[async]"
+      - name: Wait for Elasticsearch and OpenSearch
+        run: |
+          for url in http://127.0.0.1:9200 http://127.0.0.1:9201; do
+            for i in $(seq 1 90); do
+              curl -sf "$url/_cluster/health?wait_for_status=yellow&timeout=2s" > /dev/null && break
+              sleep 2
+            done
+            curl -sf "$url" | grep -m1 '"number"'
+          done
+      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Elasticsearch, OpenSearch, OPA and OpenFGA)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
           NEEDTOKNOW_TEST_OPENFGA_URL: http://127.0.0.1:8080
+          NEEDTOKNOW_TEST_ELASTICSEARCH_URL: http://127.0.0.1:9200
+          NEEDTOKNOW_TEST_OPENSEARCH_URL: http://127.0.0.1:9201
         run: |
           pytest -q -ra --cov --cov-report=
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"

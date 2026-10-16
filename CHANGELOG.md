@@ -14,6 +14,14 @@ All notable changes are recorded here. The format follows
   retriever); `check_authorizer` checks that `check` and `filter_for` agree. Every built-in backend,
   and the example OPA policy against a real OPA, runs it in CI. `HashingEmbedder` gives vector stores
   deterministic embeddings without a model.
+- `needtoknow.backends.elasticsearch` and `needtoknow.backends.opensearch`: kNN search with the
+  permission filter applied during the search. Permissions are matched on one type-tagged keyword
+  field (`needtoknow_terms`), because keyword fields compare strings and would otherwise match the
+  integer `1` against `"1"`; metadata is stored unindexed and returned exactly, and never adds
+  mappings. `create_index` sets up the mapping, `permission_terms` lets other ingestion pipelines
+  write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
+  against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
+  `needtoknow[opensearch]`.
 
 ## [1.1.0] - 2026-10-16
 

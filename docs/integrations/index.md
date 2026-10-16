@@ -7,6 +7,8 @@ authorizers need no extra at all: they use the standard library's HTTP client.
 |---|---|---|---|
 | [PostgreSQL + pgvector](pgvector.md) | Backend | `needtoknow[pgvector]` | Yes, inside the SQL query |
 | [Chroma](chroma.md) | Backend | `needtoknow[chroma]` | Yes, as a `where` clause |
+| [Elasticsearch](elasticsearch.md#elasticsearch) | Backend | `needtoknow[elasticsearch]` | Yes, inside the kNN search |
+| [OpenSearch](elasticsearch.md#opensearch) | Backend | `needtoknow[opensearch]` | Yes, inside the k-NN search |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
