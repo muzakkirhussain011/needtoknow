@@ -107,9 +107,7 @@ def test_replies_become_hits_best_first_in_both_protocols():
     assert hits[0].score == pytest.approx(0.9)
     resp3 = {
         "total_results": 1,
-        "results": [
-            {"id": "needtoknow:c", "extra_attributes": {"needtoknow_id": "c", "__needtoknow_distance": "0.2"}}
-        ],
+        "results": [{"id": "needtoknow:c", "extra_attributes": {"needtoknow_id": "c", "__needtoknow_distance": "0.2"}}],
     }
     (hit,) = RedisBackend(FakeClient(resp3), "idx", EMBED).search("leave", 1)
     assert hit.id == "c" and hit.score == pytest.approx(0.8)
