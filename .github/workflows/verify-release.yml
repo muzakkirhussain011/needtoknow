@@ -1,0 +1,63 @@
+name: Verify release
+
+# Installs a published version from PyPI, as a user would, and runs the quickstart against it.
+# Runs after every successful Release, and on demand for any version already on PyPI.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version on PyPI, for example 1.0.0rc1
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - name: Install from PyPI (retrying while a new release propagates)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          version="${INPUT_VERSION:-${TAG#v}}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          for attempt in 1 2 3 4 5 6; do
+            pip install --no-cache-dir "needtoknow==${version}" && exit 0
+            sleep 20
+          done
+          exit 1
+      - name: Run the quickstart against the installed package
+        working-directory: ${{ runner.temp }}
+        run: |
+          python - <<'EOF'
+          import os
+
+          import needtoknow
+          from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+
+          assert needtoknow.__version__ == os.environ["VERSION"], needtoknow.__version__
+          backend = InMemoryBackend(
+              [
+                  Document("handbook", "Annual leave is 25 days.", {"allowed_groups": ["*"]}),
+                  Document("salaries", "Salary bands for 2026 ...", {"allowed_groups": ["hr"]}),
+              ]
+          )
+          result = PermissionedRetriever(backend, MetadataACLAuthorizer()).retrieve(
+              "leave salary bands", Subject("bob", ["engineering"]), k=3
+          )
+          assert [h.id for h in result.hits] == ["handbook"], result
+          print(f"needtoknow {needtoknow.__version__} from PyPI works")
+          EOF
