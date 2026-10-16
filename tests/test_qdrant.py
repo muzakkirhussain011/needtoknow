@@ -48,14 +48,14 @@ def _factory(client):
 def test_in_becomes_one_match_any_per_value_type():
     f = filter_to_qdrant(In("team", ["b", 2, "a"]))
     assert f == models.Filter(
-        must=[
-            models.Filter(
-                should=[
-                    models.FieldCondition(key="metadata.team", match=models.MatchAny(any=["a", "b"])),
-                    models.FieldCondition(key="metadata.team", match=models.MatchAny(any=[2])),
-                ]
-            )
+        should=[
+            models.FieldCondition(key="metadata.team", match=models.MatchAny(any=["a", "b"])),
+            models.FieldCondition(key="metadata.team", match=models.MatchAny(any=[2])),
         ]
+    )
+    # A single condition is wrapped, so the result is always a Filter.
+    assert filter_to_qdrant(In("team", ["a"])) == models.Filter(
+        must=[models.FieldCondition(key="metadata.team", match=models.MatchAny(any=["a"]))]
     )
 
 

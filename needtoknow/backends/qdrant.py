@@ -174,7 +174,7 @@ class QdrantBackend:
     def delete(self, ids: Iterable[str]) -> None:
         from qdrant_client import models
 
-        selected = [point_id(i) for i in ids]
+        selected: list[int | str | uuid.UUID] = [point_id(i) for i in ids]
         if selected:
             self.client.delete(self.collection, points_selector=models.PointIdsList(points=selected), wait=True)
 
