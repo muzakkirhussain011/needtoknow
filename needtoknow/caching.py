@@ -13,10 +13,12 @@ keyed by the chunk id and its metadata, so a chunk whose metadata changes is dec
 Errors are never cached: every failure reaches the caller and retrieval fails closed.
 
 Across processes: pass `shared=RedisCache(redis_client)`, or any `SharedCache`, and every replica
-uses the answers any of them obtained, while `invalidate()` reaches all of them. Each shared entry
-carries its expiry time, so the revocation bound holds however many replicas copy it (with clocks
-kept in sync, as NTP does). A shared cache that fails is treated as a miss: the authorizer is asked,
-and the cache is never the reason access is granted.
+uses the answers any of them obtained. Each process then keeps its own copy of an answer for at
+most `local_ttl` seconds (1 by default) before reading the shared cache again, so `invalidate()` in
+one replica reaches every other one within `local_ttl`. Each shared entry carries its expiry time,
+so the revocation bound holds however many replicas copy it (with clocks kept in sync, as NTP
+does). A shared cache that fails is treated as a miss: the authorizer is asked, and the cache is
+never the reason access is granted.
 """
 
 from __future__ import annotations
@@ -90,8 +92,10 @@ class CachingAuthorizer:
     `ttl` is the revocation bound: a permission revoked at the source stops granting access at
     most `ttl` seconds later. `maxsize` caps the number of entries in this process, dropping the
     least recently used first. `shared` adds a cache all processes share (for example
-    `RedisCache`), under keys starting with `namespace`. Errors and malformed answers are never
-    cached. `clock` is for tests.
+    `RedisCache`), under keys starting with `namespace`; this process then keeps its own copy of
+    each answer for at most `local_ttl` seconds, which bounds how long an `invalidate()` made in
+    another process takes to reach this one. Errors and malformed answers are never cached.
+    `clock` is for tests.
     """
 
     def __init__(
@@ -102,10 +106,11 @@ class CachingAuthorizer:
         maxsize: int = 100_000,
         shared: SharedCache | None = None,
         namespace: str = "needtoknow",
+        local_ttl: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if ttl <= 0 or maxsize < 1:
-            raise ValueError("ttl and maxsize must be positive")
+        if ttl <= 0 or maxsize < 1 or local_ttl <= 0:
+            raise ValueError("ttl, local_ttl and maxsize must be positive")
         if not namespace:
             raise ValueError("namespace must be non-empty")
         self.authorizer = authorizer
@@ -113,6 +118,8 @@ class CachingAuthorizer:
         self.maxsize = maxsize
         self.shared = shared
         self.namespace = namespace
+        # Without a shared cache this process's copy is the only one, and it lives for ttl.
+        self.local_ttl = ttl if shared is None else min(local_ttl, ttl)
         self._clock = clock
         # Shared entries carry wall-clock expiry times; a test clock stands in for both clocks.
         self._wall = time.time if clock is time.monotonic else clock
@@ -134,8 +141,9 @@ class CachingAuthorizer:
             return value
 
     def _put(self, key: Any, value: Any, ttl: float | None = None) -> None:
+        lifetime = self.local_ttl if ttl is None else min(ttl, self.local_ttl)
         with self._lock:
-            self._entries[key] = (self._clock() + (self.ttl if ttl is None else ttl), value)
+            self._entries[key] = (self._clock() + lifetime, value)
             self._entries.move_to_end(key)
             while len(self._entries) > self.maxsize:
                 self._entries.popitem(last=False)
@@ -222,7 +230,8 @@ class CachingAuthorizer:
     def invalidate(self, subject: Subject | None = None) -> None:
         """Drop every cached decision, or only those for `subject`, here and in the shared cache.
 
-        A failure to clear the shared cache is raised: the caller asked for the revocation now.
+        Other processes stop using their own copies within `local_ttl` seconds. A failure to clear
+        the shared cache is raised: the caller asked for the revocation now.
         """
         with self._lock:
             if subject is None:

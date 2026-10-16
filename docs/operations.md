@@ -58,13 +58,16 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
 ```
 
 - **Two tiers:** each process looks in its own cache first, then in Redis, and only then asks the
-  permission service; answers go to both. Redis, Valkey, Dragonfly and Redis Cluster work (one
-  subject's keys share a hash slot).
+  permission service; answers go to both. A process keeps its own copy for at most `local_ttl`
+  seconds (1 by default), then reads Redis again. Redis, Valkey, Dragonfly and Redis Cluster work
+  (one subject's keys share a hash slot).
 - **The revocation bound still holds.** Each shared entry carries its expiry time, and a replica
   that copies it keeps it only for the time it has left, never a fresh `ttl`. This relies on
   replicas' clocks agreeing, as NTP keeps them.
-- **`invalidate(subject)` reaches every replica**, and raises if Redis cannot be cleared, since the
-  caller asked for the revocation now.
+- **`invalidate(subject)` reaches every replica within `local_ttl`.** It clears its own process and
+  Redis at once; every other replica stops using its own copy within `local_ttl` seconds. Lower
+  `local_ttl` for faster revocation at the cost of more Redis reads. It raises if Redis cannot be
+  cleared, since the caller asked for the revocation now.
 - **A failing or slow Redis never decides anything.** A read or write that fails is logged and
   treated as a miss: the permission service is asked.
 - **Nothing identifying in key names.** Keys are digests of the subject and the chunk, so Redis

@@ -40,7 +40,8 @@ All notable changes are recorded here. The format follows
   falls back to post-filtering. Example policy in `examples/cerbos`. Tested against Cerbos 0.56.0.
 - `CachingAuthorizer(shared=...)`: a second cache tier shared by every process, with
   `needtoknow.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
-  `needtoknow[redis]`). Replicas reuse each other's answers and `invalidate()` reaches all of them.
+  `needtoknow[redis]`). Replicas reuse each other's answers, each keeps its own copy for at most
+  `local_ttl` seconds (1 by default), and `invalidate()` reaches every replica within `local_ttl`.
   Shared entries carry their expiry time, so the revocation bound holds across replicas; key names
   are digests; values can be signed with HMAC-SHA256 (`signing_key`) so planted entries are
   ignored; and a failing shared cache is only ever a miss.
