@@ -30,18 +30,24 @@ DOCS = [
 ]
 
 
-class Counting(MetadataACLAuthorizer):
+class Counting:
+    """Counts the calls that reach the wrapped authorizer.
+
+    It wraps rather than subclasses: MetadataACLAuthorizer.check calls self.filter_for, which
+    would be counted as a call the cache let through.
+    """
+
     def __init__(self):
-        super().__init__()
+        self.inner = MetadataACLAuthorizer()
         self.checks = self.filters = 0
 
     def check(self, subject, hits, action="read"):
         self.checks += len(hits)
-        return super().check(subject, hits, action)
+        return self.inner.check(subject, hits, action)
 
     def filter_for(self, subject, action="read"):
         self.filters += 1
-        return super().filter_for(subject, action)
+        return self.inner.filter_for(subject, action)
 
 
 class Clock:
