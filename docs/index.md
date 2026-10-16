@@ -68,6 +68,7 @@ integrations/qdrant
 integrations/opa
 integrations/openfga
 integrations/spicedb
+integrations/cerbos
 integrations/langchain
 integrations/llamaindex
 ```

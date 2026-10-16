@@ -1,0 +1,24 @@
+# Example Cerbos policy for needtoknow's CerbosAuthorizer.
+#
+# Chunks carry their permissions in metadata, sent to Cerbos as resource attributes:
+# `allowed_users` (user ids) and `allowed_groups` (group names, "*" for everyone). The subject's
+# groups arrive as the principal attribute `groups`. These rules translate into a needtoknow filter
+# (see needtoknow.authorizers.cerbos), so the vector store can pre-filter.
+#
+#   docker run -p 3592:3592 -v "$PWD/examples/cerbos/policies:/policies" ghcr.io/cerbos/cerbos
+#   CerbosAuthorizer("http://localhost:3592")
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: default
+  resource: document
+  rules:
+    - actions: ["read"]
+      effect: EFFECT_ALLOW
+      roles: ["*"]
+      condition:
+        match:
+          any:
+            of:
+              - expr: request.principal.id in request.resource.attr.allowed_users
+              - expr: '"*" in request.resource.attr.allowed_groups'
+              - expr: hasIntersection(request.resource.attr.allowed_groups, request.principal.attr.groups)

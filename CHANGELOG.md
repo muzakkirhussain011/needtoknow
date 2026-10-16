@@ -33,6 +33,11 @@ All notable changes are recorded here. The format follows
   conditional on a caveat), the subject's groups as `group:<name>#member` subject sets, caveat
   context, a configurable consistency, and conditional answers treated as failures, not decisions.
   Tested against a real SpiceDB for random relationship graphs and with the conformance kit.
+- `needtoknow.authorizers.cerbos.CerbosAuthorizer`: Cerbos over its HTTP API, with no extra
+  dependency. CheckResources per chunk (metadata as resource attributes, the subject's groups and
+  attributes on the principal), and pre-filters translated from PlanResources query plans: `and`,
+  `or`, `hasIntersection`, `in` and `==` on resource attributes become exact filters, anything else
+  falls back to post-filtering. Example policy in `examples/cerbos`. Tested against Cerbos 0.56.0.
 
 ## [1.1.0] - 2026-10-16
 
