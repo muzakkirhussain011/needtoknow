@@ -38,6 +38,15 @@ All notable changes are recorded here. The format follows
   attributes on the principal), and pre-filters translated from PlanResources query plans: `and`,
   `or`, `hasIntersection`, `in` and `==` on resource attributes become exact filters, anything else
   falls back to post-filtering. Example policy in `examples/cerbos`. Tested against Cerbos 0.56.0.
+- The conformance kit also generates nested lists and objects in metadata, filters of 300 values,
+  and subjects in hundreds of groups.
+
+### Changed
+
+- pgvector: an `In` with more than 100 values (a subject in many groups) is sent as two array
+  parameters instead of two per value. A subject in more than about 32,000 groups used to exceed
+  PostgreSQL's limit of 65,535 parameters, and retrieval failed; CI now serves one in 40,000. The
+  operations guide has a section on subjects in very many groups for every backend.
 
 ## [1.1.0] - 2026-10-16
 

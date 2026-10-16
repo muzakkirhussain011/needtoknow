@@ -16,7 +16,7 @@ from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labe
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 from needtoknow.testing import check_backend
 
 EMBED = HashingEmbedder()
@@ -145,6 +145,29 @@ def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_
     # scan) or a sequential scan, all 5 must come back; without iterative scans an index scan
     # could stop short.
     assert sorted(h.id for h in result.hits) == [f"bob-{i}" for i in range(5)]
+
+
+def test_pgvector_sends_many_values_as_two_array_parameters():
+    from needtoknow.backends.pgvector import MANY_VALUES, filter_to_sql
+
+    sql, params = filter_to_sql(In("allowed_groups", [f"g{i}" for i in range(MANY_VALUES + 1)] + [7]))
+    assert sql.count("%s") == 4 and len(params) == 4
+    assert params[1][0] == "7" and params[3][0] == "[7]"  # values keep their JSON type
+    few_sql, few_params = filter_to_sql(In("allowed_groups", ["hr", "eng"]))
+    assert len(few_params) == 4 and few_sql.count("metadata @>") == 4  # GIN-friendly containment
+
+
+def test_pgvector_serves_a_subject_in_forty_thousand_groups(pgvector_factory):
+    # PostgreSQL accepts at most 65,535 bind parameters: one or two per group would fail here.
+    docs = [
+        Document("mine", "leave policy", {"allowed_groups": ["g39999"]}),
+        Document("public", "leave policy", {"allowed_groups": ["*"]}),
+        Document("other", "leave policy", {"allowed_groups": ["hr"]}),
+    ]
+    backend = pgvector_factory(docs)
+    subject = Subject("ann", [f"g{i}" for i in range(40_000)])
+    result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
+    assert sorted(h.id for h in result.hits) == ["mine", "public"] and result.violations == 0
 
 
 @pytest.mark.parametrize("bad", [0, 1001, 1.5, True, "100"])
