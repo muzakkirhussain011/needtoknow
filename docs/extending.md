@@ -48,43 +48,51 @@ versions are `afilter_for` and `acheck`.
 
 For rules that fit in a function, `FunctionAuthorizer(check, filter_for=None)` wraps one.
 
-## Test it the way the built-in adapters are tested
+## Test it with the conformance kit
 
-The built-in backends are held to one property: for random documents, random metadata and random
-nested filters, the backend returns exactly the documents `matches` selects, and the retriever on
-top of it never returns a chunk the subject may not read. A test in that style with
-[Hypothesis](https://hypothesis.readthedocs.io):
+`needtoknow.testing` checks a backend or an authorizer the way the built-in ones are checked in
+needtoknow's CI. It generates documents, permission metadata and nested filters from a seed (with
+scalar and list fields, mixed value types and missing fields: the cases where filter translations
+tend to go wrong) and compares your implementation with the reference semantics. It needs no extra
+packages, no model and no network.
 
 ```python
-from hypothesis import given
-from hypothesis import strategies as st
-
-from needtoknow import Document, In, matches
-
-groups = st.lists(st.sampled_from(["hr", "eng", "sales", "*"]), max_size=3)
-documents = st.lists(
-    st.builds(
-        Document, st.uuids().map(str), st.just("leave policy"), st.fixed_dictionaries({"allowed_groups": groups})
-    ),
-    max_size=30,
-    unique_by=lambda d: d.id,
-)
+from needtoknow.testing import HashingEmbedder, check_authorizer, check_backend
 
 
-@given(documents, groups)
-def test_my_backend_filters_like_the_reference(docs, wanted):
-    backend = make_my_backend(docs)  # your setup
-    f = In("allowed_groups", wanted)
-    expected = {d.id for d in docs if matches(f, d.metadata)}
-    assert {h.id for h in backend.search("leave", k=len(docs) + 1, filter=f)} == expected
+def make_backend(documents):
+    backend = MyStoreBackend(client, embed=HashingEmbedder(), collection=new_collection())
+    backend.add(documents)
+    return backend
+
+
+def test_my_backend_conforms():
+    check_backend(make_backend)
+
+
+def test_my_authorizer_conforms():
+    check_authorizer(MyAuthorizer(...), subjects, hits)  # subjects and hits from your test data
 ```
 
-The full conformance suite, with nested filters, scalar and list fields and mixed value types, is
-in [`tests/test_backends.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/tests/test_backends.py).
+`check_backend` checks that a search returns exactly the documents `matches` selects, at most k,
+best first, with text and metadata exactly as stored (the retriever re-checks pre-filtered hits
+against that metadata), that `asearch` agrees with `search`, and that retrieval through
+`PermissionedRetriever` never returns a chunk the subject may not read. For an approximate index
+that may miss matches, pass `exact=False`: a result may then be short, but never wrong.
+
+`check_authorizer` checks that `check` returns one boolean per hit, that a hit's answer does not
+depend on the rest of the batch, and that `check` agrees with the filter from `filter_for`. If the
+two disagree, pre-filtered and post-filtered results differ.
+
+A failure raises `ConformanceError` with the seed, the example number, the documents, the filter
+and what came back. For shrinking to a minimal failing example, the same properties can be written
+with [Hypothesis](https://hypothesis.readthedocs.io), as needtoknow's own
+[`tests/test_backends.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/tests/test_backends.py)
+does.
 
 ## Contributing an adapter
 
 New backends and authorizers are welcome. An adapter goes in its own module behind an optional
-extra, passes the conformance properties against the real service in CI, and fails closed on every
-error. See the
+extra, passes `check_backend` or `check_authorizer` against the real service in CI, and fails
+closed on every error. See the
 [contributing guide](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).

@@ -16,6 +16,7 @@ from hypothesis import strategies as st
 
 from needtoknow import AuthorizationError, Document, Hit, In, InMemoryBackend, Or, PermissionedRetriever, Subject
 from needtoknow.authorizers.opa import OPAAuthorizer
+from needtoknow.testing import check_authorizer
 
 BOB = Subject("bob", ["eng"], {"region": "eu"})
 HITS = [Hit("a", "text a", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "text b", 0.5, {"allowed_groups": ["hr"]})]
@@ -154,3 +155,9 @@ def test_example_policy_gives_exactly_the_reference_answer(docs, subject, query,
     retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
     result = retriever.retrieve(query, subject, k)
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)
+
+
+@pytest.mark.skipif(not OPA_URL, reason="set NEEDTOKNOW_TEST_OPA_URL to run against a real OPA")
+def test_example_policy_passes_the_conformance_kit():
+    # Its decisions and its filter are written separately in Rego; they must agree for every hit.
+    check_authorizer(OPAAuthorizer(OPA_URL, filter_path="needtoknow/filter"))

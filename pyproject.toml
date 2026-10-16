@@ -66,6 +66,10 @@ target-version = "py310"
 select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF"]
 ignore = ["S101"]
 
+[tool.ruff.lint.per-file-ignores]
+# Seeded random test data, not secrets.
+"needtoknow/testing.py" = ["S311"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
