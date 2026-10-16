@@ -53,11 +53,22 @@ All notable changes are recorded here. The format follows
   JSON lines; observer failures are logged and never affect retrieval.
 - `needtoknow.otel.OpenTelemetryObserver`: one span per retrieval with counts and outcomes, the
   subject id only on request. Extra: `needtoknow[otel]`.
+- Documentation site (Sphinx, MyST, Furo) in `docs/`: getting started, concepts, a security model,
+  operations, one page per integration, extending needtoknow, benchmarks and an API reference.
+  CI builds it with warnings as errors. Extra: `needtoknow[docs]`.
+- Benchmark harness (`benchmarks/`): recall@k against exact ground truth, leaks, completeness and
+  latency for exact search, Chroma and pgvector across permission selectivity and layouts, with a
+  Kaggle notebook for real embeddings. CI runs a small version against real Chroma and PostgreSQL
+  and fails on any leak.
 - Conformance tests: every backend must return exactly the documents the reference semantics
   select, for random metadata and nested filters, and never leak through the retriever. CI runs
   them against real PostgreSQL, Chroma and OPA.
 
 ### Changed
+
+- `RetrievalResult.complete` is documented precisely: it is `False` when needtoknow knows results
+  may be missing, and it trusts the backend's ranking, so it cannot see results an approximate index
+  failed to return. The benchmarks measure how often that happens.
 
 - Filter values must be strings or integers, and metadata values of other types (booleans,
   floats) never match. This keeps every backend's answer identical to the reference.

@@ -41,6 +41,13 @@ def _hit_key(hit: Hit) -> tuple[str, str]:
 
 
 class CachingAuthorizer:
+    """Caches another authorizer's answers per subject and action for `ttl` seconds.
+
+    `ttl` is the revocation bound: a permission revoked at the source stops granting access at
+    most `ttl` seconds later. `maxsize` caps the number of cached entries, dropping the least
+    recently used first. Errors and malformed answers are never cached. `clock` is for tests.
+    """
+
     def __init__(
         self,
         authorizer: Authorizer,

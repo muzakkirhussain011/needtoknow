@@ -39,6 +39,13 @@ def _subject(subject: Subject) -> dict[str, Any]:
 
 
 class OPAAuthorizer:
+    """Asks an Open Policy Agent server for decisions over its HTTP API.
+
+    `decisions_path` is the rule returning one boolean per resource and `filter_path`, if set, the
+    rule returning a filter or null. `headers` are sent with every request, for example an
+    `Authorization` header. Every failure raises `AuthorizationError`.
+    """
+
     def __init__(
         self,
         url: str,

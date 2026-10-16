@@ -22,6 +22,12 @@ __all__ = ["OpenTelemetryObserver"]
 
 
 class OpenTelemetryObserver:
+    """Records each `RetrievalEvent` as a span named `needtoknow.retrieve`.
+
+    `tracer` defaults to the `needtoknow` tracer of the global tracer provider. Spans carry counts
+    and outcomes, never query or chunk text; the subject id only with `record_subject=True`.
+    """
+
     def __init__(self, tracer: Any = None, *, record_subject: bool = False) -> None:
         self.tracer = tracer or trace.get_tracer("needtoknow")
         self.record_subject = record_subject
