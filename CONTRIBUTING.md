@@ -59,7 +59,8 @@ Maintainers release from `main`:
 2. After it merges, publish a GitHub release tagged `v` plus the version (for example `v1.2.0`),
    marked as a pre-release for release candidates.
 3. [`release.yml`](.github/workflows/release.yml) builds the package, checks that the tag matches the
-   version, and uploads it to PyPI with trusted publishing; no API token exists.
+   version, and uploads it to PyPI with trusted publishing; no API token exists. It then attaches
+   the same files to the GitHub release with a Sigstore signature for each and a CycloneDX SBOM.
    [`verify-release.yml`](.github/workflows/verify-release.yml) then installs it from PyPI and runs
    the quickstart against it.
 

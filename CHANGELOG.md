@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-16
+
+Hardening for production: resilient connections to remote permission services, releases that can
+be verified, and the first measurements at a million chunks. The one change in behaviour is that
+the authorizers no longer follow HTTP redirects. Python 3.10 reaches its end of life on 2026-10-31;
+following the support policy, 1.2 will be the first release without it.
+
 ### Added
 
 - The OPA and OpenFGA authorizers reuse HTTP connections (one per thread) instead of opening one per
@@ -132,6 +139,7 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
 [1.0.0rc1]: https://github.com/muzakkirhussain011/needtoknow/releases/tag/v1.0.0rc1
