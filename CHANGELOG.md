@@ -16,6 +16,13 @@ All notable changes are recorded here. The format follows
 - `mode="keyword"` on the Elasticsearch and OpenSearch backends: BM25 on the text under the same
   permission filter, with no embedding function needed. Tested with the conformance kit, alone and
   fused with vector search, against both engines.
+- `needtoknow.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis
+  Stack), with the permission filter in the same KNN query. Permission terms are stored
+  hex-encoded in a TAG field, so no group name or user id can add query syntax and TAG matching's
+  case folding never merges two values; metadata is stored as JSON and returned exactly.
+  `create_index` sets up the index, and `redis.asyncio` clients give a native `aretrieve`. Tested
+  with the conformance kit against Redis 8.10.2. Extra: `needtoknow[redis]`, as for the shared
+  cache.
 - `needtoknow.haystack.NeedToKnowRetriever`: a Haystack pipeline component over any needtoknow
   backend and authorizer. The authenticated user is a run input, so one pipeline serves every
   user, and the component refuses to run without a `Subject`. It outputs Haystack `Document`s and
