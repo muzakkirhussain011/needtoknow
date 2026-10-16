@@ -6,6 +6,21 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-17
+
+Breadth and scale. needtoknow now works with six more systems: the Qdrant, Milvus, Elasticsearch
+and OpenSearch vector stores, and the SpiceDB and Cerbos permission systems. Authorizers combine
+(`AllOf`, `AnyOf`, `TenantAuthorizer`), with scoped post-filtering for multi-tenant indexes; the
+permission cache can be shared across replicas through Redis; OpenTelemetry metrics show where each
+retrieval spends its time; and a subject can be in tens of thousands of groups. A conformance kit,
+`needtoknow.testing`, checks your own backends and authorizers against the reference semantics, as
+CI does for every built-in one. One behaviour is stricter: an authorizer answer that is not a
+filter now fails closed instead of reaching the backend.
+
+Python 3.10 is still supported. 1.2 comes out before 3.10's end of life on 2026-10-31, and the
+support policy drops a version in the first minor release after that, so 1.3 will be the first
+release without it, not 1.2 as the 1.1.0 notes said.
+
 ### Added
 
 - A project logo. The documentation's front page shows it as a live 3D model (three.js, vendored, so
@@ -60,8 +75,6 @@ All notable changes are recorded here. The format follows
   scope (for example only the subject's tenant) and still checks every candidate, so a tenant with
   a small share of the index keeps its recall. `AllOf` and `AnyOf` provide scopes, and
   `CachingAuthorizer` caches them.
-- The retriever rejects a `filter_for` (or `scope_for`) answer that is not a filter with
-  `AuthorizationError`, instead of handing it to the backend.
 - `CachingAuthorizer(shared=...)`: a second cache tier shared by every process, with
   `needtoknow.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
   `needtoknow[redis]`). Replicas reuse each other's answers, each keeps its own copy for at most
@@ -82,10 +95,19 @@ All notable changes are recorded here. The format follows
 
 ### Changed
 
+- The retriever rejects a `filter_for` (or `scope_for`) answer that is not a filter with
+  `AuthorizationError`, instead of handing it to the backend.
 - pgvector: an `In` with more than 100 values (a subject in many groups) is sent as two array
   parameters instead of two per value. A subject in more than about 32,000 groups used to exceed
   PostgreSQL's limit of 65,535 parameters, and retrieval failed; CI now serves one in 40,000. The
   operations guide has a section on subjects in very many groups for every backend.
+
+### Documentation
+
+- A production checklist: what to settle before launch, and what happens when each part of the
+  system fails, with what the operator sees.
+- The security model covers the shared cache's trust boundary, what a wrong `scope_for` can and
+  cannot do, how each backend returns metadata, and the new authorizers.
 
 ## [1.1.2] - 2026-10-16
 
@@ -230,7 +252,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
