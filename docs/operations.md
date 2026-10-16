@@ -42,6 +42,41 @@ authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 It works for `retrieve` and `aretrieve`, using the wrapped authorizer's async methods when it has
 them.
 
+### Sharing the cache across processes
+
+With many replicas, each one's cache asks the permission service separately, and `invalidate()`
+only clears the replica it runs in. Give them a shared cache (`pip install "needtoknow[redis]"`):
+
+```python
+import redis
+
+from needtoknow import CachingAuthorizer
+from needtoknow.caching import RedisCache
+
+shared = RedisCache(redis.Redis.from_url(REDIS_URL), signing_key=CACHE_SIGNING_KEY)
+authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
+```
+
+- **Two tiers:** each process looks in its own cache first, then in Redis, and only then asks the
+  permission service; answers go to both. Redis, Valkey, Dragonfly and Redis Cluster work (one
+  subject's keys share a hash slot).
+- **The revocation bound still holds.** Each shared entry carries its expiry time, and a replica
+  that copies it keeps it only for the time it has left, never a fresh `ttl`. This relies on
+  replicas' clocks agreeing, as NTP keeps them.
+- **`invalidate(subject)` reaches every replica**, and raises if Redis cannot be cleared, since the
+  caller asked for the revocation now.
+- **A failing or slow Redis never decides anything.** A read or write that fails is logged and
+  treated as a miss: the permission service is asked.
+- **Nothing identifying in key names.** Keys are digests of the subject and the chunk, so Redis
+  key listings show neither user ids nor document metadata.
+- **Sign the values.** Without `signing_key`, anyone who can write to that Redis could plant a
+  decision. With it (at least 16 random bytes, for example `secrets.token_bytes(32)`, known only to
+  your application), every value carries an HMAC-SHA256 over its key and content, and an entry
+  without a valid signature is ignored.
+
+Another store works too: pass any object with `get_many`, `set_many` and `delete_prefix`
+(`needtoknow.caching.SharedCache`).
+
 ## Resilience of remote permission services
 
 `OPAAuthorizer` and `OpenFGAAuthorizer` share an HTTP client built for permission checks on every

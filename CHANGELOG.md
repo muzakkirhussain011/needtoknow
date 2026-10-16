@@ -38,6 +38,12 @@ All notable changes are recorded here. The format follows
   attributes on the principal), and pre-filters translated from PlanResources query plans: `and`,
   `or`, `hasIntersection`, `in` and `==` on resource attributes become exact filters, anything else
   falls back to post-filtering. Example policy in `examples/cerbos`. Tested against Cerbos 0.56.0.
+- `CachingAuthorizer(shared=...)`: a second cache tier shared by every process, with
+  `needtoknow.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
+  `needtoknow[redis]`). Replicas reuse each other's answers and `invalidate()` reaches all of them.
+  Shared entries carry their expiry time, so the revocation bound holds across replicas; key names
+  are digests; values can be signed with HMAC-SHA256 (`signing_key`) so planted entries are
+  ignored; and a failing shared cache is only ever a miss.
 - The conformance kit also generates nested lists and objects in metadata, filters of 300 values,
   and subjects in hundreds of groups.
 
