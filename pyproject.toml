@@ -43,6 +43,7 @@ Homepage = "https://github.com/muzakkirhussain011/needtoknow"
 Repository = "https://github.com/muzakkirhussain011/needtoknow"
 Issues = "https://github.com/muzakkirhussain011/needtoknow/issues"
 Changelog = "https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md"
+Documentation = "https://muzakkirhussain011.github.io/needtoknow/"
 
 [tool.hatch.version]
 path = "needtoknow/__init__.py"

@@ -24,6 +24,7 @@ autodoc_typehints = "description"
 
 html_theme = "furo"
 html_title = "needtoknow"
+html_baseurl = "https://muzakkirhussain011.github.io/needtoknow/"
 html_theme_options = {
     "source_repository": "https://github.com/muzakkirhussain011/needtoknow",
     "source_branch": "main",

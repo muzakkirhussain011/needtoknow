@@ -1,7 +1,8 @@
 # needtoknow
 
 [![CI](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg)](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docs](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg)](https://muzakkirhussain011.github.io/needtoknow/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![Dependencies: none](https://img.shields.io/badge/core%20dependencies-none-brightgreen.svg)
 
@@ -15,6 +16,11 @@ retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 result = retriever.retrieve("What are this year's salary bands?", Subject("bob", groups=["engineering"]), k=5)
 # result.hits holds only chunks Bob may read. HR documents never reach the prompt.
 ```
+
+**[Documentation](https://muzakkirhussain011.github.io/needtoknow/)** ·
+[Security model](https://muzakkirhussain011.github.io/needtoknow/security.html) ·
+[Benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html) ·
+[Changelog](https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md)
 
 ## Why
 
@@ -113,7 +119,7 @@ backend = ChromaBackend(collection)  # uses the collection's embedding function
 
 **Open Policy Agent** (no extra dependency). Your Rego policy returns one decision per chunk, and
 can optionally return a filter so the vector store does the filtering. A complete policy is in
-[`examples/opa/needtoknow.rego`](examples/opa/needtoknow.rego).
+[`examples/opa/needtoknow.rego`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/opa/needtoknow.rego).
 
 ```python
 from needtoknow.authorizers.opa import OPAAuthorizer
@@ -145,7 +151,7 @@ docs = retriever.invoke("What are this year's salary bands?", subject=Subject("b
 
 **LlamaIndex** (`pip install "needtoknow[llamaindex]"`). `NeedToKnowRetriever` for query and chat
 engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
-existing index. Runnable examples for both frameworks are in [`examples/`](examples).
+existing index. Runnable examples for both frameworks are in [`examples/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples).
 
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
@@ -212,7 +218,7 @@ On 57,600 real chunks (BEIR FiQA, Qwen3-Embedding-0.6B), across 33,000 retrieval
 strategy returned a single forbidden chunk. Filtering inside the search kept recall@10 at 0.949 or
 better on pgvector for users who may read anywhere from 0.06% to 100% of the corpus, including when
 what they may read is far from what they ask about. Filtering after a top-10 search found almost
-nothing for selective permissions. Method, tables and caveats: [docs/benchmarks.md](docs/benchmarks.md).
+nothing for selective permissions. Method, tables and caveats: [Benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html).
 
 | Readable (far from the query) | Naive top-k, then filter | needtoknow postfilter | needtoknow prefilter (pgvector) |
 |---|---|---|---|
@@ -229,18 +235,18 @@ nothing for selective permissions. Method, tables and caveats: [docs/benchmarks.
 - [x] Authorizers: OPA, OpenFGA
 - [x] Frameworks: LangChain and LlamaIndex retrievers
 - [x] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
-- [x] Benchmarks with real embeddings; documentation site (in [`docs/`](docs))
+- [x] Benchmarks with real embeddings; [documentation site](https://muzakkirhussain011.github.io/needtoknow/)
 
 After 1.0: permission sync from Google Drive, SharePoint and Confluence; Qdrant, Elasticsearch,
-SpiceDB and Cerbos adapters. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+SpiceDB and Cerbos adapters. Contributions are welcome; see [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
 
-[`examples/gateway`](examples/gateway) is a complete, self-hosted, OpenAI-compatible gateway built
+[`examples/gateway`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/gateway) is a complete, self-hosted, OpenAI-compatible gateway built
 on the same ideas: OPA policies, pgvector hybrid search with the ACL inside the query, PII
 pseudonymisation, prompt-injection quarantine and a hash-chained audit log. It is being ported onto
 this library.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE)

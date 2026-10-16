@@ -55,7 +55,8 @@ All notable changes are recorded here. The format follows
   subject id only on request. Extra: `needtoknow[otel]`.
 - Documentation site (Sphinx, MyST, Furo) in `docs/`: getting started, concepts, a security model,
   operations, one page per integration, extending needtoknow, benchmarks and an API reference.
-  CI builds it with warnings as errors. Extra: `needtoknow[docs]`.
+  CI builds it with warnings as errors, and every push to `main` publishes it to
+  <https://muzakkirhussain011.github.io/needtoknow/>. Extra: `needtoknow[docs]`.
 - Benchmark harness (`benchmarks/`): recall@k against exact ground truth, leaks, completeness and
   latency for exact search, Chroma and pgvector across permission selectivity and layouts, with a
   Kaggle notebook for real embeddings. CI runs a small version against real Chroma and PostgreSQL
