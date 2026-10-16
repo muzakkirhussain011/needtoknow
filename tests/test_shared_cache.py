@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 import uuid
 
 import pytest
@@ -123,6 +124,35 @@ def test_invalidate_reaches_every_replica():
     assert shared.data == {}
 
 
+def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
+    shared = FakeShared()
+    clock, (_one, two), (a, b) = _replicas(shared)
+    a.check(BOB, HITS)
+    b.check(BOB, HITS)  # b now holds its own copy, for at most local_ttl (1 second)
+    a.invalidate(BOB)
+    clock.now += 0.5
+    b.check(BOB, HITS)
+    assert two.checks == 0  # still b's own copy
+    clock.now += 0.6
+    b.check(BOB, HITS)
+    assert two.checks == 2  # its copy expired and the shared entry is gone, so b asked
+
+
+def test_without_a_shared_cache_entries_live_for_ttl():
+    clock, inner = Clock(), Counting()
+    cache = CachingAuthorizer(inner, ttl=30, local_ttl=1, clock=clock)
+    cache.check(BOB, HITS)
+    clock.now += 29
+    cache.check(BOB, HITS)
+    assert inner.checks == 2  # local_ttl only applies next to a shared cache
+
+
+@pytest.mark.parametrize("options", [{"ttl": 0}, {"local_ttl": 0}, {"maxsize": 0}, {"namespace": ""}])
+def test_invalid_options_are_refused(options):
+    with pytest.raises(ValueError):
+        CachingAuthorizer(Counting(), shared=FakeShared(), **options)
+
+
 @pytest.mark.parametrize(
     "blob",
     [b"not json", b"{}", b'{"expires": "soon", "value": true}', b'{"expires": 1e12, "value": "yes"}'],
@@ -218,15 +248,17 @@ def test_redis_cache_ignores_unsigned_tampered_and_foreign_entries():
 
 @needs_redis
 def test_replicas_share_decisions_through_redis():
-    namespace = f"ntk-{uuid.uuid4().hex}"
+    namespace, clock = f"ntk-{uuid.uuid4().hex}", Clock()
+    clock.now = time.time()  # shared entries carry wall-clock expiry times
     shared = RedisCache(_redis(), signing_key=b"s" * 32)
     one, two = Counting(), Counting()
-    a = CachingAuthorizer(one, shared=shared, namespace=namespace)
-    b = CachingAuthorizer(two, shared=shared, namespace=namespace)
+    a = CachingAuthorizer(one, shared=shared, namespace=namespace, clock=clock)
+    b = CachingAuthorizer(two, shared=shared, namespace=namespace, clock=clock)
     assert a.check(BOB, HITS) == [True, False] and b.check(BOB, HITS) == [True, False]
     first = a.filter_for(BOB)  # a asks first; b then finds it in Redis
     assert b.filter_for(BOB) == first and (two.checks, two.filters) == (0, 0)
     a.invalidate(BOB)
+    clock.now += 1.1  # b's own copy has expired (local_ttl), and Redis no longer has the entry
     b.check(BOB, HITS)
     assert two.checks == 2
     a.invalidate()
