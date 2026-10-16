@@ -56,7 +56,7 @@ def test_ranks_are_fused_with_weights():
     vector, keyword = Fixed(_hit("a"), _hit("b"), _hit("c")), Fixed(_hit("b"), _hit("c"), _hit("a"))
     assert [h.id for h in RankFusion(vector, keyword).search("q", 3)] == ["b", "a", "c"]
     assert [h.id for h in RankFusion(vector, keyword, weights=[3, 1]).search("q", 3)] == ["a", "b", "c"]
-    (top,) = RankFusion(vector, keyword, rank_constant=0).search("q", 1)
+    (top,) = RankFusion(vector, keyword, rank_constant=0, depth=3).search("q", 1)
     assert top.id == "b" and top.score == pytest.approx(1 / 2 + 1 / 1)
     assert top.text == "text b" and top.metadata == {"allowed_groups": ["*"]}
 
