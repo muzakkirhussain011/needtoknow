@@ -99,7 +99,7 @@ backend.add(documents)
 value in a permission list is stored as its own field rather than as a Chroma array, and an exact
 copy of the metadata is kept for the re-check: in chromadb 1.5.x, deleting a collection leaves its
 array metadata behind for new records in other collections to pick up
-([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/pull/7725)), which for
+([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/issues/7594)), which for
 permissions would be a leak.
 
 ```python
@@ -147,7 +147,8 @@ docs = retriever.invoke("What are this year's salary bands?", subject=Subject("b
 engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
 existing index. Runnable examples for both frameworks are in [`examples/`](examples).
 
-Filter values are strings or integers, the types permission identifiers use.
+Filter values are strings or integers, the types permission identifiers use. That keeps every
+backend's answer identical to the reference semantics, which the test suite checks for each one.
 
 ## Caching, audit and tracing
 
@@ -167,8 +168,7 @@ retriever = PermissionedRetriever(
 never caches an error; `invalidate()` drops decisions after a change you know about. Every
 retrieval, including failed ones, produces one `RetrievalEvent` (who asked, strategy, returned ids,
 denied and violation counts, duration, error type). Events never contain query or chunk text, and
-an observer that fails is logged without affecting retrieval. That keeps every
-backend's answer identical to the reference semantics, which the test suite checks for each one.
+an observer that fails is logged without affecting retrieval.
 
 ## Bring your own backend or permission system
 
