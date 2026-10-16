@@ -8,6 +8,10 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- A project logo. The documentation's front page shows it as a live 3D model (three.js, vendored, so
+  the site makes no third-party requests), with a still render as the fallback when WebGL is
+  unavailable or the reader prefers reduced motion; it also appears in the sidebar, as the favicon
+  and at the top of the README.
 - `needtoknow.testing`: a conformance kit for your own backends and authorizers.
   `check_backend` compares a backend with the reference filter semantics on generated documents and
   nested filters (exact results, `k`, ordering, unchanged metadata, `asearch`, no leaks through the
@@ -54,6 +58,11 @@ All notable changes are recorded here. The format follows
   parameters instead of two per value. A subject in more than about 32,000 groups used to exceed
   PostgreSQL's limit of 65,535 parameters, and retrieval failed; CI now serves one in 40,000. The
   operations guide has a section on subjects in very many groups for every backend.
+
+## [1.1.1] - 2026-10-16
+
+The README, and so the project's PyPI page, shows the project logo. The library is unchanged from
+1.1.0.
 
 ## [1.1.0] - 2026-10-16
 
@@ -189,6 +198,7 @@ needed, in which case it will be announced in a second release candidate. Instal
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
 [Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...HEAD
+[1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
 [1.0.0rc1]: https://github.com/muzakkirhussain011/needtoknow/releases/tag/v1.0.0rc1
