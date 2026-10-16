@@ -21,8 +21,22 @@ All notable changes are recorded here. The format follows
 - `InMemoryBackend` with deterministic keyword scoring, for tests and small corpora.
 - Property-based tests (Hypothesis) for the security guarantees on Python 3.10 to 3.13.
 - Contributor documentation: CONTRIBUTING, GOVERNANCE, CODE_OF_CONDUCT, SECURITY.
+- `needtoknow.backends.pgvector`: PostgreSQL + pgvector backend with the permission filter in the
+  query as JSON containment tests (GIN-indexable), iterative HNSW scans, `create_schema`, and a
+  native async search when given an async pool. Extra: `needtoknow[pgvector]`.
+- `needtoknow.backends.chroma`: Chroma 1.5+ backend translating filters into `where` clauses
+  (`$in` for single values, `$contains` for lists). Extra: `needtoknow[chroma]`.
+- `needtoknow.authorizers.opa`: Open Policy Agent authorizer using only the standard library, with
+  per-chunk decisions and optional policy-provided filters; every failure fails closed. Example
+  policy in `examples/opa`.
+- `filter_to_dict` / `filter_from_dict` for a JSON form of filters.
+- Conformance tests: every backend must return exactly the documents the reference semantics
+  select, for random metadata and nested filters, and never leak through the retriever. CI runs
+  them against real PostgreSQL, Chroma and OPA.
 
 ### Changed
 
+- Filter values must be strings or integers, and metadata values of other types (booleans,
+  floats) never match. This keeps every backend's answer identical to the reference.
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
