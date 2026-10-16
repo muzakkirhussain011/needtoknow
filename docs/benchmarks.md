@@ -16,7 +16,8 @@ Leaks
 : Returned chunks the user may not read. For every needtoknow strategy this must be zero.
 
 Complete
-: How often the result is known to be the full top 10 (`RetrievalResult.complete`).
+: How often needtoknow reported the result as complete (`RetrievalResult.complete`). It is `False`
+  when needtoknow knows results may be missing; it cannot see what an approximate index missed.
 
 Latency
 : Median and 95th percentile per retrieval. Query embedding is excluded: queries are embedded once,
