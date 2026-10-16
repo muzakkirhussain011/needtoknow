@@ -13,6 +13,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [Milvus](milvus.md) | Backend | `needtoknow[milvus]` | Yes, inside the vector search, with parameterized filters |
 | [MongoDB Atlas Vector Search](mongodb.md) | Backend | `needtoknow[mongodb]` | Yes, as the `$vectorSearch` pre-filter |
 | [Weaviate](weaviate.md) | Backend | `needtoknow[weaviate]` | Yes, inside the vector search |
+| [Redis](redis.md) | Backend | `needtoknow[redis]` | Yes, in the same KNN query |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |

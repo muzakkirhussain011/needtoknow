@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `needtoknow.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis
+  Stack), with the permission filter in the same KNN query. Permission terms are stored
+  hex-encoded in a TAG field, so no group name or user id can add query syntax and TAG matching's
+  case folding never merges two values; metadata is stored as JSON and returned exactly.
+  `create_index` sets up the index, and `redis.asyncio` clients give a native `aretrieve`. Tested
+  with the conformance kit against Redis 8.10.2. Extra: `needtoknow[redis]`, as for the shared
+  cache.
 - `needtoknow.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
   `$vectorSearch` pre-filter on a type-tagged array field (a BSON filter, so values are never query
   syntax). Atlas indexes writes shortly after they happen, so `add` and `delete` wait until the

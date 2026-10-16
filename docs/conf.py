@@ -66,6 +66,7 @@ html_theme_options = {
                 {"title": "Milvus", "url": "integrations/milvus", "summary": "Parameterized filters"},
                 {"title": "MongoDB", "url": "integrations/mongodb", "summary": "Atlas Vector Search"},
                 {"title": "Weaviate", "url": "integrations/weaviate", "summary": "Filtered vector search"},
+                {"title": "Redis", "url": "integrations/redis", "summary": "Query Engine KNN"},
                 {"title": "Elasticsearch, OpenSearch", "url": "integrations/elasticsearch", "summary": "Filtered kNN"},
                 {"title": "OpenFGA", "url": "integrations/openfga", "summary": "Relationship-based access"},
                 {"title": "Open Policy Agent", "url": "integrations/opa", "summary": "Policy as code"},
