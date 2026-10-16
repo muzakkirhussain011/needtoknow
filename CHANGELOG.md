@@ -12,6 +12,10 @@ All notable changes are recorded here. The format follows
   the site makes no third-party requests), with a still render as the fallback when WebGL is
   unavailable or the reader prefers reduced motion; it also appears in the sidebar, as the favicon
   and at the top of the README.
+- A redesigned documentation site on the Shibuya theme: a product-style front page (feature cards,
+  how it works, code in tabs, integrations, measured results), a top navigation bar with menus,
+  copy buttons on code, edit links on every page, and link previews. It uses each platform's own
+  font and no third-party services, and its buttons meet WCAG AA contrast in light and dark mode.
 - `needtoknow.testing`: a conformance kit for your own backends and authorizers.
   `check_backend` compares a backend with the reference filter semantics on generated documents and
   nested filters (exact results, `k`, ordering, unchanged metadata, `asearch`, no leaks through the
