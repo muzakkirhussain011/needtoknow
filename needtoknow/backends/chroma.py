@@ -101,7 +101,8 @@ def _decode_metadata(stored: Mapping[str, Any] | None) -> dict[str, Any]:
     # carrying no permissions, so the re-check denies them.
     if not stored or not isinstance(stored.get(JSON_KEY), str):
         return {}
-    return json.loads(stored[JSON_KEY])
+    metadata = json.loads(stored[JSON_KEY])
+    return metadata if isinstance(metadata, dict) else {}
 
 
 class ChromaBackend:
