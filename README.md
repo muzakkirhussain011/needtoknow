@@ -403,9 +403,10 @@ the LangChain and LlamaIndex integrations, caching, audit events and tracing. Th
 versioning: no breaking change without a major version and a deprecation period first.
 
 Since 1.0, 1.1 added resilient connections to remote permission services and signed, verifiable
-releases. The Qdrant, Milvus, Elasticsearch and OpenSearch backends and the SpiceDB and Cerbos
-authorizers are on `main` for the next minor release. Next, in rough order: permission sync from Google Drive,
-SharePoint and Confluence, and more vector stores. Contributions are welcome; see
+releases. 1.2 added the Qdrant, Milvus, Elasticsearch and OpenSearch backends, the SpiceDB and
+Cerbos authorizers, combined and multi-tenant authorizers, a permission cache shared across
+replicas, OpenTelemetry metrics and a conformance kit. Next, in rough order: permission sync from
+Google Drive, SharePoint and Confluence, and more vector stores. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
