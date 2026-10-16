@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `needtoknow.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
+  `$vectorSearch` pre-filter on a type-tagged array field (a BSON filter, so values are never query
+  syntax). Atlas indexes writes shortly after they happen, so `add` and `delete` wait until the
+  index shows the change, including a replaced chunk's new permissions (`wait=False` skips it).
+  `create_search_index` sets up the index, and `AsyncMongoClient` collections give a native
+  `aretrieve`. Tested with the conformance kit against `mongodb/mongodb-atlas-local` 8.0.30. Extra:
+  `needtoknow[mongodb]`.
+
 ## [1.2.0] - 2026-10-17
 
 Breadth and scale. needtoknow now works with six more systems: the Qdrant, Milvus, Elasticsearch

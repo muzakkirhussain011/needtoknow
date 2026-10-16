@@ -161,6 +161,15 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.milvus.filter_to_expression
 
 .. autofunction:: needtoknow.backends.milvus.permission_terms
+
+.. autoclass:: needtoknow.backends.mongodb.MongoDBBackend
+   :members: add, delete, search, asearch
+
+.. autofunction:: needtoknow.backends.mongodb.create_search_index
+
+.. autofunction:: needtoknow.backends.mongodb.filter_to_mongo
+
+.. autofunction:: needtoknow.backends.mongodb.permission_terms
 ```
 
 ## Frameworks

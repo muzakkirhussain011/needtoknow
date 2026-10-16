@@ -116,6 +116,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [PostgreSQL + pgvector](https://muzakkirhussain011.github.io/needtoknow/integrations/pgvector.html) | Vector store | `needtoknow[pgvector]` | Inside the SQL query |
 | [Qdrant](https://muzakkirhussain011.github.io/needtoknow/integrations/qdrant.html) | Vector store | `needtoknow[qdrant]` | Qdrant's `query_filter` |
 | [Milvus](https://muzakkirhussain011.github.io/needtoknow/integrations/milvus.html) | Vector store | `needtoknow[milvus]` | Inside the vector search, with parameterized filters |
+| [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -203,6 +204,26 @@ from needtoknow.backends.milvus import MilvusBackend, create_collection
 client = MilvusClient(uri="http://localhost:19530")
 create_collection(client, "docs", dim=768)
 backend = MilvusBackend(client, "docs", embed=my_embedding_model)
+```
+
+</details>
+
+<details>
+<summary><b>MongoDB Atlas Vector Search</b></summary>
+
+**MongoDB Atlas Vector Search** (`pip install "needtoknow[mongodb]"`). The filter is the
+`$vectorSearch` pre-filter, on a type-tagged array field. Atlas indexes writes a moment after they
+happen, so `add` and `delete` wait until the index shows them, including a chunk's new
+permissions.
+
+```python
+from pymongo import MongoClient
+
+from needtoknow.backends.mongodb import MongoDBBackend, create_search_index
+
+collection = MongoClient(MONGODB_URI)["rag"]["chunks"]
+create_search_index(collection, dim=768)
+backend = MongoDBBackend(collection, embed=my_embedding_model)
 ```
 
 </details>
