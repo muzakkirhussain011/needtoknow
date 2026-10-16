@@ -63,6 +63,7 @@ html_theme_options = {
                 {"title": "Overview", "url": "integrations/index", "summary": "Every backend and authorizer"},
                 {"title": "PostgreSQL + pgvector", "url": "integrations/pgvector", "summary": "Filter inside SQL"},
                 {"title": "Qdrant", "url": "integrations/qdrant", "summary": "Filter as a query_filter"},
+                {"title": "Milvus", "url": "integrations/milvus", "summary": "Parameterized filters"},
                 {"title": "Elasticsearch, OpenSearch", "url": "integrations/elasticsearch", "summary": "Filtered kNN"},
                 {"title": "OpenFGA", "url": "integrations/openfga", "summary": "Relationship-based access"},
                 {"title": "Open Policy Agent", "url": "integrations/opa", "summary": "Policy as code"},
