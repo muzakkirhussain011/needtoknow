@@ -195,6 +195,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 :::{grid-item-card} {octicon}`plug;1.2em;sd-text-primary` Frameworks and operations
 - [LangChain](integrations/langchain.md) retrievers and agent tools
 - [LlamaIndex](integrations/llamaindex.md) retrievers and postprocessors
+- [Haystack](integrations/haystack.md) retriever component
 - [OpenTelemetry](operations.md#tracing) spans
 - [Audit events](operations.md) as JSON lines
 :::
@@ -292,6 +293,7 @@ integrations/spicedb
 integrations/cerbos
 integrations/langchain
 integrations/llamaindex
+integrations/haystack
 ```
 
 ```{toctree}

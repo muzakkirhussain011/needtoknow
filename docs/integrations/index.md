@@ -19,6 +19,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [Cerbos](cerbos.md) | Authorizer | none | Yes, from query plans |
 | [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
 | [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
+| [Haystack](haystack.md) | Framework | `needtoknow[haystack]` | Through any needtoknow backend |
 | [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
 
 Backends and authorizers combine freely: pgvector with OpenFGA, Chroma with OPA, a LangChain

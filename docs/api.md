@@ -199,6 +199,9 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autoclass:: needtoknow.llamaindex.PermissionNodePostprocessor
 
 .. autoclass:: needtoknow.llamaindex.LlamaIndexBackend
+
+.. autoclass:: needtoknow.haystack.NeedToKnowRetriever
+   :members: run, run_async
 ```
 
 ## Conformance testing
