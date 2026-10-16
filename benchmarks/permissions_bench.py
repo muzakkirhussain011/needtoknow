@@ -118,9 +118,15 @@ def model_embed(
     model.max_seq_length = min(model.max_seq_length or 512, 512)
     prompt = "query" if "query" in (model.prompts or {}) else None
     options = {"batch_size": batch_size, "normalize_embeddings": True, "convert_to_numpy": True}
-    doc_vecs = model.encode(list(docs), show_progress_bar=True, **options)
+    gpu = torch.cuda.get_device_name(0) if device == "cuda" else "no GPU"
+    log(f"embedding {len(docs)} chunks and {len(queries)} queries with {name} on {device} ({gpu})")
+    # Logged in slices, because a progress bar that redraws one line never reaches notebook logs.
+    parts = []
+    for start in range(0, len(docs), 5000):
+        parts.append(model.encode(list(docs[start : start + 5000]), **options))
+        log(f"embedded {min(start + 5000, len(docs))}/{len(docs)} chunks")
     query_vecs = model.encode(list(queries), prompt_name=prompt, **options)
-    return doc_vecs.astype(np.float32), query_vecs.astype(np.float32)
+    return np.concatenate(parts).astype(np.float32), query_vecs.astype(np.float32)
 
 
 # ---- permissions -----------------------------------------------------------------------------
