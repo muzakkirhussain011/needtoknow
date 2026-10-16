@@ -92,6 +92,8 @@ class PgVectorBackend:
     `pool` is a psycopg `ConnectionPool`; `embed` turns text into a vector (your embedding model).
     Scores are cosine similarity, `1 - cosine distance`. Pass `async_pool` (an
     `AsyncConnectionPool`) for a native `asearch`; otherwise async calls run `search` in a thread.
+    `ef_search` sets pgvector's `hnsw.ef_search` (1 to 1000) for each search: higher finds more of
+    the true nearest neighbours and takes longer. `None` leaves the server's setting (40 by default).
     """
 
     supports_filters = True
@@ -103,15 +105,21 @@ class PgVectorBackend:
         *,
         table: str = "needtoknow_chunks",
         iterative_scan: str | None = "relaxed_order",
+        ef_search: int | None = None,
         async_pool: Any = None,
     ) -> None:
         if iterative_scan not in (None, "relaxed_order", "strict_order"):
             raise ValueError("iterative_scan must be None, 'relaxed_order' or 'strict_order'")
+        if ef_search is not None and (
+            isinstance(ef_search, bool) or not isinstance(ef_search, int) or not 1 <= ef_search <= 1000
+        ):
+            raise ValueError("ef_search must be None or an integer from 1 to 1000")
         self.pool = pool
         self.async_pool = async_pool
         self.embed = embed
         self.table = table
         self.iterative_scan = iterative_scan
+        self.ef_search = ef_search
 
     # ---- writing -----------------------------------------------------------------------------
 
@@ -155,10 +163,16 @@ class PgVectorBackend:
         ).format(t=sql.Identifier(self.table), cond=sql.SQL(condition))
         return statement, [query_vector, *params, k]
 
-    def _setting(self) -> Any:
+    def _settings(self) -> list[Any]:
+        """`SET LOCAL` statements for the search's transaction, so pooled connections keep their own."""
         from psycopg import sql
 
-        return sql.SQL("SET LOCAL hnsw.iterative_scan = {}").format(sql.Literal(self.iterative_scan))
+        settings = []
+        if self.iterative_scan:
+            settings.append(sql.SQL("SET LOCAL hnsw.iterative_scan = {}").format(sql.Literal(self.iterative_scan)))
+        if self.ef_search is not None:
+            settings.append(sql.SQL("SET LOCAL hnsw.ef_search = {}").format(sql.Literal(self.ef_search)))
+        return settings
 
     @staticmethod
     def _hits(rows: Iterable[Sequence[Any]]) -> list[Hit]:
@@ -169,8 +183,8 @@ class PgVectorBackend:
             return []
         statement, params = self._query(_vector(self.embed(query)), k, filter)
         with self.pool.connection() as conn, conn.transaction():
-            if self.iterative_scan:
-                conn.execute(self._setting())
+            for setting in self._settings():
+                conn.execute(setting)
             rows = conn.execute(statement, params).fetchall()
         return self._hits(rows)
 
@@ -182,8 +196,8 @@ class PgVectorBackend:
         vector = _vector(await asyncio.to_thread(self.embed, query))
         statement, params = self._query(vector, k, filter)
         async with self.async_pool.connection() as conn, conn.transaction():
-            if self.iterative_scan:
-                await conn.execute(self._setting())
+            for setting in self._settings():
+                await conn.execute(setting)
             cursor = await conn.execute(statement, params)
             rows = await cursor.fetchall()
         return self._hits(rows)

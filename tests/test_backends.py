@@ -141,6 +141,31 @@ def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_
     assert sorted(h.id for h in result.hits) == [f"bob-{i}" for i in range(5)]
 
 
+@pytest.mark.parametrize("bad", [0, 1001, 1.5, True, "100"])
+def test_pgvector_ef_search_must_be_an_integer_from_1_to_1000(bad):
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    with pytest.raises(ValueError, match="ef_search"):
+        PgVectorBackend(None, EMBED, ef_search=bad)
+
+
+def test_pgvector_ef_search_holds_for_the_search_only(pgvector_pool):
+    from psycopg import sql
+
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    class Probe(PgVectorBackend):
+        # Returns the setting the search query sees, in place of rows.
+        def _query(self, query_vector, k, f):
+            return sql.SQL("SELECT current_setting('hnsw.ef_search'), '', NULL, 0.0"), []
+
+    [hit] = Probe(pgvector_pool, EMBED, table="ntk_hnsw", ef_search=123).search("anything", 1)
+    assert hit.id == "123"
+    # SET LOCAL ends with the search's transaction: the pooled connection is left as it was.
+    with pgvector_pool.connection() as conn:
+        assert conn.execute("SELECT current_setting('hnsw.ef_search', true)").fetchone()[0] != "123"
+
+
 def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_factory):
     psycopg_pool = pytest.importorskip("psycopg_pool")
     from needtoknow.backends.pgvector import PgVectorBackend

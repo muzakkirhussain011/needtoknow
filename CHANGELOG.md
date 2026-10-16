@@ -15,6 +15,8 @@ All notable changes are recorded here. The format follows
 - `needtoknow.authorizers.CircuitBreaker`: pauses requests to a permission service that keeps
   failing, then probes; pass it as `circuit_breaker=`.
 - `ssl_context=` on both authorizers, for your own CA or mutual TLS.
+- `PgVectorBackend(ef_search=...)` sets pgvector's HNSW search depth for each search, trading
+  latency for recall, without changing the setting for other users of the connection pool.
 - A load benchmark (`benchmarks/load_bench.py`): a million MS MARCO passages on pgvector, recall
   and latency by selectivity, throughput with concurrent users, and the cost of OPA as the
   permission service with and without caching. CI runs a small version against real services. The
