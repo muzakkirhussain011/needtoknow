@@ -14,8 +14,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12" }
       - run: pip install "ruff==0.17.1"
       - run: ruff check .
@@ -32,10 +33,11 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
-      - uses: open-policy-agent/setup-opa@v2
+      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with: { version: 1.21.2 }
       - name: Start OPA with the example policy
         run: |
@@ -72,8 +74,9 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "${{ matrix.python }}", cache: pip }
       - run: pip install -e ".[dev]"
       - run: pytest -q
@@ -81,12 +84,20 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12" }
       - run: pip install build twine
       - run: python -m build
       - run: twine check --strict dist/*
+      - name: The SBOM the release attaches can be generated
+        run: |
+          python -m venv "$RUNNER_TEMP/sbom"
+          "$RUNNER_TEMP/sbom/bin/pip" install --no-deps dist/*.whl
+          pip install "cyclonedx-bom==7.5.0"
+          cyclonedx-py environment "$RUNNER_TEMP/sbom" --output-format JSON --output-file sbom.cdx.json
+          python -c "import json; names = [c['name'] for c in json.load(open('sbom.cdx.json'))['components']]; assert 'needtoknow' in names, names"
       - name: The sdist must not ship the example deployments
         run: |
           tar -tzf dist/*.tar.gz > sdist-files.txt
@@ -95,8 +106,9 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       - run: pip install -e ".[docs,langchain,llamaindex,otel]"
       - name: Build the documentation (warnings are errors)
@@ -110,8 +122,9 @@ jobs:
       run:
         working-directory: examples/gateway
     steps:
-      - uses: actions/checkout@v7
-      - uses: open-policy-agent/setup-opa@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with: { version: 1.21.2 }
       - run: opa check --strict policies
       - run: opa fmt --list --fail policies
@@ -135,10 +148,11 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
-      - uses: open-policy-agent/setup-opa@v2
+      - uses: open-policy-agent/setup-opa@b2b258e089860efaadaaf71bf6e3aecb4a3eeff1 # v2.4.0
         with: { version: 1.21.2 }
       - name: Start OPA with the example policies
         run: |
@@ -154,6 +168,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       - name: Build the example gateway image
         run: docker build --target runtime -t needtoknow-gateway:ci examples/gateway
