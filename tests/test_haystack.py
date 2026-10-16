@@ -8,9 +8,9 @@ import pytest
 
 pytest.importorskip("haystack")
 
-from haystack import Pipeline  # noqa: E402
+from haystack import Pipeline
 
-from needtoknow import (  # noqa: E402
+from needtoknow import (
     AuthorizationError,
     Document,
     FunctionAuthorizer,
@@ -19,7 +19,7 @@ from needtoknow import (  # noqa: E402
     PermissionedRetriever,
     Subject,
 )
-from needtoknow.haystack import NeedToKnowRetriever  # noqa: E402
+from needtoknow.haystack import NeedToKnowRetriever
 
 DOCS = [
     Document("handbook", "leave policy", {"allowed_groups": ["*"]}),
