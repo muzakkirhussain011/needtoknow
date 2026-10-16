@@ -1,0 +1,59 @@
+# Chroma
+
+```bash
+pip install "needtoknow[chroma]"
+```
+
+The permission filter becomes Chroma's `where` clause, so Chroma filters inside the search.
+
+## Set up
+
+```python
+import chromadb
+
+from needtoknow.backends.chroma import ChromaBackend
+
+client = chromadb.PersistentClient(path="./chroma")
+collection = client.get_or_create_collection("docs", configuration={"hnsw": {"space": "cosine"}})
+backend = ChromaBackend(collection)  # uses the collection's embedding function
+```
+
+Pass `embed=` to embed queries and documents with your own model instead of the collection's
+embedding function. Scores are `1 - distance`, so create the collection with cosine distance for
+scores between -1 and 1. `add(documents, embeddings=None)` upserts by id and `delete(ids)` removes
+chunks.
+
+## How metadata is stored
+
+needtoknow does not use Chroma's array metadata, and the reason is a real leak. In chromadb 1.5.x
+(local mode), deleting a collection leaves its array metadata behind, and because SQLite reuses
+record ids, new records in *other* collections come back with those arrays and are matched by
+`where` filters ([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/issues/7594)).
+For permission data, that means a chunk can appear to belong to groups it was never shared with.
+
+So the backend stores metadata in a form that bug cannot affect:
+
+| Your metadata | Stored in Chroma |
+|---|---|
+| `team: "eng"` (a string or integer) | `team: "eng"`, unchanged |
+| `allowed_groups: ["hr", "eng"]` (a list) | One boolean field per value: `allowed_groups::s:hr: true`, `allowed_groups::s:eng: true` |
+| Everything | An exact JSON copy under `needtoknow_metadata` |
+
+Search results are rebuilt from the JSON copy, never from the fields Chroma returns, so the
+retriever's re-check always sees the true permissions. Records written by something other than
+needtoknow have no copy and are treated as having no permissions: the re-check denies them.
+
+Field names may not contain `::`, and `needtoknow_metadata` is reserved. Values that are not
+strings or integers are kept in the JSON copy only, which matches the reference semantics: no filter
+matches them.
+
+## How the filter becomes `where`
+
+`In(field, values)` becomes an `$or` of `$in` on the scalar field (one per value type, since
+Chroma's `$in` lists hold a single type) and an `$eq: true` test on each value's list field.
+`And` and `Or` become `$and` and `$or`. A filter that can match nothing, such as `In(field, [])`,
+skips the query entirely.
+
+A permission filter with many values becomes a large `where` clause. Granting access through
+hierarchical groups (team, department, division) rather than hundreds of individual groups keeps
+it small.

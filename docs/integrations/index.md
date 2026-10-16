@@ -1,0 +1,18 @@
+# Integrations
+
+Each integration is an optional extra, so the core stays free of dependencies. The OPA and OpenFGA
+authorizers need no extra at all: they use the standard library's HTTP client.
+
+| Integration | Kind | Install | Pre-filters |
+|---|---|---|---|
+| [PostgreSQL + pgvector](pgvector.md) | Backend | `needtoknow[pgvector]` | Yes, inside the SQL query |
+| [Chroma](chroma.md) | Backend | `needtoknow[chroma]` | Yes, as a `where` clause |
+| [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
+| [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
+| [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
+| [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
+| [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
+
+Backends and authorizers combine freely: pgvector with OpenFGA, Chroma with OPA, a LangChain
+store with permissions on the chunks. A store not listed here needs only a `search` method; see
+[Extending needtoknow](../extending.md).
