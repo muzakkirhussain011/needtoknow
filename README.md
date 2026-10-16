@@ -178,6 +178,18 @@ from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
 authorizer = SpiceDBAuthorizer("http://localhost:8443", token=spicedb_key, resource_field="doc_id")
 ```
 
+**Cerbos** (no extra dependency). Each chunk is a Cerbos resource whose attributes are its
+metadata. Pre-filters come from Cerbos query plans: the conditions a vector store can apply
+exactly are translated into a filter, and anything else is post-filtered with Cerbos deciding each
+chunk. An example policy is in
+[`examples/cerbos`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/cerbos).
+
+```python
+from needtoknow.authorizers.cerbos import CerbosAuthorizer
+
+authorizer = CerbosAuthorizer("http://localhost:3592")
+```
+
 **LangChain** (`pip install "needtoknow[langchain]"`). `NeedToKnowRetriever` is a LangChain
 retriever, so it works in chains, agents and LangGraph tools; `LangChainVectorStoreBackend` turns
 any LangChain vector store into a needtoknow backend (post-filtered).

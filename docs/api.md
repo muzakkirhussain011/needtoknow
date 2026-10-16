@@ -73,6 +73,10 @@ modules and need their extra.
 
 .. autoclass:: needtoknow.authorizers.spicedb.SpiceDBAuthorizer
 
+.. autoclass:: needtoknow.authorizers.cerbos.CerbosAuthorizer
+
+.. autofunction:: needtoknow.authorizers.cerbos.plan_to_filter
+
 .. autoclass:: needtoknow.authorizers.CircuitBreaker
    :members: is_open
 ```
