@@ -1,7 +1,7 @@
 # Integrations
 
-Each integration is an optional extra, so the core stays free of dependencies. The OPA and OpenFGA
-authorizers need no extra at all: they use the standard library's HTTP client.
+Each integration is an optional extra, so the core stays free of dependencies. The OPA, OpenFGA and
+SpiceDB authorizers need no extra at all: they use the standard library's HTTP client.
 
 | Integration | Kind | Install | Pre-filters |
 |---|---|---|---|
@@ -12,6 +12,7 @@ authorizers need no extra at all: they use the standard library's HTTP client.
 | [Qdrant](qdrant.md) | Backend | `needtoknow[qdrant]` | Yes, as a `query_filter` |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
+| [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
 | [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
 | [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
 | [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |

@@ -167,6 +167,17 @@ from needtoknow.authorizers.openfga import OpenFGAAuthorizer
 authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
 ```
 
+**SpiceDB** (no extra dependency). Zanzibar-style permissions through SpiceDB's HTTP API.
+CheckBulkPermissions decides each chunk, LookupResources gives the pre-filter, and the subject's
+groups are checked as subject sets (`group:<name>#member`), so memberships from your identity
+provider need no syncing.
+
+```python
+from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
+
+authorizer = SpiceDBAuthorizer("http://localhost:8443", token=spicedb_key, resource_field="doc_id")
+```
+
 **LangChain** (`pip install "needtoknow[langchain]"`). `NeedToKnowRetriever` is a LangChain
 retriever, so it works in chains, agents and LangGraph tools; `LangChainVectorStoreBackend` turns
 any LangChain vector store into a needtoknow backend (post-filtered).

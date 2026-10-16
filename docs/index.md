@@ -67,6 +67,7 @@ integrations/elasticsearch
 integrations/qdrant
 integrations/opa
 integrations/openfga
+integrations/spicedb
 integrations/langchain
 integrations/llamaindex
 ```

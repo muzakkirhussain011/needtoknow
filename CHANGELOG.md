@@ -27,6 +27,12 @@ All notable changes are recorded here. The format follows
   write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
   against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
   `needtoknow[opensearch]`.
+- `needtoknow.authorizers.spicedb.SpiceDBAuthorizer`: SpiceDB over its HTTP API, with no extra
+  dependency. CheckBulkPermissions in batches (answers matched by the request they echo),
+  LookupResources for the pre-filter (post-filtering when the list may be truncated or is
+  conditional on a caveat), the subject's groups as `group:<name>#member` subject sets, caveat
+  context, a configurable consistency, and conditional answers treated as failures, not decisions.
+  Tested against a real SpiceDB for random relationship graphs and with the conformance kit.
 
 ## [1.1.0] - 2026-10-16
 
