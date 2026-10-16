@@ -1,0 +1,70 @@
+# Qdrant
+
+```bash
+pip install "needtoknow[qdrant]"
+```
+
+The permission filter becomes Qdrant's `query_filter`, so Qdrant returns the nearest points the
+subject may read. Qdrant applies filters inside its HNSW search and plans restrictive filters with
+its payload indexes, which suits large collections where a user may read only a small share.
+
+## Set up
+
+```python
+from qdrant_client import QdrantClient
+
+from needtoknow.backends.qdrant import QdrantBackend, create_collection
+
+client = QdrantClient(url="http://localhost:6333")  # or QdrantClient(":memory:") for tests
+create_collection(client, "docs", dim=768)
+backend = QdrantBackend(client, "docs", embed=embed)  # embed: str -> list[float], your embedding model
+```
+
+`create_collection(client, name, dim, keyword_fields=("allowed_users", "allowed_groups"))` creates
+a cosine-distance collection if it does not exist, and keyword payload indexes on the permission
+fields. Without the indexes Qdrant still filters correctly, but has to check every point.
+
+## How points are stored
+
+`QdrantBackend` stores and reads points in the layout of LangChain's Qdrant integration: the text
+under `page_content`, the metadata under `metadata`. A collection built with LangChain can therefore
+be searched with permissions without re-indexing, as long as its metadata carries the permission
+fields. Pass `content_key=` and `metadata_key=` for another layout, and `vector_name=` for a named
+vector.
+
+Qdrant point ids are unsigned integers or UUIDs. `add` uses a document id that is a UUID as the point
+id, and derives a stable UUID from any other id, keeping the original under `needtoknow_id` in the
+payload. Search results report that id, or the point id for points written by something else. A
+point without a `metadata` object carries no permissions, so the re-check denies it.
+
+```python
+from needtoknow import Document
+
+backend.add([Document("salaries-1", "Salary bands for 2026 ...", {"allowed_groups": ["hr"]})])
+backend.delete(["salaries-1"])
+```
+
+## How filters are translated
+
+| needtoknow | Qdrant |
+|---|---|
+| `In("allowed_groups", ["hr", "eng"])` | `FieldCondition(key="metadata.allowed_groups", match=MatchAny(any=["eng", "hr"]))` |
+| `In("level", ["a", 1])` | one `MatchAny` for the strings and one for the integers, under `should` |
+| `And(...)` / `Or(...)` | `Filter(must=[...])` / `Filter(should=[...])` |
+| `In(field, [])` | matches nothing: the backend returns no hits without calling Qdrant |
+
+For a list field, Qdrant matches when any element matches, which is the reference semantics of `In`.
+Strings and integers are never mixed in one `MatchAny`, and an empty value list is handled before the
+query is built rather than left to Qdrant's handling of empty lists. Field names used in filters
+may not contain `.`, `[`, `]` or `"`, which Qdrant reads as path syntax; such a filter raises
+`ValueError`, so retrieval fails closed.
+
+The backend passes needtoknow's [conformance kit](../extending.md#test-it-with-the-conformance-kit)
+in CI against a real Qdrant server (v1.19.2) and against Qdrant's local mode.
+
+## Search quality and async
+
+`search_params=` takes a `qdrant_client.models.SearchParams`: `SearchParams(hnsw_ef=128)` searches
+deeper for higher recall, `SearchParams(exact=True)` searches by brute force. Pass
+`async_client=AsyncQdrantClient(...)` for a native `aretrieve`; without it, async calls run the sync
+search in a thread.
