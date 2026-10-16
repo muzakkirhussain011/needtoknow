@@ -35,6 +35,12 @@ All notable changes are recorded here. The format follows
   write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
   against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
   `needtoknow[opensearch]`.
+- `needtoknow.backends.milvus`: a Milvus backend, with the permission filter applied inside the
+  vector search. Permissions are matched on a type-tagged array field, as on the search engines,
+  and the values are passed as Milvus filter parameters, never written into the expression, so a
+  group name cannot change what a filter selects. `create_collection` sets up the schema and
+  indexes, searches use strong consistency by default, and `AsyncMilvusClient` gives a native
+  `aretrieve`. Tested with the conformance kit against Milvus 3.0.2. Extra: `needtoknow[milvus]`.
 - `needtoknow.authorizers.spicedb.SpiceDBAuthorizer`: SpiceDB over its HTTP API, with no extra
   dependency. CheckBulkPermissions in batches (answers matched by the request they echo),
   LookupResources for the pre-filter (post-filtering when the list may be truncated or is
