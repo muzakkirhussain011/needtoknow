@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-16
+
+The first stable release. The public API in the
+[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) now follows semantic
+versioning. Everything in 1.0.0rc1 below is included; these are the changes since the release
+candidate.
+
 ### Added
 
 - Tested on Python 3.14. Every Python version CPython still supports is supported, and a version is
@@ -95,5 +102,6 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
 [1.0.0rc1]: https://github.com/muzakkirhussain011/needtoknow/releases/tag/v1.0.0rc1
