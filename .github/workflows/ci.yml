@@ -162,6 +162,18 @@ jobs:
             --seconds 2 --ef-search 100 --opa-url http://127.0.0.1:8181 --check --out load.json --markdown load.md
           python benchmarks/load_bench.py --render load.json --markdown rendered.md && cmp load.md rendered.md
           cat load.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Load benchmark harness on the other stores (synthetic smoke runs)
+        run: |
+          run() {
+            python benchmarks/load_bench.py --backend "$1" --url "$2" --docs 2000 --queries 10 --selectivity 0.01,1 \
+              --users 1,2 --seconds 1 --check --out "load-$1.json" --markdown "load-$1.md"
+            cat "load-$1.md" >> "$GITHUB_STEP_SUMMARY"
+          }
+          run qdrant http://127.0.0.1:6333
+          run milvus http://127.0.0.1:19530
+          run elasticsearch http://127.0.0.1:9200
+          run opensearch http://127.0.0.1:9201
+          run weaviate http://127.0.0.1:8079
 
   library:
     name: library (Python ${{ matrix.python }})
