@@ -124,3 +124,21 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 .. autoclass:: needtoknow.llamaindex.LlamaIndexBackend
 ```
+
+## Conformance testing
+
+See [Extending needtoknow](extending.md#test-it-with-the-conformance-kit).
+
+```{eval-rst}
+.. autofunction:: needtoknow.testing.check_backend
+
+.. autofunction:: needtoknow.testing.check_authorizer
+
+.. autoexception:: needtoknow.testing.ConformanceError
+
+.. autoclass:: needtoknow.testing.HashingEmbedder
+
+.. autofunction:: needtoknow.testing.random_documents
+
+.. autofunction:: needtoknow.testing.random_filter
+```

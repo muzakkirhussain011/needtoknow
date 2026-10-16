@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `needtoknow.testing`: a conformance kit for your own backends and authorizers.
+  `check_backend` compares a backend with the reference filter semantics on generated documents and
+  nested filters (exact results, `k`, ordering, unchanged metadata, `asearch`, no leaks through the
+  retriever); `check_authorizer` checks that `check` and `filter_for` agree. Every built-in backend,
+  and the example OPA policy against a real OPA, runs it in CI. `HashingEmbedder` gives vector stores
+  deterministic embeddings without a model.
+
 ## [1.1.0] - 2026-10-16
 
 Hardening for production: resilient connections to remote permission services, releases that can

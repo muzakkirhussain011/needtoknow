@@ -17,6 +17,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from needtoknow.testing import check_backend
 
 EMBED = HashingEmbedder()
 DATABASE_URL = os.environ.get("NEEDTOKNOW_TEST_DATABASE_URL")
@@ -105,6 +106,11 @@ def test_retriever_on_backend_never_leaks_and_is_complete(factory, docs, subject
     if not isinstance(backend, InMemoryBackend):
         # Vector search ranks every stored chunk, so the subject gets min(k, everything permitted).
         assert len(result.hits) == min(k, sum(may_read(subject, d) for d in docs))
+
+
+def test_backend_passes_the_public_conformance_kit(factory):
+    # The checks third-party adapters run (needtoknow.testing), on every built-in backend.
+    check_backend(factory)
 
 
 # ---- Chroma specifics ------------------------------------------------------------------------

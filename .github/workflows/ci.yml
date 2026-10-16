@@ -20,7 +20,7 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install "ruff==0.17.1"
       - run: ruff check .
-      - run: ruff format --check .
+      - run: ruff format --diff .
 
   typecheck:
     runs-on: ubuntu-latest

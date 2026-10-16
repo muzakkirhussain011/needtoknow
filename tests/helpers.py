@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import hashlib
-import math
-import re
 from collections.abc import Sequence
 
 from hypothesis import strategies as st
 
-from needtoknow import And, Document, Filter, Hit, In, InMemoryBackend, Or, Subject, matches
+from needtoknow import And, Document, Filter, Hit, In, InMemoryBackend, Or, Subject, matches, testing
 
 USERS = ["alice", "bob", "carol", "dave", "erin"]
 GROUPS = ["eng", "hr", "sales", "finance", "legal"]
@@ -57,20 +54,7 @@ class FilterIgnoringBackend(InMemoryBackend):
         return super().search(query, k, None)
 
 
-class HashingEmbedder:
-    """Deterministic bag-of-words embeddings for tests. No model, no network."""
-
-    def __init__(self, dim: int = 16) -> None:
-        self.dim = dim
-
-    def __call__(self, text: str) -> list[float]:
-        # A small constant keeps every vector non-zero (cosine distance is undefined for zero vectors).
-        vec = [1e-3] * self.dim
-        for token in re.findall(r"\w+", text.lower()):
-            digest = hashlib.blake2b(token.encode(), digest_size=8).digest()
-            vec[int.from_bytes(digest[:4], "big") % self.dim] += 1.0 if digest[4] & 1 else -1.0
-        norm = math.sqrt(sum(v * v for v in vec))
-        return [v / norm for v in vec]
+HashingEmbedder = testing.HashingEmbedder  # the public test embedder; the tests use the same one
 
 
 # ---- conformance: random metadata and filters ------------------------------------------------
