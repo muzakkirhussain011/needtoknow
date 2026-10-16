@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import uuid
 
 import pytest
 from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labelled_docs, may_read, queries, subjects
@@ -55,11 +56,16 @@ def chroma_factory():
     from needtoknow.backends.chroma import ChromaBackend
 
     client = chromadb.EphemeralClient()
+    previous: list[str] = []
 
     def make(docs):
-        with contextlib.suppress(Exception):
-            client.delete_collection("ntk_conformance")
-        collection = client.create_collection("ntk_conformance", embedding_function=None)
+        # A new, uniquely named collection per example: recreating one under the same name in the
+        # in-memory client can serve rows left over from the previous example.
+        for name in previous:
+            with contextlib.suppress(Exception):
+                client.delete_collection(name)
+        previous[:] = [f"ntk_{uuid.uuid4().hex}"]
+        collection = client.create_collection(previous[0], embedding_function=None)
         backend = ChromaBackend(collection, EMBED)
         backend.add(docs)
         return backend
