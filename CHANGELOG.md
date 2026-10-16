@@ -18,6 +18,13 @@ All notable changes are recorded here. The format follows
 - Fault-injection tests: under any sequence of injected faults, retrieval through OPA returns
   exactly the permitted top-k or raises `AuthorizationError`.
 
+### Security
+
+- Releases attach the published files to the GitHub release with a Sigstore signature for each
+  and a CycloneDX SBOM; SECURITY.md shows how to verify a download.
+- Every GitHub Action is pinned to a commit, checkouts no longer keep credentials, CodeQL scans the
+  Python code and the workflows, and OpenSSF Scorecard publishes the project's security score.
+
 ### Changed
 
 - The authorizers no longer follow HTTP redirects; a redirect is an error, so retrieval fails
