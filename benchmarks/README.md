@@ -55,7 +55,8 @@ concurrent users grow, and what Open Policy Agent costs as the permission servic
 with the example policy and gives PostgreSQL enough memory for a million rows.
 
 CI runs a small synthetic version against real PostgreSQL and OPA with `--check`, which fails on
-any leak or error.
+any leak or error. `--render load_results.json` prints the tables of a saved run again without
+running anything.
 
 ## Run anywhere, without a model
 

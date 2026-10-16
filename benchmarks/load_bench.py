@@ -211,13 +211,15 @@ LOAD_COLUMNS = [
     ("p99 ms", "p99_ms"),
     ("Errors", "errors"),
 ]
+# As in permissions_bench.py's tables; other values print as they are.
+FORMATS = {"recall": "{:.3f}", "complete_rate": "{:.0%}"}
 
 
 def markdown(report: dict) -> str:
     def table(rows: list[dict], columns: list[tuple[str, str]]) -> list[str]:
         out = ["| " + " | ".join(title for title, _ in columns) + " |", "|---" * len(columns) + "|"]
         for r in rows:
-            out.append("| " + " | ".join(str(r[key]) for _, key in columns) + " |")
+            out.append("| " + " | ".join(FORMATS.get(key, "{}").format(r[key]) for _, key in columns) + " |")
         return [*out, ""]
 
     load = report["load"]
@@ -260,11 +262,19 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--out", type=Path, default=Path("load_results.json"))
     p.add_argument("--markdown", type=Path)
     p.add_argument("--check", action="store_true", help="exit 1 on any leak or error")
+    p.add_argument("--render", type=Path, help="write the tables of an earlier --out file, then exit")
     return p.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.render:
+        text = markdown(json.loads(args.render.read_text(encoding="utf-8")))
+        if args.markdown:
+            args.markdown.write_text(text, encoding="utf-8")
+        else:
+            print(text)
+        return 0
     if not args.database_url:
         raise SystemExit("needs --database-url or NEEDTOKNOW_BENCH_DATABASE_URL")
     if args.teams % 100:
