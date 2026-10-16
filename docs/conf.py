@@ -12,7 +12,7 @@ extensions = ["myst_parser", "sphinx.ext.autodoc", "sphinx.ext.viewcode"]
 source_suffix = {".md": "markdown"}
 # The architecture decision records describe the project's history (including the gateway it grew
 # out of); they are linked from the contributing page on GitHub rather than built into the site.
-exclude_patterns = ["_build", "adr"]
+exclude_patterns = ["_build", "adr", "_static"]
 
 myst_enable_extensions = ["colon_fence", "deflist"]
 myst_heading_anchors = 3
@@ -29,4 +29,11 @@ html_theme_options = {
     "source_repository": "https://github.com/muzakkirhussain011/needtoknow",
     "source_branch": "main",
     "source_directory": "docs/",
+    "light_logo": "brand/needtoknow-3d.webp",
+    "dark_logo": "brand/needtoknow-3d.webp",
 }
+
+# Brand assets and the front page's 3D logo (hero3d.js, with three.js vendored in _static/vendor).
+html_static_path = ["_static"]
+html_css_files = ["brand.css"]
+html_favicon = "_static/brand/favicon.svg"
