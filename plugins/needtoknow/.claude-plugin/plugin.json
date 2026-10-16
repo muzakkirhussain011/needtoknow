@@ -1,0 +1,10 @@
+{
+  "name": "needtoknow",
+  "description": "Permission-aware retrieval for RAG with the needtoknow Python library: every user gets only the chunks they are allowed to read",
+  "version": "1.1.0",
+  "author": { "name": "Syed Muzakkir Hussain" },
+  "homepage": "https://muzakkirhussain011.github.io/needtoknow/",
+  "repository": "https://github.com/muzakkirhussain011/needtoknow",
+  "license": "MIT",
+  "keywords": ["rag", "retrieval", "authorization", "access-control", "permissions", "vector-search"]
+}

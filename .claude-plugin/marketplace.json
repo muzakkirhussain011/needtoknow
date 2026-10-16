@@ -1,0 +1,12 @@
+{
+  "name": "needtoknow",
+  "description": "Claude Code skills for needtoknow, permission-aware retrieval for RAG",
+  "owner": { "name": "Syed Muzakkir Hussain" },
+  "plugins": [
+    {
+      "name": "needtoknow",
+      "source": "./plugins/needtoknow",
+      "description": "Teaches Claude to build retrieval that only returns what each user may read, with the needtoknow library"
+    }
+  ]
+}
