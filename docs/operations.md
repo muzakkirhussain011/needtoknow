@@ -66,7 +66,7 @@ without storing them. Rotating the key breaks that link, which can be what you w
 flushes after each event:
 
 ```json
-{"action":"read","complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":3,"extra":{},"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
+{"action":"read","complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":3,"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
 ```
 
 An observer that raises is logged on the `needtoknow` logger and never changes what retrieval
