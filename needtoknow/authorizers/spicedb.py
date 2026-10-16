@@ -169,7 +169,7 @@ class SpiceDBAuthorizer:
             if not isinstance(results, list):
                 raise AuthorizationError("SpiceDB CheckBulkPermissions returned an unexpected response")
             # Match answers to questions by the request each pair echoes, not by position.
-            decided: dict[tuple[Any, ...], str] = {}
+            decided: dict[tuple[Any, ...], Any] = {}
             for pair in results:
                 request = pair.get("request") if isinstance(pair, dict) else None
                 if not isinstance(request, dict):
