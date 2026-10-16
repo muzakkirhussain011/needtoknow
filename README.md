@@ -227,6 +227,11 @@ nothing for selective permissions. Method, tables and caveats: [Benchmarks](http
 | 4.8% | 0.000 | 0.314 | 0.950 |
 | 20% | 0.041 | 0.974 | 0.949 |
 
+At a million chunks (MS MARCO in PostgreSQL + pgvector, on 4 CPUs), pre-filtering kept recall@10
+between 0.88 and 0.97 for users who may read 0.1% to 100% of the corpus, at a median of 3 to 21 ms
+one query at a time; the machine served up to 129 requests a second. Open Policy Agent as the
+permission service cost 8 to 10% of throughput, and `CachingAuthorizer` recovered all of it.
+
 ## Stability and roadmap
 
 1.0 is the stable base: the core, the pgvector and Chroma backends, the OPA and OpenFGA authorizers,
