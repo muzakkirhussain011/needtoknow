@@ -52,6 +52,7 @@ html_theme_options = {
                 {"title": "Combining and tenants", "url": "combining", "summary": "Layered rules, multi-tenancy"},
                 {"title": "Security model", "url": "security", "summary": "What is guaranteed and what is assumed"},
                 {"title": "Operations", "url": "operations", "summary": "Caching, audit, tracing, failure modes"},
+                {"title": "Production checklist", "url": "production", "summary": "Launch checks, failure modes"},
                 {"title": "Benchmarks", "url": "benchmarks", "summary": "Recall, latency and throughput, measured"},
             ],
         },
