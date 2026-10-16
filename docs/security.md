@@ -21,7 +21,7 @@ Given an authorizer that answers correctly:
    finding k permitted hits, the result says `complete=False`.
 5. **Audit events contain no content.** `RetrievalEvent`, `JsonLinesAudit` and the OpenTelemetry
    spans record ids, counts and outcomes, never query text or chunk text. The query appears only as
-   an HMAC, and only when you supply a key.
+   an HMAC, and only when you supply a key. OpenTelemetry metrics record no ids at all.
 
 ## What it relies on
 
