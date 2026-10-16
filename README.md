@@ -118,6 +118,20 @@ collection = chromadb.PersistentClient(path="./chroma").get_or_create_collection
 backend = ChromaBackend(collection)  # uses the collection's embedding function
 ```
 
+**Qdrant** (`pip install "needtoknow[qdrant]"`). The filter becomes Qdrant's `query_filter`, served
+by payload indexes on the permission fields. Points use the layout of LangChain's Qdrant
+integration, so a collection built with LangChain can be searched with permissions as it is.
+
+```python
+from qdrant_client import QdrantClient
+
+from needtoknow.backends.qdrant import QdrantBackend, create_collection
+
+client = QdrantClient(url="http://localhost:6333")
+create_collection(client, "docs", dim=768)
+backend = QdrantBackend(client, "docs", embed=my_embedding_model)
+```
+
 **Elasticsearch and OpenSearch** (`pip install "needtoknow[elasticsearch]"` or `[opensearch]`).
 The filter runs inside the kNN search. Permissions are matched on a type-tagged keyword field, so
 the integer `1` and the string `"1"` stay different values, as the reference semantics require.

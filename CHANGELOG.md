@@ -14,6 +14,11 @@ All notable changes are recorded here. The format follows
   retriever); `check_authorizer` checks that `check` and `filter_for` agree. Every built-in backend,
   and the example OPA policy against a real OPA, runs it in CI. `HashingEmbedder` gives vector stores
   deterministic embeddings without a model.
+- `needtoknow.backends.qdrant`: a Qdrant backend. The filter becomes Qdrant's `query_filter`
+  (`MatchAny` per value type, an empty `In` decided before the query), `create_collection` adds
+  keyword payload indexes on the permission fields, points use LangChain's Qdrant layout so existing
+  collections work, and `AsyncQdrantClient` gives a native `aretrieve`. Tested with the conformance kit
+  against a real Qdrant server and Qdrant's local mode. Extra: `needtoknow[qdrant]`.
 - `needtoknow.backends.elasticsearch` and `needtoknow.backends.opensearch`: kNN search with the
   permission filter applied during the search. Permissions are matched on one type-tagged keyword
   field (`needtoknow_terms`), because keyword fields compare strings and would otherwise match the
