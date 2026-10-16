@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import itertools
 import json
 import math
 import random
@@ -184,13 +185,16 @@ def _problems(hits: Sequence[Hit], k: int, expected: set[str], by_id: Mapping[st
     leaked = [i for i in ids if i not in expected]
     if leaked:
         problems.append(f"returned documents that should not match: {leaked}")
-    missing = sorted(expected - set(ids))
-    if exact and missing:
-        problems.append(f"missed documents that match: {missing}")
+    found = len(set(ids) & expected)
+    if exact and found < min(k, len(expected)):
+        if k >= len(expected):
+            problems.append(f"missed documents that match: {sorted(expected - set(ids))}")
+        else:
+            problems.append(f"returned {found} matching documents for k={k}, though {len(expected)} match")
     scores = [h.score for h in hits]
     if not all(isinstance(s, (int, float)) and math.isfinite(s) for s in scores):
         problems.append(f"scores must be finite numbers, got {scores}")
-    elif any(a < b - 1e-9 for a, b in zip(scores, scores[1:])):
+    elif any(a < b - 1e-9 for a, b in itertools.pairwise(scores)):
         problems.append(f"hits are not ordered best first: scores {scores}")
     for hit in hits:
         doc = by_id.get(hit.id)
@@ -222,11 +226,11 @@ def check_backend(
     `factory(documents)` must return a new backend holding exactly those documents. For each of
     `examples` random corpora (up to `max_documents` each) it checks that:
 
-    * a search without a filter returns stored documents only, at most k, best first, with text
-      and metadata exactly as stored;
-    * a search with a filter (when `supports_filters` is true) returns exactly the documents
-      `matches` selects, for `filters_per_example` random nested filters, and `asearch`, if the
-      backend has one, returns the same ids in the same order;
+    * a search without a filter returns stored documents only, min(k, stored) of them for k up to
+      the whole corpus, best first, with text and metadata exactly as stored;
+    * a search with a filter (when `supports_filters` is true) returns only documents `matches`
+      selects, and min(k, matching) of them, for `filters_per_example` random nested filters; and
+      `asearch`, if the backend has one, returns the same ids in the same order;
     * retrieval through `PermissionedRetriever` with `MetadataACLAuthorizer` never returns a
       document the subject may not read, reports no violations, and returns as many readable
       documents as were asked for (with `"prefilter"` and `"postfilter"` where available).
@@ -242,17 +246,20 @@ def check_backend(
         example = _Example(seed, number, docs)
         backend = factory(docs)
         by_id = {d.id: d for d in docs}
-        k = max(len(docs), 1)
+        everything = max(len(docs), 1)
 
-        hits = backend.search(QUERY, k)
-        problems = _problems(hits, k, set(by_id), by_id, exact)
-        if problems:
-            raise example.failure("search without a filter", problems, returned=[h.id for h in hits])
+        # Every document, then the top few: a backend must honour k in both cases.
+        for k in (everything, rng.randint(1, everything)):
+            hits = backend.search(QUERY, k)
+            problems = _problems(hits, k, set(by_id), by_id, exact)
+            if problems:
+                raise example.failure("search without a filter", problems, k=k, returned=[h.id for h in hits])
 
         if backend.supports_filters:
             for _ in range(filters_per_example):
                 f = random_filter(rng)
                 expected = {d.id for d in docs if matches(f, d.metadata)}
+                k = everything if rng.random() < 0.5 else rng.randint(1, everything)
                 hits = backend.search(QUERY, k, f)
                 problems = _problems(hits, k, expected, by_id, exact)
                 if problems:
@@ -260,6 +267,7 @@ def check_backend(
                         "search with a filter",
                         problems,
                         filter=_json(filter_to_dict(f)),
+                        k=k,
                         expected=sorted(expected),
                         returned=[h.id for h in hits],
                     )
