@@ -71,6 +71,7 @@ html_theme_options = {
                 {"title": "Open Policy Agent", "url": "integrations/opa", "summary": "Policy as code"},
                 {"title": "LangChain", "url": "integrations/langchain", "summary": "Retriever and tools"},
                 {"title": "LlamaIndex", "url": "integrations/llamaindex", "summary": "Retriever and postprocessor"},
+                {"title": "Haystack", "url": "integrations/haystack", "summary": "Retriever component"},
             ],
         },
         {"title": "API", "url": "api"},
