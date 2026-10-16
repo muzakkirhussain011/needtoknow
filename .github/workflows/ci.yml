@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install "ruff==0.17.1"
       - run: ruff check .
@@ -33,7 +33,7 @@ jobs:
           --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
       - uses: open-policy-agent/setup-opa@v2
         with: { version: 1.21.2 }
@@ -73,7 +73,7 @@ jobs:
         python: ["3.10", "3.11", "3.13"]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "${{ matrix.python }}", cache: pip }
       - run: pip install -e ".[dev]"
       - run: pytest -q
@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install build twine
       - run: python -m build
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
       - run: pip install -e ".[docs,langchain,llamaindex,otel]"
       - name: Build the documentation (warnings are errors)
@@ -136,7 +136,7 @@ jobs:
           --health-cmd "pg_isready -U test" --health-interval 3s --health-retries 30
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12", cache: pip }
       - uses: open-policy-agent/setup-opa@v2
         with: { version: 1.21.2 }
