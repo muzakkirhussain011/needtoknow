@@ -75,6 +75,7 @@ integrations/pgvector
 integrations/chroma
 integrations/elasticsearch
 integrations/qdrant
+integrations/milvus
 integrations/opa
 integrations/openfga
 integrations/spicedb
