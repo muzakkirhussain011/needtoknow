@@ -38,6 +38,16 @@ All notable changes are recorded here. The format follows
   attributes on the principal), and pre-filters translated from PlanResources query plans: `and`,
   `or`, `hasIntersection`, `in` and `==` on resource attributes become exact filters, anything else
   falls back to post-filtering. Example policy in `examples/cerbos`. Tested against Cerbos 0.56.0.
+- `AllOf` and `AnyOf` combine authorizers (each part asked only about the chunks still undecided),
+  and `TenantAuthorizer` keeps every subject inside its tenant; a subject without a tenant gets
+  nothing. Guide: "Combining authorizers and multi-tenancy".
+- Scoped post-filtering: an authorizer may offer `scope_for(subject, action)`, a filter every
+  readable chunk matches. When there is no exact filter, the retriever post-filters inside the
+  scope (for example only the subject's tenant) and still checks every candidate, so a tenant with
+  a small share of the index keeps its recall. `AllOf` and `AnyOf` provide scopes, and
+  `CachingAuthorizer` caches them.
+- The retriever rejects a `filter_for` (or `scope_for`) answer that is not a filter with
+  `AuthorizationError`, instead of handing it to the backend.
 - `CachingAuthorizer(shared=...)`: a second cache tier shared by every process, with
   `needtoknow.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
   `needtoknow[redis]`). Replicas reuse each other's answers and `invalidate()` reaches all of them.

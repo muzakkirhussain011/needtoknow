@@ -64,6 +64,14 @@ modules and need their extra.
 
 .. autoclass:: needtoknow.FunctionAuthorizer
 
+.. autoclass:: needtoknow.TenantAuthorizer
+
+.. autoclass:: needtoknow.AllOf
+   :members: scope_for
+
+.. autoclass:: needtoknow.AnyOf
+   :members: scope_for
+
 .. autoclass:: needtoknow.CachingAuthorizer
    :members: invalidate
 

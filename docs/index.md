@@ -52,6 +52,7 @@ search when it cannot, and fails closed when anything goes wrong.
 
 quickstart
 concepts
+combining
 security
 operations
 ```

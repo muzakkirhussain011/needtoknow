@@ -252,6 +252,37 @@ class CachingAuthorizer:
             return None if cached is _NONE else cached
         return self._remember(key, self.authorizer.filter_for(subject, action))
 
+    def scope_for(self, subject: Subject, action: str = "read") -> Filter | None:
+        """The wrapped authorizer's `scope_for`, cached like `filter_for` (None if it has none)."""
+        inner = getattr(self.authorizer, "scope_for", None)
+        if inner is None:
+            return None
+        key = ("scope", subject, action)
+        cached = self._lookup(key)
+        if cached is not None:
+            return None if cached is _NONE else cached
+        return self._remember(key, inner(subject, action))
+
+    async def ascope_for(self, subject: Subject, action: str = "read") -> Filter | None:
+        if not hasattr(self.authorizer, "scope_for") and not hasattr(self.authorizer, "ascope_for"):
+            return None
+        key = ("scope", subject, action)
+        cached = self._get(key)
+        if cached is None and self.shared is not None:
+            (cached,) = await asyncio.to_thread(self._shared_get, [key])
+        if cached is not None:
+            return None if cached is _NONE else cached
+        native = getattr(self.authorizer, "ascope_for", None)
+        result: Filter | None
+        if native is not None:
+            result = await native(subject, action)
+        else:
+            result = await asyncio.to_thread(self.authorizer.scope_for, subject, action)  # type: ignore[attr-defined]
+        if self.shared is None:
+            self._put(key, _NONE if result is None else result)
+            return result
+        return await asyncio.to_thread(self._remember, key, result)
+
     def _local(self, subject: Subject, hits: Sequence[Hit], action: str) -> tuple[list[Any], list[bool | None]]:
         keys = [("check", subject, action, _hit_key(h)) for h in hits]
         return keys, [self._get(k) for k in keys]

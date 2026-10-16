@@ -35,7 +35,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.events import Observer, RetrievalEvent, query_fingerprint
-from needtoknow.filters import Filter
+from needtoknow.filters import And, Filter, In, Or
 from needtoknow.types import Hit, Subject
 
 __all__ = ["PermissionedRetriever", "RetrievalResult", "SearchBackend", "Strategy"]
@@ -84,6 +84,11 @@ class _FilterFor:
 
 
 @dataclass(frozen=True)
+class _ScopeFor:
+    pass
+
+
+@dataclass(frozen=True)
 class _Search:
     query: str
     k: int
@@ -95,7 +100,7 @@ class _Check:
     hits: list[Hit]
 
 
-_Op = _FilterFor | _Search | _Check
+_Op = _FilterFor | _ScopeFor | _Search | _Check
 _log = logging.getLogger("needtoknow")
 _Plan = Generator[_Op, Any, RetrievalResult]
 
@@ -235,7 +240,12 @@ class PermissionedRetriever:
                 raise ValueError("strategy='prefilter' needs an authorizer that returns a filter")
         if f is not None:
             return (yield from self._prefilter(query, k, f))
-        return (yield from self._postfilter(query, k))
+        scope: Filter | None = None
+        if self.backend.supports_filters and hasattr(self.authorizer, "scope_for"):
+            # A necessary condition without the full answer (for example the subject's tenant):
+            # post-filtering then searches only inside it, and still checks every candidate.
+            scope = yield _ScopeFor()
+        return (yield from self._postfilter(query, k, scope))
 
     def _prefilter(self, query: str, k: int, f: Filter) -> _Plan:
         hits: list[Hit] = yield _Search(query, k, f)
@@ -249,13 +259,13 @@ class PermissionedRetriever:
             kept, "prefilter", examined=len(hits), denied=0, violations=violations, complete=violations == 0
         )
 
-    def _postfilter(self, query: str, k: int) -> _Plan:
+    def _postfilter(self, query: str, k: int, scope: Filter | None = None) -> _Plan:
         fetch = min(k * self.overfetch, self.max_candidates)
         seen: set[str] = set()
         kept: list[Hit] = []
         examined = denied = 0
         while True:
-            candidates: list[Hit] = yield _Search(query, fetch, None)
+            candidates: list[Hit] = yield _Search(query, fetch, scope)
             fresh = [h for h in candidates if h.id not in seen]
             seen.update(h.id for h in fresh)
             if fresh:
@@ -287,7 +297,9 @@ class PermissionedRetriever:
             return self.backend.search(op.query, op.k, op.filter)
         try:
             if isinstance(op, _FilterFor):
-                return self.authorizer.filter_for(subject, self.action)
+                return self._filter(self.authorizer.filter_for(subject, self.action))
+            if isinstance(op, _ScopeFor):
+                return self._filter(self.authorizer.scope_for(subject, self.action))  # type: ignore[attr-defined]
             return self._validated(op, self.authorizer.check(subject, op.hits, self.action))
         except AuthorizationError:
             raise
@@ -301,11 +313,12 @@ class PermissionedRetriever:
                 return await asearch(op.query, op.k, op.filter)
             return await asyncio.to_thread(self.backend.search, op.query, op.k, op.filter)
         try:
-            if isinstance(op, _FilterFor):
-                afilter_for = getattr(self.authorizer, "afilter_for", None)
-                if afilter_for is not None:
-                    return await afilter_for(subject, self.action)
-                return await asyncio.to_thread(self.authorizer.filter_for, subject, self.action)
+            if isinstance(op, (_FilterFor, _ScopeFor)):
+                name = "filter_for" if isinstance(op, _FilterFor) else "scope_for"
+                native = getattr(self.authorizer, f"a{name}", None)
+                if native is not None:
+                    return self._filter(await native(subject, self.action))
+                return self._filter(await asyncio.to_thread(getattr(self.authorizer, name), subject, self.action))
             acheck = getattr(self.authorizer, "acheck", None)
             if acheck is not None:
                 decisions = await acheck(subject, op.hits, self.action)
@@ -316,6 +329,12 @@ class PermissionedRetriever:
             raise
         except Exception as exc:
             raise AuthorizationError(f"authorizer failed: {exc}") from exc
+
+    @staticmethod
+    def _filter(value: Any) -> Filter | None:
+        if value is None or isinstance(value, (In, And, Or)):
+            return value
+        raise AuthorizationError(f"authorizer returned {type(value).__name__}, not a filter")
 
     @staticmethod
     def _validated(op: _Check, decisions: Sequence[bool]) -> list[bool]:
