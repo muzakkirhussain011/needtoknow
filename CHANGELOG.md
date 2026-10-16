@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0rc1] - 2026-10-16
+
+The first release candidate for 1.0. The public API in the
+[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) is what 1.0.0 will ship:
+changes before then are fixes, unless testing the release candidate shows that a breaking change is
+needed, in which case it will be announced in a second release candidate. Install it with
+`pip install --pre needtoknow`.
+
 ### Added
 
 - `PermissionedRetriever` with `prefilter`, `postfilter` and `auto` strategies, sync
@@ -70,8 +78,10 @@ All notable changes are recorded here. The format follows
 - `RetrievalResult.complete` is documented precisely: it is `False` when needtoknow knows results
   may be missing, and it trusts the backend's ranking, so it cannot see results an approximate index
   failed to return. The benchmarks measure how often that happens.
-
 - Filter values must be strings or integers, and metadata values of other types (booleans,
   floats) never match. This keeps every backend's answer identical to the reference.
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
+
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...HEAD
+[1.0.0rc1]: https://github.com/muzakkirhussain011/needtoknow/releases/tag/v1.0.0rc1
