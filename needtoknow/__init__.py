@@ -17,6 +17,7 @@ from needtoknow.backends.memory import InMemoryBackend
 from needtoknow.caching import CachingAuthorizer
 from needtoknow.events import JsonLinesAudit, RetrievalEvent
 from needtoknow.filters import And, Filter, In, Or, filter_from_dict, filter_to_dict, matches
+from needtoknow.fusion import RankFusion
 from needtoknow.retriever import PermissionedRetriever, RetrievalResult, SearchBackend, Strategy
 from needtoknow.types import Document, Hit, Subject
 
@@ -39,6 +40,7 @@ __all__ = [
     "MetadataACLAuthorizer",
     "Or",
     "PermissionedRetriever",
+    "RankFusion",
     "RetrievalEvent",
     "RetrievalResult",
     "SearchBackend",

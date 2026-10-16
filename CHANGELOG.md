@@ -8,6 +8,14 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `RankFusion`: hybrid search. A backend that searches several backends with the same permission
+  filter and fuses their rankings by reciprocal rank fusion, with weights, a rank constant and a
+  per-backend depth; `aretrieve` searches them concurrently. A chunk two backends return with
+  different metadata is left out and logged, since its permissions are uncertain. Guide: "Hybrid
+  search".
+- `mode="keyword"` on the Elasticsearch and OpenSearch backends: BM25 on the text under the same
+  permission filter, with no embedding function needed. Tested with the conformance kit, alone and
+  fused with vector search, against both engines.
 - `needtoknow.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
   `$vectorSearch` pre-filter on a type-tagged array field (a BSON filter, so values are never query
   syntax). Atlas indexes writes shortly after they happen, so `add` and `delete` wait until the

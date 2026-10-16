@@ -66,7 +66,9 @@ class OpenSearchBackend(EngineBackend):
     `embed` turns text into a vector. Scores are OpenSearch's: `(1 + cosine) / 2` for a
     `cosinesimil` field. `refresh` is passed to bulk writes (`"wait_for"` by default, so written
     chunks are searchable when `add` returns). `num_candidates` is not used by OpenSearch's `knn`
-    query; set `ef_search` in the index settings instead.
+    query; set `ef_search` in the index settings instead. `mode="keyword"` searches the text with
+    BM25 instead, under the same permission filter, for hybrid search with `RankFusion`; `embed`
+    may then be None.
     """
 
     def _search_request(self, vector: list[float], k: int, query: dict[str, Any] | None) -> dict[str, Any]:
@@ -80,6 +82,10 @@ class OpenSearchBackend(EngineBackend):
                 "_source": {"excludes": [self.vector_field]},
             }
         }
+
+    def _keyword_request(self, text: str, k: int, query: dict[str, Any] | None) -> dict[str, Any]:
+        match = {"bool": {"must": [{"match": {self.content_field: text}}], "filter": [query] if query else []}}
+        return {"body": {"size": k, "query": match, "_source": {"excludes": [self.vector_field]}}}
 
     def _bulk(self, client: Any, operations: list[dict[str, Any]]) -> Any:
         return client.bulk(body=operations, refresh=self.refresh)

@@ -265,6 +265,10 @@ create_index(client, "docs", dim=768)
 backend = ElasticsearchBackend(client, "docs", embed=my_embedding_model)
 ```
 
+`mode="keyword"` runs BM25 on the same index under the same filter. `RankFusion(vector, keyword)`
+fuses the two into hybrid search, and fuses any other backends the same way
+([hybrid search](https://muzakkirhussain011.github.io/needtoknow/hybrid.html)).
+
 </details>
 
 <details>

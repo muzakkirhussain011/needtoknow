@@ -50,6 +50,7 @@ html_theme_options = {
             "children": [
                 {"title": "Concepts", "url": "concepts", "summary": "Subjects, authorizers, filters, strategies"},
                 {"title": "Combining and tenants", "url": "combining", "summary": "Layered rules, multi-tenancy"},
+                {"title": "Hybrid search", "url": "hybrid", "summary": "Keyword and vector, fused"},
                 {"title": "Security model", "url": "security", "summary": "What is guaranteed and what is assumed"},
                 {"title": "Operations", "url": "operations", "summary": "Caching, audit, tracing, failure modes"},
                 {"title": "Production checklist", "url": "production", "summary": "Launch checks, failure modes"},
