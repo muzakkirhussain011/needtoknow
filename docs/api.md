@@ -108,6 +108,15 @@ An observer is any callable that takes a `RetrievalEvent`.
    :members: add, delete, search
 
 .. autofunction:: needtoknow.backends.chroma.filter_to_where
+
+.. autoclass:: needtoknow.backends.qdrant.QdrantBackend
+   :members: add, delete, search, asearch
+
+.. autofunction:: needtoknow.backends.qdrant.create_collection
+
+.. autofunction:: needtoknow.backends.qdrant.filter_to_qdrant
+
+.. autofunction:: needtoknow.backends.qdrant.point_id
 ```
 
 ## Frameworks
