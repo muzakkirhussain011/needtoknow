@@ -67,6 +67,11 @@ jobs:
         run: |
           docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz && break; sleep 1; done
+      - name: Start SpiceDB (HTTP API, in-memory datastore)
+        run: |
+          docker run -d --name spicedb -p 8443:8443 authzed/spicedb:v1.56.2 serve \
+            --grpc-preshared-key ntk-test --http-enabled --datastore-engine memory
+          for i in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:8443/ && break; sleep 1; done
       - name: Start Qdrant
         run: |
           docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2
@@ -83,11 +88,13 @@ jobs:
             done
             curl -sf "$url" | grep -m1 '"number"'
           done
-      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Elasticsearch, OpenSearch, OPA and OpenFGA)
+      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Elasticsearch, OpenSearch, OPA, OpenFGA and SpiceDB)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
           NEEDTOKNOW_TEST_OPENFGA_URL: http://127.0.0.1:8080
+          NEEDTOKNOW_TEST_SPICEDB_URL: http://127.0.0.1:8443
+          NEEDTOKNOW_TEST_SPICEDB_TOKEN: ntk-test
           NEEDTOKNOW_TEST_QDRANT_URL: http://127.0.0.1:6333
           NEEDTOKNOW_TEST_ELASTICSEARCH_URL: http://127.0.0.1:9200
           NEEDTOKNOW_TEST_OPENSEARCH_URL: http://127.0.0.1:9201

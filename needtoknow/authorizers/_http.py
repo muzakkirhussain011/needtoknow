@@ -131,7 +131,9 @@ class JsonClient:
         self._proxied = _proxy_applies(parts)
         self._local = threading.local()
 
-    def post_json(self, path: str, payload: Any, what: str) -> Any:
+    def post_json(self, path: str, payload: Any, what: str, *, lines: bool = False) -> Any:
+        """POST `payload` and return the decoded answer; with `lines`, a list with one decoded
+        value per line of a newline-delimited JSON answer (a streamed response)."""
         try:
             body = json.dumps(payload).encode()
         except (TypeError, ValueError) as exc:
@@ -153,7 +155,7 @@ class JsonClient:
                 else:
                     if status not in _RETRY_STATUS:
                         reachable = status < 500
-                        return self._decode(status, raw, what)
+                        return self._decode(status, raw, what, lines)
                     failure = f"HTTP {status}"
                 if attempt >= self.retries:
                     raise AuthorizationError(f"{what} failed: {failure}")
@@ -164,10 +166,12 @@ class JsonClient:
                 self.breaker.record(reachable)
 
     @staticmethod
-    def _decode(status: int, raw: bytes, what: str) -> Any:
+    def _decode(status: int, raw: bytes, what: str, lines: bool = False) -> Any:
         if status != 200:
             raise AuthorizationError(f"{what} returned HTTP {status}")
         try:
+            if lines:
+                return [json.loads(line) for line in raw.splitlines() if line.strip()]
             return json.loads(raw)
         except ValueError as exc:
             raise AuthorizationError(f"{what} returned invalid JSON") from exc

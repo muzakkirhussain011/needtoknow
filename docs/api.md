@@ -71,6 +71,8 @@ modules and need their extra.
 
 .. autoclass:: needtoknow.authorizers.openfga.OpenFGAAuthorizer
 
+.. autoclass:: needtoknow.authorizers.spicedb.SpiceDBAuthorizer
+
 .. autoclass:: needtoknow.authorizers.CircuitBreaker
    :members: is_open
 ```
