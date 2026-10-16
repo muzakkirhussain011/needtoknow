@@ -1,3 +1,5 @@
+<a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/needtoknow-3d.webp" alt="needtoknow logo: a document whose readable lines are highlighted and one line is redacted" width="160" align="right"></a>
+
 # needtoknow
 
 [![CI](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg)](https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml)
