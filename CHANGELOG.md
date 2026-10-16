@@ -59,6 +59,11 @@ All notable changes are recorded here. The format follows
   PostgreSQL's limit of 65,535 parameters, and retrieval failed; CI now serves one in 40,000. The
   operations guide has a section on subjects in very many groups for every backend.
 
+## [1.1.2] - 2026-10-16
+
+The README, and so the PyPI page, opens with the logo lockup, centred, with a dark version for
+dark themes. The library is unchanged from 1.1.0.
+
 ## [1.1.1] - 2026-10-16
 
 The README, and so the project's PyPI page, shows the project logo. The library is unchanged from
@@ -198,6 +203,7 @@ needed, in which case it will be announced in a second release candidate. Instal
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
 [Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...HEAD
+[1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
