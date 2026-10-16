@@ -45,7 +45,7 @@ jobs:
         run: |
           docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/healthz && break; sleep 1; done
-      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex]"
+      - run: pip install -e ".[dev,pgvector,chroma,langchain,llamaindex,otel]" opentelemetry-sdk
       - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, OPA and OpenFGA)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
