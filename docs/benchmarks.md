@@ -214,8 +214,9 @@ Agent over HTTP (the example policy in `examples/opa`), and by OPA behind `Cachi
 **The index's own settings set the ceiling.** At 100% readable both strategies return the index's
 top 10, and here that is 0.895 of the exact top 10, against 0.977 on FiQA: a larger corpus searched
 with pgvector's default `hnsw.ef_search` of 40. Pre-filtering stayed between 0.88 and 0.97 at every
-selectivity. Raising pgvector's `hnsw.ef_search` trades latency for recall in both strategies, and
-is worth measuring on your own data with this harness.
+selectivity. Raising pgvector's `hnsw.ef_search` (`PgVectorBackend(ef_search=...)`) trades latency
+for recall in both strategies, and is worth measuring on your own data with this harness
+(`--ef-search`).
 
 **At 10% readable, post-filtering found more of the top 10 than pre-filtering** (0.915 against
 0.883). Post-filtering asks the index for more candidates when too few pass (40, then 160), and the

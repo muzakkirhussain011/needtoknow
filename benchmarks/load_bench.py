@@ -124,13 +124,13 @@ def load_postgres(url: str, ids: Sequence[str], texts: Sequence[str], vectors: n
     }
 
 
-def backend(url: str, embed: Any, pool_size: int) -> Any:
+def backend(args: argparse.Namespace, embed: Any, pool_size: int) -> Any:
     from psycopg_pool import ConnectionPool
 
     from needtoknow.backends.pgvector import PgVectorBackend
 
-    pool = ConnectionPool(url, min_size=pool_size, max_size=pool_size, open=True)
-    return PgVectorBackend(pool, embed, table=TABLE)
+    pool = ConnectionPool(args.database_url, min_size=pool_size, max_size=pool_size, open=True)
+    return PgVectorBackend(pool, embed, table=TABLE, ef_search=args.ef_search)
 
 
 def throughput(retriever: PermissionedRetriever, cases: Sequence[Case], k: int, users: int, seconds: float) -> dict:
@@ -227,7 +227,7 @@ def markdown(report: dict) -> str:
         f"### Load: {load['rows']} chunks",
         "",
         f"COPY {load['copy_s']} s, GIN index {load['gin_index_s']} s, HNSW index {load['hnsw_index_s']} s,"
-        f" total size {load['total_size']}.",
+        f" total size {load['total_size']}. hnsw.ef_search: {report['config'].get('ef_search') or 'default (40)'}.",
         "",
         "### Recall and latency by selectivity (one query at a time)",
         "",
@@ -255,6 +255,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--users", default="1,2,4,8,16", help="concurrent users for the throughput runs")
     p.add_argument("--seconds", type=float, default=20.0, help="duration of each throughput run")
     p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"))
+    p.add_argument("--ef-search", type=int, help="pgvector hnsw.ef_search for every search (default: the server's, 40)")
     p.add_argument("--opa-url", help="an OPA running examples/opa, to measure a remote permission service")
     p.add_argument("--batch-size", type=int, default=256, help="embedding batch size")
     p.add_argument("--seed", type=int, default=7)
@@ -300,7 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     acl = MetadataACLAuthorizer()
 
     scale = []
-    single = backend(args.database_url, embed, 1)
+    single = backend(args, embed, 1)
     for selectivity in selectivities:
         cases = build_cases(queries, query_vecs, doc_vecs, teams, ids, args.teams, selectivity, args.k, rng)
         for strategy in ("prefilter", "postfilter"):
@@ -316,7 +317,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     del doc_vecs
     rows = []
     for n in users:
-        retriever = PermissionedRetriever(backend(args.database_url, embed, n), acl, strategy="prefilter")
+        retriever = PermissionedRetriever(backend(args, embed, n), acl, strategy="prefilter")
         row = {"selectivity": f"{args.throughput_selectivity:.1%}"}
         row |= throughput(retriever, busy, args.k, n, args.seconds)
         rows.append(row)
@@ -339,7 +340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ]
         for name, make in candidates:
             for n in sorted({1, max(users)}):
-                retriever = PermissionedRetriever(backend(args.database_url, embed, n), make(), strategy="prefilter")
+                retriever = PermissionedRetriever(backend(args, embed, n), make(), strategy="prefilter")
                 row = {"authorizer": name} | throughput(retriever, busy, args.k, n, args.seconds)
                 authorizers.append(row)
                 log(f"{name}, {n} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, errors {row['errors']}")

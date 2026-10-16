@@ -72,6 +72,21 @@ hnsw.iterative_scan`):
 Results are ordered by distance, then by id, so equal scores come back in a stable order. Scores
 are cosine similarity, `1 - cosine distance`.
 
+## Search depth
+
+HNSW is approximate: how many of the true nearest neighbours a search finds depends on
+`hnsw.ef_search`, the size of the candidate list it keeps (40 by default, 1 to 1000). Higher finds
+more and takes longer. On a million chunks at the default, the index's top 10 held 0.895 of the
+exact top 10 (see [Benchmarks](../benchmarks.md#at-a-million-chunks-under-load)).
+
+```python
+backend = PgVectorBackend(pool, embed, ef_search=100)
+```
+
+The backend sets it with `SET LOCAL` in each search's transaction, like the iterative scan, so
+other users of the connection pool keep their own setting. `None` (the default) leaves the server's
+value. Measure the recall and latency of a few values on your own data before choosing one.
+
 ## Async
 
 Pass an `AsyncConnectionPool` as `async_pool=` and `aretrieve` uses a native async search.
