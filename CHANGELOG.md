@@ -44,6 +44,15 @@ All notable changes are recorded here. The format follows
 - `needtoknow.llamaindex`: `NeedToKnowRetriever`, `PermissionNodePostprocessor` and
   `LlamaIndexBackend`. Extra: `needtoknow[llamaindex]`.
 - Runnable examples for LangChain and LlamaIndex, executed in CI.
+- `CachingAuthorizer`: caches pre-filters and per-chunk decisions (keyed by chunk id and
+  metadata) per subject for `ttl` seconds, with that as the documented revocation bound; errors and
+  malformed answers are never cached; `invalidate()`; sync and async.
+- Retrieval events: every call, including failed ones, produces a `RetrievalEvent` for
+  `observers` (subject id, strategy, returned ids, denied and violation counts, duration, error
+  type, optional HMAC of the query). Never query or chunk text. `JsonLinesAudit` writes them as
+  JSON lines; observer failures are logged and never affect retrieval.
+- `needtoknow.otel.OpenTelemetryObserver`: one span per retrieval with counts and outcomes, the
+  subject id only on request. Extra: `needtoknow[otel]`.
 - Conformance tests: every backend must return exactly the documents the reference semantics
   select, for random metadata and nested filters, and never leak through the retriever. CI runs
   them against real PostgreSQL, Chroma and OPA.

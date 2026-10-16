@@ -27,11 +27,14 @@ The algorithm is written once, as a generator of operations; `retrieve` runs it 
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from needtoknow.authz import AuthorizationError, Authorizer
+from needtoknow.events import Observer, RetrievalEvent, query_fingerprint
 from needtoknow.filters import Filter
 from needtoknow.types import Hit, Subject
 
@@ -89,6 +92,7 @@ class _Check:
 
 
 _Op = _FilterFor | _Search | _Check
+_log = logging.getLogger("needtoknow")
 _Plan = Generator[_Op, Any, RetrievalResult]
 
 
@@ -103,6 +107,8 @@ class PermissionedRetriever:
         overfetch: int = 4,
         max_candidates: int = 1000,
         recheck: bool = True,
+        observers: Sequence[Observer] = (),
+        audit_key: bytes | None = None,
     ) -> None:
         if strategy not in ("auto", "prefilter", "postfilter"):
             raise ValueError(f"unknown strategy {strategy!r}")
@@ -119,26 +125,75 @@ class PermissionedRetriever:
         self.overfetch = overfetch
         self.max_candidates = max_candidates
         self.recheck = recheck
+        self.observers = tuple(observers)
+        self.audit_key = audit_key
 
     # ---- public API ------------------------------------------------------------------------
 
     def retrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
-        plan = self._plan(query, subject, k)
+        started, clock = time.time(), time.perf_counter()
         try:
-            op = next(plan)
-            while True:
-                op = plan.send(self._run(op, subject))
-        except StopIteration as done:
-            return done.value
+            plan = self._plan(query, subject, k)
+            try:
+                op = next(plan)
+                while True:
+                    op = plan.send(self._run(op, subject))
+            except StopIteration as done:
+                result = done.value
+        except Exception as exc:
+            self._emit(query, subject, k, started, clock, None, exc)
+            raise
+        self._emit(query, subject, k, started, clock, result, None)
+        return result
 
     async def aretrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
-        plan = self._plan(query, subject, k)
+        started, clock = time.time(), time.perf_counter()
         try:
-            op = next(plan)
-            while True:
-                op = plan.send(await self._arun(op, subject))
-        except StopIteration as done:
-            return done.value
+            plan = self._plan(query, subject, k)
+            try:
+                op = next(plan)
+                while True:
+                    op = plan.send(await self._arun(op, subject))
+            except StopIteration as done:
+                result = done.value
+        except Exception as exc:
+            self._emit(query, subject, k, started, clock, None, exc)
+            raise
+        self._emit(query, subject, k, started, clock, result, None)
+        return result
+
+    def _emit(
+        self,
+        query: str,
+        subject: Subject,
+        k: int,
+        started: float,
+        clock: float,
+        result: RetrievalResult | None,
+        error: Exception | None,
+    ) -> None:
+        if not self.observers:
+            return
+        event = RetrievalEvent(
+            subject_id=subject.id,
+            action=self.action,
+            k=k,
+            strategy=result.strategy if result else None,
+            returned_ids=tuple(h.id for h in result.hits) if result else (),
+            examined=result.examined if result else 0,
+            denied=result.denied if result else 0,
+            violations=result.violations if result else 0,
+            complete=result.complete if result else False,
+            duration_ms=round((time.perf_counter() - clock) * 1000, 3),
+            error=type(error).__name__ if error else None,
+            query_hmac=query_fingerprint(query, self.audit_key) if self.audit_key else None,
+            started_at=started,
+        )
+        for observer in self.observers:
+            try:
+                observer(event)
+            except Exception:  # an observer must never change what retrieval returns or raises
+                _log.exception("needtoknow observer %r failed", observer)
 
     # ---- the algorithm (shared by both drivers) --------------------------------------------
 

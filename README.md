@@ -99,7 +99,7 @@ backend.add(documents)
 value in a permission list is stored as its own field rather than as a Chroma array, and an exact
 copy of the metadata is kept for the re-check: in chromadb 1.5.x, deleting a collection leaves its
 array metadata behind for new records in other collections to pick up
-([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/pull/7725)), which for
+([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/issues/7594)), which for
 permissions would be a leak.
 
 ```python
@@ -150,6 +150,26 @@ existing index. Runnable examples for both frameworks are in [`examples/`](examp
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
 
+## Caching, audit and tracing
+
+```python
+from needtoknow import CachingAuthorizer, JsonLinesAudit
+from needtoknow.otel import OpenTelemetryObserver  # pip install "needtoknow[otel]"
+
+retriever = PermissionedRetriever(
+    backend,
+    CachingAuthorizer(authorizer, ttl=30),  # a revoked permission stops granting access within 30 s
+    observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver()],  # audit_file: an open text file
+    audit_key=b"...",  # optional: an HMAC of each query, so repeats can be matched without storing them
+)
+```
+
+`CachingAuthorizer` caches pre-filters and per-chunk decisions per subject for `ttl` seconds and
+never caches an error; `invalidate()` drops decisions after a change you know about. Every
+retrieval, including failed ones, produces one `RetrievalEvent` (who asked, strategy, returned ids,
+denied and violation counts, duration, error type). Events never contain query or chunk text, and
+an observer that fails is logged without affecting retrieval.
+
 ## Bring your own backend or permission system
 
 A backend is any object with a `search` method:
@@ -194,7 +214,7 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 - [x] Backends: pgvector, Chroma
 - [x] Authorizers: OPA, OpenFGA
 - [x] Frameworks: LangChain and LlamaIndex retrievers
-- [ ] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
+- [x] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
 - [ ] Benchmarks with real embeddings; documentation site
 
 After 1.0: permission sync from Google Drive, SharePoint and Confluence; Qdrant, Elasticsearch,

@@ -35,6 +35,7 @@ pgvector = ["psycopg[binary,pool]>=3.2"]
 chroma = ["chromadb>=1.5"]
 langchain = ["langchain-core>=1.0"]
 llamaindex = ["llama-index-core>=0.12"]
+otel = ["opentelemetry-api>=1.30"]
 
 [project.urls]
 Homepage = "https://github.com/muzakkirhussain011/needtoknow"
