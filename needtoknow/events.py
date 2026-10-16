@@ -18,7 +18,7 @@ import hmac
 import json
 import threading
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from typing import IO, Any
 
 __all__ = ["JsonLinesAudit", "Observer", "RetrievalEvent", "query_fingerprint"]
@@ -44,7 +44,6 @@ class RetrievalEvent:
     query_hmac: str | None = None
     started_at: float = 0.0
     """Unix time when the call started."""
-    extra: dict[str, Any] = field(default_factory=dict, hash=False)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

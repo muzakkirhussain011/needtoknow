@@ -14,8 +14,10 @@ pytest -q
 ruff check . && ruff format --check .
 ```
 
-The core needs no services, no GPU and no network. Adapter integration tests start their service
-(PostgreSQL, OpenFGA, ...) with Docker; each adapter's docs say how.
+The core needs no services, no GPU and no network. Integration tests run against a real service
+when its address is set (`NEEDTOKNOW_TEST_DATABASE_URL` for PostgreSQL with pgvector,
+`NEEDTOKNOW_TEST_OPA_URL`, `NEEDTOKNOW_TEST_OPENFGA_URL`) and are skipped otherwise. CI runs all of
+them; [`.github/workflows/ci.yml`](.github/workflows/ci.yml) shows how each service is started.
 
 ## What makes a good pull request
 
@@ -27,7 +29,7 @@ The core needs no services, no GPU and no network. Adapter integration tests sta
 - **Fail closed.** An authorizer that cannot decide raises `AuthorizationError`. Never return
   "allow" on errors, timeouts or unexpected responses.
 - **No new core dependencies.** Integrations with external systems are optional extras
-  (`pip install needtoknow[openfga]`), imported only inside their own module.
+  (`pip install "needtoknow[pgvector]"`), imported only inside their own module.
 - **Public API changes** need an issue first. After 1.0 the public API follows semantic
   versioning: no breaking changes without a deprecation period.
 - Add a line to `CHANGELOG.md` under *Unreleased* for anything a user would notice.
@@ -47,6 +49,22 @@ system can enumerate what a subject may read, `filter_for(subject, action)`.
 Significant decisions are recorded as architecture decision records in [`docs/adr`](docs/adr).
 Propose larger changes in an issue or discussion first, so that design questions are settled
 before code is written.
+
+## Releasing
+
+Maintainers release from `main`:
+
+1. Open a pull request that sets `__version__` in `needtoknow/__init__.py` and moves the
+   *Unreleased* changelog entries under a dated heading for the new version.
+2. After it merges, publish a GitHub release tagged `v` plus the version (for example `v1.2.0`),
+   marked as a pre-release for release candidates.
+3. [`release.yml`](.github/workflows/release.yml) builds the package, checks that the tag matches the
+   version, and uploads it to PyPI with trusted publishing; no API token exists.
+   [`verify-release.yml`](.github/workflows/verify-release.yml) then installs it from PyPI and runs
+   the quickstart against it.
+
+Versions follow [semantic versioning](https://semver.org/). Every Python version that CPython
+still supports is supported; a version is dropped in the first minor release after its end of life.
 
 ## Conduct and governance
 

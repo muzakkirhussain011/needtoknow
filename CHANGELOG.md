@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Tested on Python 3.14. Every Python version CPython still supports is supported, and a version is
+  dropped in the first minor release after its end of life (Python 3.10's is 2026-10-31).
+- A release procedure for maintainers in CONTRIBUTING.
+
+### Removed
+
+- `RetrievalEvent.extra`, a field nothing ever set. Audit lines no longer carry an empty `"extra"`.
+  Removed before 1.0 so that it is not frozen into the stable API; adding a field later is
+  compatible, removing one is not.
+
 ## [1.0.0rc1] - 2026-10-16
 
 The first release candidate for 1.0. The public API in the
