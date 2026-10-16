@@ -127,6 +127,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [Open Policy Agent](https://muzakkirhussain011.github.io/needtoknow/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
 | [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
 | [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
+| [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
 
 Setup for each, with code:
 
@@ -373,6 +374,25 @@ docs = retriever.invoke("What are this year's salary bands?", subject=Subject("b
 **LlamaIndex** (`pip install "needtoknow[llamaindex]"`). `NeedToKnowRetriever` for query and chat
 engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
 existing index. Runnable examples for both frameworks are in [`examples/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples).
+
+</details>
+
+<details>
+<summary><b>Haystack</b></summary>
+
+**Haystack** (`pip install "needtoknow[haystack]"`). `NeedToKnowRetriever` is a pipeline component
+over any needtoknow backend and authorizer. The authenticated user is a run input, so one pipeline
+serves every user; it outputs `documents` and `complete`, and has `run_async`.
+
+```python
+from haystack import Pipeline
+
+from needtoknow.haystack import NeedToKnowRetriever
+
+pipeline = Pipeline()
+pipeline.add_component("retriever", NeedToKnowRetriever(PermissionedRetriever(backend, authorizer)))
+result = pipeline.run({"retriever": {"query": question, "subject": subject}})
+```
 
 </details>
 

@@ -15,6 +15,11 @@ All notable changes are recorded here. The format follows
   `create_index` sets up the index, and `redis.asyncio` clients give a native `aretrieve`. Tested
   with the conformance kit against Redis 8.10.2. Extra: `needtoknow[redis]`, as for the shared
   cache.
+- `needtoknow.haystack.NeedToKnowRetriever`: a Haystack pipeline component over any needtoknow
+  backend and authorizer. The authenticated user is a run input, so one pipeline serves every
+  user, and the component refuses to run without a `Subject`. It outputs Haystack `Document`s and
+  `complete`, and has `run_async`. The extra requires `haystack-ai` 2.12 or later; CI tests the
+  current Haystack 3 release. Extra: `needtoknow[haystack]`.
 - `needtoknow.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
   `$vectorSearch` pre-filter on a type-tagged array field (a BSON filter, so values are never query
   syntax). Atlas indexes writes shortly after they happen, so `add` and `delete` wait until the
