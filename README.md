@@ -121,6 +121,32 @@ from needtoknow.authorizers.opa import OPAAuthorizer
 authorizer = OPAAuthorizer("http://localhost:8181", filter_path="needtoknow/filter")
 ```
 
+**OpenFGA** (no extra dependency). Relationship-based access control in the Google Zanzibar style.
+Checks run in batches; for pre-filtering, ListObjects returns every document the user may view,
+and if that list may have been truncated the retriever post-filters instead. The subject's groups
+can be sent as contextual tuples, so memberships from your identity provider need no syncing.
+
+```python
+from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+
+authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
+```
+
+**LangChain** (`pip install "needtoknow[langchain]"`). `NeedToKnowRetriever` is a LangChain
+retriever, so it works in chains, agents and LangGraph tools; `LangChainVectorStoreBackend` turns
+any LangChain vector store into a needtoknow backend (post-filtered).
+
+```python
+from needtoknow.langchain import NeedToKnowRetriever
+
+retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, authorizer))
+docs = retriever.invoke("What are this year's salary bands?", subject=Subject("bob", ["sales"]))
+```
+
+**LlamaIndex** (`pip install "needtoknow[llamaindex]"`). `NeedToKnowRetriever` for query and chat
+engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
+existing index. Runnable examples for both frameworks are in [`examples/`](examples).
+
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
 
@@ -166,9 +192,8 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 
 - [x] Core: filters, strategies, failing closed, re-checks, async
 - [x] Backends: pgvector, Chroma
-- [x] Authorizers: OPA
-- [ ] Authorizers: OpenFGA
-- [ ] Frameworks: LangChain and LlamaIndex retrievers
+- [x] Authorizers: OPA, OpenFGA
+- [x] Frameworks: LangChain and LlamaIndex retrievers
 - [ ] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
 - [ ] Benchmarks with real embeddings; documentation site
 
