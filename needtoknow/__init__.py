@@ -12,7 +12,7 @@ from needtoknow.filters import And, Filter, In, Or, filter_from_dict, filter_to_
 from needtoknow.retriever import PermissionedRetriever, RetrievalResult, SearchBackend, Strategy
 from needtoknow.types import Document, Hit, Subject
 
-__version__ = "1.0.0rc1"
+__version__ = "1.0.0"
 
 __all__ = [
     "And",

@@ -227,19 +227,16 @@ nothing for selective permissions. Method, tables and caveats: [Benchmarks](http
 | 4.8% | 0.000 | 0.314 | 0.950 |
 | 20% | 0.041 | 0.974 | 0.949 |
 
-## Roadmap to 1.0
+## Stability and roadmap
 
-`needtoknow` is in active development towards a 1.0 release with a stable API.
+1.0 is the stable base: the core, the pgvector and Chroma backends, the OPA and OpenFGA authorizers,
+the LangChain and LlamaIndex integrations, caching, audit events and tracing. The public API in the
+[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) follows semantic
+versioning: no breaking change without a major version and a deprecation period first.
 
-- [x] Core: filters, strategies, failing closed, re-checks, async
-- [x] Backends: pgvector, Chroma
-- [x] Authorizers: OPA, OpenFGA
-- [x] Frameworks: LangChain and LlamaIndex retrievers
-- [x] Permission caching with a documented revocation bound, OpenTelemetry hooks, audit events
-- [x] Benchmarks with real embeddings; [documentation site](https://muzakkirhussain011.github.io/needtoknow/)
-
-After 1.0: permission sync from Google Drive, SharePoint and Confluence; Qdrant, Elasticsearch,
-SpiceDB and Cerbos adapters. Contributions are welcome; see [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
+Next, in rough order: permission sync from Google Drive, SharePoint and Confluence; Qdrant and
+Elasticsearch backends; SpiceDB and Cerbos authorizers. Contributions are welcome; see
+[CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
 

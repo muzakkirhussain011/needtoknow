@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use needtoknow in your work, please cite it as below."
+type: software
+title: "needtoknow: permission-aware retrieval for RAG"
+abstract: >-
+  A Python library that makes retrieval-augmented generation respect permissions: every user gets
+  only the chunks they are allowed to read, whatever vector store, permission system or framework
+  is used. Permission filters run inside the vector search when the permission system can express
+  them, candidates are checked after the search when it cannot, and every failure fails closed.
+authors:
+  - family-names: Hussain
+    given-names: Syed Muzakkir
+version: 1.0.0
+date-released: 2026-10-16
+license: MIT
+repository-code: "https://github.com/muzakkirhussain011/needtoknow"
+url: "https://muzakkirhussain011.github.io/needtoknow/"
+keywords:
+  - retrieval-augmented generation
+  - access control
+  - authorization
+  - vector search
+  - information retrieval
