@@ -42,6 +42,46 @@ authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 It works for `retrieve` and `aretrieve`, using the wrapped authorizer's async methods when it has
 them.
 
+## Resilience of remote permission services
+
+`OPAAuthorizer` and `OpenFGAAuthorizer` share an HTTP client built for permission checks on every
+retrieval:
+
+- **Connections are reused**, one per thread, so a busy service does not open a TCP and TLS
+  connection per check. A connection the server closed while idle is replaced transparently.
+- **Transient failures are retried once** (`retries=1`): refused or reset connections, responses
+  that never arrived, and HTTP 502, 503 and 504. The requests are queries, so a retry has no side
+  effects. Timeouts are not retried, which keeps the worst case at one `timeout`; neither are other
+  HTTP errors or invalid answers.
+- **A circuit breaker** pauses requests to a service that keeps failing, so retries do not pile on
+  during an outage. Retrieval fails closed either way; the breaker makes it fail fast.
+- **Redirects are never followed**, and the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`
+  variables are honoured (proxied requests do not reuse connections).
+- **TLS** uses the system trust store; pass `ssl_context` for your own CA or for mutual TLS.
+
+```python
+import ssl
+
+from needtoknow.authorizers import CircuitBreaker
+from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+
+tls = ssl.create_default_context(cafile="/etc/ssl/internal-ca.pem")
+tls.load_cert_chain("/etc/needtoknow/client.pem", "/etc/needtoknow/client.key")
+
+authorizer = OpenFGAAuthorizer(
+    "https://openfga.internal:8443",
+    store_id,
+    timeout=1.0,
+    circuit_breaker=CircuitBreaker(failures=5, reset_after=30),
+    ssl_context=tls,
+)
+```
+
+`CircuitBreaker(failures=5, reset_after=30)` opens after five consecutive failed requests (no
+response, or a 5xx one), rejects calls at once for 30 seconds, then lets one probe through: success
+closes it, failure opens it again. `breaker.is_open` is there for monitoring, and one breaker can be
+shared by every authorizer that calls the same service.
+
 ## Audit events
 
 Every `retrieve` and `aretrieve` call, including failed ones, produces one `RetrievalEvent` and

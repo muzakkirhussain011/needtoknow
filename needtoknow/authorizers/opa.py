@@ -14,19 +14,18 @@ document (`{"in": {"field", "values"}}`, `{"and": [...]}` or `{"or": [...]}`), o
 policy cannot express the subject's access as a filter. That lets the vector store pre-filter.
 
 Every failure (unreachable server, timeout, non-200 response, undefined decision, malformed
-result) raises `AuthorizationError`, so retrieval fails closed. `examples/opa/needtoknow.rego` is a
-working policy.
+result) raises `AuthorizationError`, so retrieval fails closed. Connections are reused, transient
+failures are retried once, and a `CircuitBreaker` can pause requests to a failing server; see
+`needtoknow.authorizers`. `examples/opa/needtoknow.rego` is a working policy.
 """
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
+import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any
-from urllib.parse import urlsplit
 
+from needtoknow.authorizers._http import CircuitBreaker, JsonClient
 from needtoknow.authz import AuthorizationError
 from needtoknow.filters import Filter, filter_from_dict
 from needtoknow.types import Hit, Subject
@@ -43,7 +42,10 @@ class OPAAuthorizer:
 
     `decisions_path` is the rule returning one boolean per resource and `filter_path`, if set, the
     rule returning a filter or null. `headers` are sent with every request, for example an
-    `Authorization` header. Every failure raises `AuthorizationError`.
+    `Authorization` header. `retries` is how many times a transient failure is retried,
+    `circuit_breaker` pauses requests to a server that keeps failing, and `ssl_context` sets the
+    TLS trust and client certificates (your own CA, mutual TLS). Every failure raises
+    `AuthorizationError`.
     """
 
     def __init__(
@@ -54,34 +56,26 @@ class OPAAuthorizer:
         filter_path: str | None = None,
         timeout: float = 2.0,
         headers: Mapping[str, str] | None = None,
+        retries: int = 1,
+        circuit_breaker: CircuitBreaker | None = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
-        if urlsplit(url).scheme not in ("http", "https"):
-            raise ValueError("the OPA url must start with http:// or https://")
-        self.url = url.rstrip("/")
+        self._client = JsonClient(
+            url,
+            service="OPA",
+            timeout=timeout,
+            headers=headers or {},
+            retries=retries,
+            breaker=circuit_breaker,
+            ssl_context=ssl_context,
+        )
+        self.url = self._client.url
         self.decisions_path = decisions_path.strip("/")
         self.filter_path = filter_path.strip("/") if filter_path else None
         self.timeout = timeout
-        self.headers = {"Content-Type": "application/json", **(headers or {})}
 
     def _query(self, path: str, payload: dict[str, Any]) -> Any:
-        try:
-            body = json.dumps({"input": payload}).encode()
-        except (TypeError, ValueError) as exc:
-            raise AuthorizationError(f"input is not JSON-serialisable: {exc}") from exc
-        # The scheme is restricted to http(s) in __init__, so these calls cannot open file:// or others.
-        url = f"{self.url}/v1/data/{path}"
-        request = urllib.request.Request(url, data=body, headers=self.headers, method="POST")  # noqa: S310
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
-                status, raw = response.status, response.read()
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
-            raise AuthorizationError(f"OPA request to {path} failed: {exc}") from exc
-        if status != 200:
-            raise AuthorizationError(f"OPA returned HTTP {status} for {path}")
-        try:
-            document = json.loads(raw)
-        except ValueError as exc:
-            raise AuthorizationError(f"OPA returned invalid JSON for {path}") from exc
+        document = self._client.post_json(f"/v1/data/{path}", {"input": payload}, f"OPA {path}")
         if not isinstance(document, dict) or "result" not in document:
             # An undefined decision is a deny, never an allow.
             raise AuthorizationError(f"OPA decision {path} is undefined")

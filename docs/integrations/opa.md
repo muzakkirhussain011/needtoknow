@@ -57,4 +57,6 @@ by default), a non-200 response, invalid JSON, an undefined decision, a list of 
 type, or a malformed filter. An undefined decision is treated as a deny, never an allow.
 
 `headers=` adds headers to every request, for example `{"Authorization": "Bearer ..."}` when OPA
-requires a token.
+requires a token. Connections are reused and transient failures retried once (`retries=`); a
+`circuit_breaker=` pauses requests to a failing server, and `ssl_context=` sets your own CA or
+mutual TLS. See [resilience](../operations.md#resilience-of-remote-permission-services).
