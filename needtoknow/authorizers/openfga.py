@@ -32,6 +32,14 @@ __all__ = ["OpenFGAAuthorizer"]
 
 
 class OpenFGAAuthorizer:
+    """Asks an OpenFGA store for decisions over its HTTP API.
+
+    `relations` maps actions to relations (default `{"read": "viewer"}`). Users are
+    `<user_type>:<subject id>` and objects `<object_type>:<resource id>`, where the resource id is
+    the metadata field `resource_field` (or the chunk id when it is None). Every failure raises
+    `AuthorizationError`.
+    """
+
     def __init__(
         self,
         url: str,

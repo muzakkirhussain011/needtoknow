@@ -58,6 +58,8 @@ class SearchBackend(Protocol):
 
 @dataclass(frozen=True)
 class RetrievalResult:
+    """What one retrieval returned, with the counts needed to monitor it."""
+
     hits: list[Hit]
     """Permitted hits, best first, at most k."""
     strategy: Literal["prefilter", "postfilter"]
@@ -97,6 +99,20 @@ _Plan = Generator[_Op, Any, RetrievalResult]
 
 
 class PermissionedRetriever:
+    """Searches a backend and returns only the hits the subject may read.
+
+    `strategy` chooses where permissions are applied: `"prefilter"` inside the search, with a
+    filter from the authorizer; `"postfilter"` after it, checking each candidate; `"auto"` (the
+    default) pre-filters when the backend supports filters and the authorizer returns one.
+    `action` is passed to the authorizer on every call.
+
+    Post-filtering fetches `k * overfetch` candidates and multiplies the fetch by `overfetch`
+    until k permitted hits are found, the backend has no more, or `max_candidates` is reached.
+    `recheck` checks pre-filtered hits again with the authorizer, so a backend that ignores the
+    filter cannot leak. `observers` receive a `RetrievalEvent` for every call, and `audit_key`
+    adds an HMAC of the query to those events.
+    """
+
     def __init__(
         self,
         backend: SearchBackend,
@@ -131,6 +147,11 @@ class PermissionedRetriever:
     # ---- public API ------------------------------------------------------------------------
 
     def retrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
+        """Return at most `k` hits the subject may read, best first.
+
+        Raises `AuthorizationError` when the authorizer fails or gives a malformed answer, and
+        `ValueError` for invalid arguments. Nothing is returned in either case.
+        """
         started, clock = time.time(), time.perf_counter()
         try:
             plan = self._plan(query, subject, k)
@@ -147,6 +168,11 @@ class PermissionedRetriever:
         return result
 
     async def aretrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
+        """The async form of `retrieve`, with the same arguments and guarantees.
+
+        It uses the backend's `asearch` and the authorizer's `afilter_for` and `acheck` when they
+        exist, and runs the sync methods in a thread otherwise.
+        """
         started, clock = time.time(), time.perf_counter()
         try:
             plan = self._plan(query, subject, k)

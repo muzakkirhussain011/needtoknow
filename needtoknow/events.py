@@ -26,6 +26,8 @@ __all__ = ["JsonLinesAudit", "Observer", "RetrievalEvent", "query_fingerprint"]
 
 @dataclass(frozen=True)
 class RetrievalEvent:
+    """One retrieval, for audit logs and monitoring. Never contains query or chunk text."""
+
     subject_id: str
     action: str
     k: int
@@ -54,6 +56,7 @@ Observer = Callable[[RetrievalEvent], None]
 
 
 def query_fingerprint(query: str, key: bytes) -> str:
+    """HMAC-SHA256 of the query under `key`, in hex. Equal queries give equal fingerprints."""
     return hmac.new(key, query.encode("utf-8"), hashlib.sha256).hexdigest()
 
 

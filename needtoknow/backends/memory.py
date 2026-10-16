@@ -23,6 +23,12 @@ def _tokens(text: str) -> list[str]:
 
 
 class InMemoryBackend:
+    """Keeps documents in memory and ranks them by keyword overlap.
+
+    For tests, examples and small corpora. Its filtering follows `matches` exactly, which makes it
+    the reference the other backends are tested against.
+    """
+
     supports_filters = True
 
     def __init__(self, documents: Iterable[Document] = ()) -> None:
