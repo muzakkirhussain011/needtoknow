@@ -87,7 +87,7 @@ def test_a_second_replica_uses_the_first_ones_answers():
 
 def test_the_revocation_bound_holds_across_replicas():
     shared = FakeShared()
-    clock, (one, two), (a, b) = _replicas(shared)
+    clock, (_one, two), (a, b) = _replicas(shared)
     a.check(BOB, HITS)  # written at t=1000, expires at t=1030
     clock.now += 25
     b.check(BOB, HITS)  # copied into b's own cache with 5 seconds left, not a fresh 30
@@ -98,7 +98,7 @@ def test_the_revocation_bound_holds_across_replicas():
 
 def test_a_copied_entry_never_outlives_the_ttl_whatever_expiry_it_carries():
     shared = FakeShared()
-    clock, (one, two), (a, b) = _replicas(shared)
+    clock, (_one, two), (a, b) = _replicas(shared)
     a.check(BOB, HITS[:1])
     (key,) = shared.data
     entry = json.loads(shared.data[key])
@@ -112,7 +112,7 @@ def test_a_copied_entry_never_outlives_the_ttl_whatever_expiry_it_carries():
 
 def test_invalidate_reaches_every_replica():
     shared = FakeShared()
-    _, (one, two), (a, b) = _replicas(shared)
+    _, (_one, two), (a, b) = _replicas(shared)
     a.check(BOB, HITS)
     a.check(Subject("ann", ["hr"]), HITS)
     a.invalidate(BOB)
@@ -129,7 +129,7 @@ def test_invalidate_reaches_every_replica():
 )
 def test_unreadable_entries_are_misses(blob):
     shared = FakeShared()
-    _, (one, two), (a, b) = _replicas(shared)
+    _, (_one, two), (a, b) = _replicas(shared)
     a.check(BOB, HITS[:1])
     shared.data = dict.fromkeys(shared.data, blob)
     assert b.check(BOB, HITS[:1]) == [True] and two.checks == 1
@@ -137,7 +137,7 @@ def test_unreadable_entries_are_misses(blob):
 
 def test_a_malformed_shared_filter_is_a_miss():
     shared = FakeShared()
-    _, (one, two), (a, b) = _replicas(shared)
+    _, (_one, two), (a, b) = _replicas(shared)
     a.filter_for(BOB)
     shared.data = dict.fromkeys(shared.data, b'{"expires": 1e12, "value": {"filter": {"in": "nonsense"}}}')
     assert b.filter_for(BOB) is not None and two.filters == 1
@@ -145,7 +145,7 @@ def test_a_malformed_shared_filter_is_a_miss():
 
 def test_a_failing_shared_cache_never_changes_an_answer():
     shared = FakeShared()
-    _, (one, two), (a, b) = _replicas(shared)
+    _, (one, _two), (a, _b) = _replicas(shared)
     shared.fail = True
     assert a.check(BOB, HITS) == [True, False] and a.filter_for(BOB) is not None
     assert one.checks == 2
@@ -155,7 +155,7 @@ def test_a_failing_shared_cache_never_changes_an_answer():
 
 def test_async_paths_use_the_shared_cache():
     shared = FakeShared()
-    _, (one, two), (a, b) = _replicas(shared)
+    _, (_one, two), (a, b) = _replicas(shared)
     asyncio.run(a.acheck(BOB, HITS))
     asyncio.run(a.afilter_for(BOB))
     assert asyncio.run(b.acheck(BOB, HITS)) == [True, False]
@@ -224,7 +224,8 @@ def test_replicas_share_decisions_through_redis():
     a = CachingAuthorizer(one, shared=shared, namespace=namespace)
     b = CachingAuthorizer(two, shared=shared, namespace=namespace)
     assert a.check(BOB, HITS) == [True, False] and b.check(BOB, HITS) == [True, False]
-    assert b.filter_for(BOB) == a.filter_for(BOB) and (two.checks, two.filters) == (0, 0)
+    first = a.filter_for(BOB)  # a asks first; b then finds it in Redis
+    assert b.filter_for(BOB) == first and (two.checks, two.filters) == (0, 0)
     a.invalidate(BOB)
     b.check(BOB, HITS)
     assert two.checks == 2

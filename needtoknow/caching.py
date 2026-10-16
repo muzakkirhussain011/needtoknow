@@ -192,7 +192,8 @@ class CachingAuthorizer:
         except Exception:
             _log.warning("needtoknow shared cache read failed; asking the authorizer", exc_info=True)
             return [None] * len(keys)
-        now, found = self._wall(), []
+        now = self._wall()
+        found: list[Any] = []
         for key, blob in zip(keys, blobs, strict=True):
             value, remaining = self._decode(key, blob, now)
             if value is _MISS:
