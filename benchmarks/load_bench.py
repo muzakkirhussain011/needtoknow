@@ -1,6 +1,7 @@
 """Load benchmark: permission-aware retrieval at a million chunks, with concurrent users.
 
-On PostgreSQL + pgvector it measures
+On one vector store (`--backend`: pgvector by default, or Qdrant, Milvus, Elasticsearch,
+OpenSearch, Weaviate; see stores.py) it measures
 
 * how long loading and indexing the corpus takes, and how large it gets,
 * recall@k against brute force over the same vectors, and latency, by permission selectivity, one
@@ -42,10 +43,10 @@ from permissions_bench import (
     tags,
     top_rows,
 )
+from stores import STORES, make_store
 
 from needtoknow import CachingAuthorizer, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
-TABLE = "needtoknow_load"
 FIELD = "allowed_groups"
 
 
@@ -66,71 +67,6 @@ def load_msmarco(n_docs: int, n_queries: int, rng: np.random.Generator) -> tuple
     unique = list(dict.fromkeys(q.strip() for q in questions["text"] if q.strip()))
     picked = rng.choice(len(unique), min(n_queries, len(unique)), replace=False)
     return ids, texts, [unique[i] for i in picked]
-
-
-def load_postgres(url: str, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
-    """Bulk-load with binary COPY, then build the indexes; returns timings and sizes."""
-    import psycopg
-    from pgvector.psycopg import register_vector
-    from psycopg import sql
-    from psycopg.types.json import Jsonb
-
-    table = sql.Identifier(TABLE)
-    with psycopg.connect(url, autocommit=True) as conn:
-        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        register_vector(conn)
-        conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(table))
-        conn.execute(
-            sql.SQL(
-                "CREATE TABLE {} (id text PRIMARY KEY, content text NOT NULL, metadata jsonb NOT NULL,"
-                " embedding vector({}) NOT NULL)"
-            ).format(table, sql.Literal(int(vectors.shape[1])))
-        )
-        started = time.perf_counter()
-        copy_sql = sql.SQL("COPY {} (id, content, metadata, embedding) FROM STDIN WITH (FORMAT BINARY)")
-        with conn.cursor() as cur, cur.copy(copy_sql.format(table)) as copy:
-            copy.set_types(["text", "text", "jsonb", "vector"])
-            for i in range(len(ids)):
-                copy.write_row((ids[i], texts[i], Jsonb(metadata[i]), vectors[i]))
-        loaded = time.perf_counter()
-        log(f"loaded {len(ids)} rows in {loaded - started:.0f} s")
-        conn.execute("SET maintenance_work_mem = '4GB'")
-        conn.execute("SET max_parallel_maintenance_workers = 3")
-        conn.execute(
-            sql.SQL("CREATE INDEX {} ON {} USING gin (metadata jsonb_path_ops)").format(
-                sql.Identifier(f"{TABLE}_metadata_gin"), table
-            )
-        )
-        gin = time.perf_counter()
-        conn.execute(
-            sql.SQL("CREATE INDEX {} ON {} USING hnsw (embedding vector_cosine_ops)").format(
-                sql.Identifier(f"{TABLE}_embedding_hnsw"), table
-            )
-        )
-        hnsw = time.perf_counter()
-        log(f"indexes built: GIN {gin - loaded:.0f} s, HNSW {hnsw - gin:.0f} s")
-        conn.execute(sql.SQL("ANALYZE {}").format(table))
-        size = conn.execute("SELECT pg_size_pretty(pg_total_relation_size(%s))", [TABLE]).fetchone()[0]
-        server = conn.execute("SHOW server_version").fetchone()[0]
-        extension = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()[0]
-    return {
-        "rows": len(ids),
-        "copy_s": round(loaded - started, 1),
-        "gin_index_s": round(gin - loaded, 1),
-        "hnsw_index_s": round(hnsw - gin, 1),
-        "total_size": size,
-        "postgres": server,
-        "pgvector": extension,
-    }
-
-
-def backend(args: argparse.Namespace, embed: Any, pool_size: int) -> Any:
-    from psycopg_pool import ConnectionPool
-
-    from needtoknow.backends.pgvector import PgVectorBackend
-
-    pool = ConnectionPool(args.database_url, min_size=pool_size, max_size=pool_size, open=True)
-    return PgVectorBackend(pool, embed, table=TABLE, ef_search=args.ef_search)
 
 
 def throughput(retriever: PermissionedRetriever, cases: Sequence[Case], k: int, users: int, seconds: float) -> dict:
@@ -222,12 +158,21 @@ def markdown(report: dict) -> str:
             out.append("| " + " | ".join(FORMATS.get(key, "{}").format(r[key]) for _, key in columns) + " |")
         return [*out, ""]
 
-    load = report["load"]
+    load, store = report["load"], report["config"].get("backend", "pgvector")
+    if "copy_s" in load:  # pgvector, as in the runs published before other stores were added
+        summary = (
+            f"COPY {load['copy_s']} s, GIN index {load['gin_index_s']} s, HNSW index {load['hnsw_index_s']} s,"
+            f" total size {load['total_size']}. hnsw.ef_search: {report['config'].get('ef_search') or 'default (40)'}."
+        )
+    else:
+        summary = (
+            f"Loaded in {load['load_s']} s, then {load['index_s']} s until the index was built. {load['detail']}."
+            f" Search breadth: {report['config'].get('ef_search') or 'the store default'}."
+        )
     out = [
-        f"### Load: {load['rows']} chunks",
+        f"### Load: {load['rows']} chunks" + ("" if store == "pgvector" else f" in {store}"),
         "",
-        f"COPY {load['copy_s']} s, GIN index {load['gin_index_s']} s, HNSW index {load['hnsw_index_s']} s,"
-        f" total size {load['total_size']}. hnsw.ef_search: {report['config'].get('ef_search') or 'default (40)'}.",
+        summary,
         "",
         "### Recall and latency by selectivity (one query at a time)",
         "",
@@ -254,8 +199,11 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--throughput-selectivity", type=float, default=0.01)
     p.add_argument("--users", default="1,2,4,8,16", help="concurrent users for the throughput runs")
     p.add_argument("--seconds", type=float, default=20.0, help="duration of each throughput run")
-    p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"))
-    p.add_argument("--ef-search", type=int, help="pgvector hnsw.ef_search for every search (default: the server's, 40)")
+    p.add_argument("--backend", choices=STORES, default="pgvector", help="the vector store to measure")
+    p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"), help="for pgvector")
+    p.add_argument("--url", default=os.environ.get("NEEDTOKNOW_BENCH_URL"), help="for the other stores")
+    p.add_argument("--grpc-port", type=int, default=50051, help="Weaviate's gRPC port")
+    p.add_argument("--ef-search", type=int, help="search breadth (pgvector hnsw.ef_search; see stores.py for the rest)")
     p.add_argument("--opa-url", help="an OPA running examples/opa, to measure a remote permission service")
     p.add_argument("--batch-size", type=int, default=256, help="embedding batch size")
     p.add_argument("--seed", type=int, default=7)
@@ -276,8 +224,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(text)
         return 0
-    if not args.database_url:
-        raise SystemExit("needs --database-url or NEEDTOKNOW_BENCH_DATABASE_URL")
+    url = args.database_url if args.backend == "pgvector" else args.url
+    if not url:
+        raise SystemExit("pgvector needs --database-url (or NEEDTOKNOW_BENCH_DATABASE_URL); other stores --url")
     if args.teams % 100:
         raise SystemExit("--teams must be a multiple of 100")
     selectivities = [float(s) for s in args.selectivity.split(",")]
@@ -294,14 +243,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     teams = rng.integers(0, args.teams, len(ids))
     metadata = [{FIELD: tags("r", int(t))} for t in teams]
-    load = load_postgres(args.database_url, ids, texts, doc_vecs, metadata)
+    store = make_store(args.backend, url, args.ef_search, args.grpc_port)
+    load = store.load(ids, texts, doc_vecs, metadata)
     del texts
     embed: Callable[[str], Any] = dict(zip(queries, query_vecs, strict=True)).__getitem__
     row_of = {doc_id: row for row, doc_id in enumerate(ids)}
     acl = MetadataACLAuthorizer()
 
     scale = []
-    single = backend(args, embed, 1)
+    single = store.backend(embed, 1)
     for selectivity in selectivities:
         cases = build_cases(queries, query_vecs, doc_vecs, teams, ids, args.teams, selectivity, args.k, rng)
         for strategy in ("prefilter", "postfilter"):
@@ -317,7 +267,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     del doc_vecs
     rows = []
     for n in users:
-        retriever = PermissionedRetriever(backend(args, embed, n), acl, strategy="prefilter")
+        retriever = PermissionedRetriever(store.backend(embed, n), acl, strategy="prefilter")
         row = {"selectivity": f"{args.throughput_selectivity:.1%}"}
         row |= throughput(retriever, busy, args.k, n, args.seconds)
         rows.append(row)
@@ -340,12 +290,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ]
         for name, make in candidates:
             for n in sorted({1, max(users)}):
-                retriever = PermissionedRetriever(backend(args, embed, n), make(), strategy="prefilter")
+                retriever = PermissionedRetriever(store.backend(embed, n), make(), strategy="prefilter")
                 row = {"authorizer": name} | throughput(retriever, busy, args.k, n, args.seconds)
                 authorizers.append(row)
                 log(f"{name}, {n} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, errors {row['errors']}")
 
-    config = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k != "database_url"}
+    secret = ("database_url", "url")  # connection strings can hold credentials
+    config = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k not in secret}
     report = {
         "config": config | {"docs": len(ids), "queries": len(queries), "dim": int(query_vecs.shape[1])},
         "environment": environment(args),

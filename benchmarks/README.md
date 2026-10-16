@@ -54,9 +54,15 @@ concurrent users grow, and what Open Policy Agent costs as the permission servic
 `CachingAuthorizer`. Run it with [`kaggle_load.ipynb`](kaggle_load.ipynb), which also starts OPA
 with the example policy and gives PostgreSQL enough memory for a million rows.
 
-CI runs a small synthetic version against real PostgreSQL and OPA with `--check`, which fails on
-any leak or error. `--render load_results.json` prints the tables of a saved run again without
-running anything.
+`--backend` runs the same measurements on another store: `qdrant`, `milvus`, `elasticsearch`,
+`opensearch` or `weaviate`, at `--url` (Weaviate also takes `--grpc-port`). The corpus is loaded
+through needtoknow's own backend for that store, so the layout measured is the one you get, and the
+load time includes waiting until the store's index is built. `--ef-search` sets each store's search
+breadth (see [`stores.py`](stores.py)).
+
+CI runs a small synthetic version against real PostgreSQL and OPA, and against every other store,
+with `--check`, which fails on any leak or error. `--render load_results.json` prints the tables of
+a saved run again without running anything.
 
 ## Run anywhere, without a model
 
