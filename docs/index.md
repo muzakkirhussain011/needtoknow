@@ -1,3 +1,12 @@
+```{raw} html
+<div class="ntk-hero">
+  <div class="ntk-hero__stage" data-ntk-hero>
+    <img src="_static/brand/needtoknow-3d.webp" width="440" height="361" alt="The needtoknow logo: a document whose readable lines are highlighted and one line is redacted">
+  </div>
+</div>
+<script type="module" src="_static/hero3d.js"></script>
+```
+
 # needtoknow
 
 **Permission-aware retrieval for RAG.** Every user gets only the chunks they are allowed to read,
