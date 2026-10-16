@@ -170,6 +170,17 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.mongodb.filter_to_mongo
 
 .. autofunction:: needtoknow.backends.mongodb.permission_terms
+
+.. autoclass:: needtoknow.backends.weaviate.WeaviateBackend
+   :members: add, delete, search, asearch
+
+.. autofunction:: needtoknow.backends.weaviate.create_collection
+
+.. autofunction:: needtoknow.backends.weaviate.filter_to_weaviate
+
+.. autofunction:: needtoknow.backends.weaviate.permission_terms
+
+.. autofunction:: needtoknow.backends.weaviate.point_id
 ```
 
 ## Frameworks

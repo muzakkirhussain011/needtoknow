@@ -41,9 +41,9 @@ sits between your application and your vector store, and closes that gap.
 :gutter: 3
 
 :::{grid-item-card} {octicon}`stack;1.4em;sd-text-primary` Works with what you have
-pgvector, Qdrant, Milvus, MongoDB, Elasticsearch, OpenSearch, Chroma or any LangChain or
-LlamaIndex store; OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The core has no
-dependencies.
+pgvector, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, Chroma or any
+LangChain or LlamaIndex store; OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The
+core has no dependencies.
 :::
 
 :::{grid-item-card} {octicon}`goal;1.4em;sd-text-primary` Exact where it matters
@@ -178,6 +178,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 - [Qdrant](integrations/qdrant.md)
 - [Milvus](integrations/milvus.md)
 - [MongoDB Atlas Vector Search](integrations/mongodb.md)
+- [Weaviate](integrations/weaviate.md)
 - [Elasticsearch and OpenSearch](integrations/elasticsearch.md)
 - [Chroma](integrations/chroma.md)
 - Any [LangChain](integrations/langchain.md) or [LlamaIndex](integrations/llamaindex.md) store
@@ -283,6 +284,7 @@ integrations/elasticsearch
 integrations/qdrant
 integrations/milvus
 integrations/mongodb
+integrations/weaviate
 integrations/opa
 integrations/openfga
 integrations/spicedb

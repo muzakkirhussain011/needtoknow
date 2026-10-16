@@ -15,6 +15,13 @@ All notable changes are recorded here. The format follows
   `create_search_index` sets up the index, and `AsyncMongoClient` collections give a native
   `aretrieve`. Tested with the conformance kit against `mongodb/mongodb-atlas-local` 8.0.30. Extra:
   `needtoknow[mongodb]`.
+- `needtoknow.backends.weaviate`: Weaviate, with the permission filter applied inside the vector
+  search. Permissions are matched on a type-tagged `text[]` property with `field` tokenization, each
+  term guarded at both ends so case and whitespace never blur two values, through the client's
+  filter objects; metadata is stored as unindexed JSON and returned exactly. Document ids become
+  UUIDs, with the original kept on the object. `create_collection` sets up a self-provided cosine
+  vector, and `WeaviateAsyncClient` gives a native `aretrieve`. Tested with the conformance kit
+  against Weaviate 1.39.12. Extra: `needtoknow[weaviate]`.
 
 ## [1.2.0] - 2026-10-17
 

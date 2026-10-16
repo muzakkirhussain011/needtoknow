@@ -117,6 +117,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [Qdrant](https://muzakkirhussain011.github.io/needtoknow/integrations/qdrant.html) | Vector store | `needtoknow[qdrant]` | Qdrant's `query_filter` |
 | [Milvus](https://muzakkirhussain011.github.io/needtoknow/integrations/milvus.html) | Vector store | `needtoknow[milvus]` | Inside the vector search, with parameterized filters |
 | [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
+| [Weaviate](https://muzakkirhussain011.github.io/needtoknow/integrations/weaviate.html) | Vector store | `needtoknow[weaviate]` | Inside the vector search |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -224,6 +225,25 @@ from needtoknow.backends.mongodb import MongoDBBackend, create_search_index
 collection = MongoClient(MONGODB_URI)["rag"]["chunks"]
 create_search_index(collection, dim=768)
 backend = MongoDBBackend(collection, embed=my_embedding_model)
+```
+
+</details>
+
+<details>
+<summary><b>Weaviate</b></summary>
+
+**Weaviate** (`pip install "needtoknow[weaviate]"`). The filter runs inside Weaviate's vector
+search, on a type-tagged `text[]` property with `field` tokenization, so terms match exactly, case
+and whitespace included. The metadata is stored as JSON and returned as written.
+
+```python
+import weaviate
+
+from needtoknow.backends.weaviate import WeaviateBackend, create_collection
+
+client = weaviate.connect_to_local()
+create_collection(client, "Chunks")
+backend = WeaviateBackend(client, "Chunks", embed=my_embedding_model)
 ```
 
 </details>
