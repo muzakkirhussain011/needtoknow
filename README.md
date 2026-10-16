@@ -297,16 +297,16 @@ existing index. Runnable examples for both frameworks are in [`examples/`](https
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
 
-## Caching, audit and tracing
+## Caching, audit, tracing and metrics
 
 ```python
 from needtoknow import CachingAuthorizer, JsonLinesAudit
-from needtoknow.otel import OpenTelemetryObserver  # pip install "needtoknow[otel]"
+from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "needtoknow[otel]"
 
 retriever = PermissionedRetriever(
     backend,
     CachingAuthorizer(authorizer, ttl=30),  # a revoked permission stops granting access within 30 s
-    observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver()],  # audit_file: an open text file
+    observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver(), OpenTelemetryMetrics()],
     audit_key=b"...",  # optional: an HMAC of each query, so repeats can be matched without storing them
 )
 ```
@@ -314,8 +314,10 @@ retriever = PermissionedRetriever(
 `CachingAuthorizer` caches pre-filters and per-chunk decisions per subject for `ttl` seconds and
 never caches an error; `invalidate()` drops decisions after a change you know about. Every
 retrieval, including failed ones, produces one `RetrievalEvent` (who asked, strategy, returned ids,
-denied and violation counts, duration, error type). Events never contain query or chunk text, and
-an observer that fails is logged without affecting retrieval.
+denied and violation counts, time spent in the backend and the authorizer, error type).
+`JsonLinesAudit` writes each one to `audit_file`, an open text file; `OpenTelemetryObserver` turns
+it into a span and `OpenTelemetryMetrics` into counters and latency histograms. Events never
+contain query or chunk text, and an observer that fails is logged without affecting retrieval.
 
 ## Bring your own backend or permission system
 

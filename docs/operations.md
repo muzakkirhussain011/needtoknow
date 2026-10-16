@@ -1,16 +1,16 @@
 # Operations
 
 Running needtoknow in production: fewer calls to the permission service, an audit trail, traces,
-and the signals worth alerting on.
+metrics, and the signals worth alerting on.
 
 ```python
 from needtoknow import CachingAuthorizer, JsonLinesAudit, PermissionedRetriever
-from needtoknow.otel import OpenTelemetryObserver  # pip install "needtoknow[otel]"
+from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "needtoknow[otel]"
 
 retriever = PermissionedRetriever(
     backend,
     CachingAuthorizer(authorizer, ttl=30),
-    observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver()],
+    observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver(), OpenTelemetryMetrics()],
     audit_key=audit_key,  # bytes from your secret store; enables query fingerprints
 )
 ```
@@ -156,6 +156,8 @@ passes it to each observer. An observer is any callable taking the event.
 | `returned_ids` | The chunk ids returned, in order |
 | `examined`, `denied`, `violations`, `complete` | As in `RetrievalResult` |
 | `duration_ms`, `started_at` | Timing (`started_at` is Unix time) |
+| `search_ms`, `authorize_ms` | Time spent in the backend and in the authorizer |
+| `searches` | Backend searches: one when pre-filtering, more when post-filtering fetched again |
 | `error` | The exception type when the call failed, for example `AuthorizationError` |
 | `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set |
 
@@ -168,7 +170,7 @@ without storing them. Rotating the key breaks that link, which can be what you w
 flushes after each event:
 
 ```json
-{"action":"read","complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":3,"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
+{"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
 ```
 
 An observer that raises is logged on the `needtoknow` logger and never changes what retrieval
@@ -181,22 +183,55 @@ the call and parented to the span that was current when it ran.
 
 | Attribute | Value |
 |---|---|
-| `needtoknow.action`, `needtoknow.k` | As requested |
+| `gen_ai.operation.name` | `retrieval` |
+| `gen_ai.retrieval.top_k`, `needtoknow.k` | The `k` requested |
+| `needtoknow.action` | As requested |
 | `needtoknow.strategy` | The strategy that ran |
 | `needtoknow.returned`, `needtoknow.examined`, `needtoknow.denied`, `needtoknow.violations` | Counts |
 | `needtoknow.complete` | As `RetrievalResult.complete` |
-| `needtoknow.error` | The exception type; the span status is then ERROR |
+| `needtoknow.searches`, `needtoknow.search.duration_ms`, `needtoknow.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
+| `error.type`, `needtoknow.error` | The exception type; the span status is then ERROR |
 | `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 
-The attributes use the `needtoknow.` prefix because OpenTelemetry's semantic conventions for
-generative AI were still in development when this was written. It needs only `opentelemetry-api`;
-your application configures the SDK and exporter as usual.
+The `gen_ai.*` and `error.type` attributes are the ones OpenTelemetry's GenAI semantic conventions
+define for retrieval. Those conventions were still at Development status in October 2026 and may
+change, so everything else uses the `needtoknow.` prefix, and the span keeps its name. It needs only
+`opentelemetry-api`; your application configures the SDK and exporter as usual.
+
+## Metrics
+
+`OpenTelemetryMetrics` turns the same events into metrics for dashboards and alerts:
+
+```python
+from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver
+
+observers = [OpenTelemetryObserver(), OpenTelemetryMetrics()]
+retriever = PermissionedRetriever(backend, authorizer, observers=observers)
+```
+
+| Instrument | Type, unit | What it measures |
+|---|---|---|
+| `gen_ai.client.operation.duration` | Histogram, s | Each retrieval, with `gen_ai.operation.name = "retrieval"`, as the GenAI conventions define it |
+| `needtoknow.retrievals` | Counter | Retrievals by `needtoknow.outcome`: `complete`, `incomplete` or `error` |
+| `needtoknow.search.duration` | Histogram, s | Time spent in the backend during one retrieval |
+| `needtoknow.authorize.duration` | Histogram, s | Time spent in the authorizer during one retrieval |
+| `needtoknow.chunks.returned`, `.examined`, `.denied` | Counters | Chunks returned, checked by the authorizer, and withheld |
+| `needtoknow.violations` | Counter | Pre-filtered chunks the re-check rejected |
+
+Every instrument is broken down by `needtoknow.action` and `needtoknow.strategy`, plus the outcome
+and `error.type` where they apply. Each has a handful of values, so the number of time series stays
+small however many users you have. Subjects, queries and chunks are never recorded; per-subject
+questions belong to the audit log. The duration histogram uses the bucket boundaries the
+conventions advise (10 ms to 82 s); the two stage histograms start at 0.5 ms, because a cached
+authorizer answers in well under a millisecond. A `View` in your SDK configuration can change
+either.
 
 ## What to alert on
 
-| Signal | Why |
-|---|---|
-| `violations > 0` | The backend returned chunks outside the filter. Nothing leaked, because the re-check caught them, but the backend or its translation has a bug. |
-| Rate of `AuthorizationError` | The permission service is failing. Users are getting errors, which is the safe outcome, but it is an outage. |
-| Share of `complete=False` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
-| `denied` per call, by subject | Unusually high values can mean a user is probing for documents they may not read. |
+| Signal | Metric | Why |
+|---|---|---|
+| Any violation | `needtoknow.violations` increases | The backend returned chunks outside the filter. Nothing leaked, because the re-check caught them, but the backend or its translation has a bug. |
+| Authorization failures | `needtoknow.retrievals` with `error.type = AuthorizationError` | The permission service is failing. Users are getting errors, which is the safe outcome, but it is an outage. |
+| Incomplete results | Share of `needtoknow.outcome = incomplete` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
+| Slow permission checks | `needtoknow.authorize.duration` p99 | The permission service, or the network to it, is slowing retrieval down. `CachingAuthorizer` helps. |
+| Probing | `denied` per call, by subject, in the audit log | Unusually high values can mean a user is probing for documents they may not read. |

@@ -106,6 +106,8 @@ modules and need their extra.
 .. autofunction:: needtoknow.events.query_fingerprint
 
 .. autoclass:: needtoknow.otel.OpenTelemetryObserver
+
+.. autoclass:: needtoknow.otel.OpenTelemetryMetrics
 ```
 
 An observer is any callable that takes a `RetrievalEvent`.
