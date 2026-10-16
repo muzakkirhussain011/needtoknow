@@ -16,12 +16,21 @@ from typing import Any
 from needtoknow.filters import And, Filter, In, Or, _ordered
 from needtoknow.types import Document, Hit
 
-__all__ = ["NEVER", "ChromaBackend", "filter_to_where"]
+__all__ = ["EMPTY_MARKER", "NEVER", "ChromaBackend", "filter_to_where"]
 
 Embed = Callable[[str], Sequence[float]]
 
 NEVER: dict[str, Any] = {}
 """Returned by `filter_to_where` when the filter can match nothing (an `In` with no values)."""
+
+EMPTY_MARKER = "needtoknow_empty"
+"""Stored instead of empty metadata, and removed again from search results.
+
+Never send Chroma `None` metadata: with it, a new record has been seen to come back carrying
+metadata from an earlier record with the same id, which would hand a chunk with no permissions
+someone else's permissions. The marker is a boolean, so no filter (strings and integers only)
+ever matches it.
+"""
 
 _SCALARS = (str, int, float, bool)
 
@@ -58,6 +67,8 @@ def filter_to_where(f: Filter) -> dict[str, Any]:
 def _clean_metadata(doc_id: str, metadata: Mapping[str, Any]) -> dict[str, Any]:
     clean: dict[str, Any] = {}
     for key, value in metadata.items():
+        if key == EMPTY_MARKER:
+            raise ValueError(f"{doc_id}: metadata key {EMPTY_MARKER!r} is reserved")
         if value is None or (isinstance(value, (list, tuple)) and not value):
             continue
         if isinstance(value, (list, tuple)):
@@ -69,6 +80,12 @@ def _clean_metadata(doc_id: str, metadata: Mapping[str, Any]) -> dict[str, Any]:
             clean[key] = value
         else:
             raise ValueError(f"{doc_id}: metadata {key!r} has unsupported type {type(value).__name__}")
+    return clean
+
+
+def _strip_marker(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    clean = dict(metadata or {})
+    clean.pop(EMPTY_MARKER, None)
     return clean
 
 
@@ -93,7 +110,7 @@ class ChromaBackend:
         kwargs: dict[str, Any] = {
             "ids": [d.id for d in docs],
             "documents": [d.text for d in docs],
-            "metadatas": [_clean_metadata(d.id, d.metadata) or None for d in docs],
+            "metadatas": [_clean_metadata(d.id, d.metadata) or {EMPTY_MARKER: True} for d in docs],
         }
         if embeddings is not None:
             kwargs["embeddings"] = [list(map(float, v)) for v in embeddings]
@@ -121,6 +138,6 @@ class ChromaBackend:
         metadatas = result["metadatas"][0]
         distances = result["distances"][0]
         rows = zip(ids, texts, metadatas, distances, strict=True)
-        hits = [Hit(i, t or "", 1.0 - float(d), m or {}) for i, t, m, d in rows]
+        hits = [Hit(i, t or "", 1.0 - float(d), _strip_marker(m)) for i, t, m, d in rows]
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits

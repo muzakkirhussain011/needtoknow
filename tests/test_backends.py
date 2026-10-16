@@ -59,8 +59,7 @@ def chroma_factory():
     previous: list[str] = []
 
     def make(docs):
-        # A new, uniquely named collection per example: recreating one under the same name in the
-        # in-memory client can serve rows left over from the previous example.
+        # A new, uniquely named collection per example keeps examples independent.
         for name in previous:
             with contextlib.suppress(Exception):
                 client.delete_collection(name)
@@ -106,6 +105,19 @@ def test_retriever_on_backend_never_leaks_and_is_complete(factory, docs, subject
     if not isinstance(backend, InMemoryBackend):
         # Vector search ranks every stored chunk, so the subject gets min(k, everything permitted).
         assert len(result.hits) == min(k, sum(may_read(subject, d) for d in docs))
+
+
+# ---- Chroma specifics ------------------------------------------------------------------------
+
+
+def test_chroma_chunk_without_permissions_never_inherits_another_chunks(chroma_factory):
+    # Regression: with None metadata, Chroma returned a new record carrying metadata from an
+    # earlier record with the same id, which would make a chunk readable by everyone.
+    chroma_factory([Document("doc-000", "policy", {"allowed_groups": ["*"]})])
+    backend = chroma_factory([Document("doc-000", "policy", {})])
+    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
+    assert retriever.retrieve("policy", Subject("alice"), k=5).hits == []
+    assert backend.search("policy", 5) and backend.search("policy", 5)[0].metadata == {}
 
 
 # ---- pgvector specifics ----------------------------------------------------------------------

@@ -7,7 +7,7 @@ import json
 import pytest
 
 from needtoknow import And, In, Or
-from needtoknow.backends.chroma import NEVER, _clean_metadata, filter_to_where
+from needtoknow.backends.chroma import EMPTY_MARKER, NEVER, _clean_metadata, filter_to_where
 from needtoknow.backends.pgvector import filter_to_sql
 
 # ---- PostgreSQL ------------------------------------------------------------------------------
@@ -76,3 +76,5 @@ def test_chroma_metadata_is_cleaned_or_rejected():
         _clean_metadata("d", {"mixed": ["x", 1]})
     with pytest.raises(ValueError):
         _clean_metadata("d", {"nested": {"x": 1}})
+    with pytest.raises(ValueError):
+        _clean_metadata("d", {EMPTY_MARKER: True})
