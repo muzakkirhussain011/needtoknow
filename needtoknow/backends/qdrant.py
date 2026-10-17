@@ -24,8 +24,9 @@ import uuid
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 if TYPE_CHECKING:
     from qdrant_client import models
@@ -123,6 +124,7 @@ class QdrantBackend:
     `SearchParams(hnsw_ef=128)` for higher recall or `SearchParams(exact=True)` for brute force.
     Scores are Qdrant's: cosine similarity for a cosine collection. Pass `async_client` (an
     `AsyncQdrantClient`) for a native `asearch`; otherwise async calls run `search` in a thread.
+    Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
     """
 
     supports_filters = True
@@ -131,7 +133,7 @@ class QdrantBackend:
         self,
         client: Any,
         collection: str,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         content_key: str = "page_content",
         metadata_key: str = "metadata",
@@ -157,9 +159,7 @@ class QdrantBackend:
         from qdrant_client import models
 
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
+        vectors = document_vectors(docs, embeddings, self.embed)
         points = [
             models.PointStruct(
                 id=point_id(d.id),
@@ -180,7 +180,7 @@ class QdrantBackend:
 
     # ---- searching ---------------------------------------------------------------------------
 
-    def _request(self, query: str, k: int, f: Filter | None) -> dict[str, Any] | None:
+    def _request(self, query: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         query_filter = None
         if f is not None:
             query_filter = filter_to_qdrant(f, self.metadata_key)
@@ -188,7 +188,7 @@ class QdrantBackend:
                 return None  # nothing can match
         return {
             "collection_name": self.collection,
-            "query": [float(x) for x in self.embed(query)],
+            "query": query.embedded(self.embed),
             "using": self.vector_name,
             "query_filter": query_filter,
             "search_params": self.search_params,
@@ -215,20 +215,20 @@ class QdrantBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(query, k, filter)
+        request = self._request(Query.of(query), k, filter)
         if request is None:
             return []
         return self._hits(self.client.query_points(**request).points)
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, query, k, filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), k, filter)
         if request is None:
             return []
         response = await self.async_client.query_points(**request)

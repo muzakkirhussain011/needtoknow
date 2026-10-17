@@ -36,6 +36,7 @@ In an agent, keep `subject` out of the tool's inputs that the model fills in.
 | Input | `query` | The question to search for |
 | Input | `subject` | The authenticated user (`needtoknow.Subject`) |
 | Input | `top_k` | Optional; overrides the component's `top_k` for this run |
+| Input | `query_embedding` | Optional; a vector to search with instead of embedding `query` (connect a text embedder's `embedding`). `query` may then be empty. See [Your own vectors](../vectors.md) |
 | Output | `documents` | Haystack `Document`s: the chunk id, text, metadata and score, best first |
 | Output | `complete` | False when needtoknow knows results may be missing (see [concepts](../concepts.md)) |
 

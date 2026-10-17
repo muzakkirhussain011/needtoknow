@@ -37,7 +37,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.events import Observer, RetrievalEvent, query_fingerprint
 from needtoknow.filters import And, Filter, In, Or
-from needtoknow.types import Hit, Subject
+from needtoknow.types import Hit, Query, Subject
 
 __all__ = ["PermissionedRetriever", "RetrievalResult", "SearchBackend", "Strategy"]
 
@@ -50,11 +50,15 @@ class SearchBackend(Protocol):
 
     `supports_filters` says whether `search` honours the `filter` argument. Backends may also
     provide `async def asearch(...)` with the same signature; otherwise `search` runs in a thread.
+
+    `query` is what the caller passed to `retrieve`, unchanged: a string, or a `Query` when the
+    caller supplies a vector. `Query.of(query)` gives a `Query` either way. A backend that takes
+    only strings still works with every string query.
     """
 
     supports_filters: bool
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]: ...
+    def search(self, query: Any, k: int, filter: Filter | None = None) -> list[Hit]: ...
 
 
 @dataclass(frozen=True)
@@ -91,7 +95,7 @@ class _ScopeFor:
 
 @dataclass(frozen=True)
 class _Search:
-    query: str
+    query: str | Query
     k: int
     filter: Filter | None
 
@@ -175,11 +179,12 @@ class PermissionedRetriever:
 
     # ---- public API ------------------------------------------------------------------------
 
-    def retrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
+    def retrieve(self, query: str | Query, subject: Subject, k: int = 5) -> RetrievalResult:
         """Return at most `k` hits the subject may read, best first.
 
-        Raises `AuthorizationError` when the authorizer fails or gives a malformed answer, and
-        `ValueError` for invalid arguments. Nothing is returned in either case.
+        `query` is text, or a `Query` carrying a vector you computed. Raises `AuthorizationError`
+        when the authorizer fails or gives a malformed answer, and `ValueError` or `TypeError`
+        for invalid arguments. Nothing is returned in any of these cases.
         """
         started, clock, timings = time.time(), time.perf_counter(), _Timings()
         try:
@@ -198,7 +203,7 @@ class PermissionedRetriever:
         self._emit(query, subject, k, started, clock, timings, result, None)
         return result
 
-    async def aretrieve(self, query: str, subject: Subject, k: int = 5) -> RetrievalResult:
+    async def aretrieve(self, query: str | Query, subject: Subject, k: int = 5) -> RetrievalResult:
         """The async form of `retrieve`, with the same arguments and guarantees.
 
         It uses the backend's `asearch` and the authorizer's `afilter_for` and `acheck` when they
@@ -223,7 +228,7 @@ class PermissionedRetriever:
 
     def _emit(
         self,
-        query: str,
+        query: str | Query,
         subject: Subject,
         k: int,
         started: float,
@@ -234,6 +239,9 @@ class PermissionedRetriever:
     ) -> None:
         if not self.observers:
             return
+        fingerprint = None
+        if self.audit_key and isinstance(query, (str, Query)):  # a query of the wrong type is reported, not hashed
+            fingerprint = query_fingerprint(query, self.audit_key)
         event = RetrievalEvent(
             subject_id=subject.id,
             action=self.action,
@@ -246,7 +254,7 @@ class PermissionedRetriever:
             complete=result.complete if result else False,
             duration_ms=round((time.perf_counter() - clock) * 1000, 3),
             error=type(error).__name__ if error else None,
-            query_hmac=query_fingerprint(query, self.audit_key) if self.audit_key else None,
+            query_hmac=fingerprint,
             started_at=started,
             search_ms=round(timings.search * 1000, 3),
             authorize_ms=round(timings.authorize * 1000, 3),
@@ -260,9 +268,11 @@ class PermissionedRetriever:
 
     # ---- the algorithm (shared by both drivers) --------------------------------------------
 
-    def _plan(self, query: str, subject: Subject, k: int) -> _Plan:
+    def _plan(self, query: str | Query, subject: Subject, k: int) -> _Plan:
         if k < 1:
             raise ValueError("k must be at least 1")
+        if not isinstance(query, (str, Query)):
+            raise TypeError(f"a query is a string or a Query, not {type(query).__name__}")
         f: Filter | None = None
         if self.strategy != "postfilter" and self.backend.supports_filters:
             f = yield _FilterFor()
@@ -277,7 +287,7 @@ class PermissionedRetriever:
             scope = yield _ScopeFor()
         return (yield from self._postfilter(query, k, scope))
 
-    def _prefilter(self, query: str, k: int, f: Filter) -> _Plan:
+    def _prefilter(self, query: str | Query, k: int, f: Filter) -> _Plan:
         hits: list[Hit] = yield _Search(query, k, f)
         hits = list(hits)[:k]
         if not self.recheck or not hits:
@@ -289,7 +299,7 @@ class PermissionedRetriever:
             kept, "prefilter", examined=len(hits), denied=0, violations=violations, complete=violations == 0
         )
 
-    def _postfilter(self, query: str, k: int, scope: Filter | None = None) -> _Plan:
+    def _postfilter(self, query: str | Query, k: int, scope: Filter | None = None) -> _Plan:
         fetch = min(k * self.overfetch, self.max_candidates)
         seen: set[str] = set()
         kept: list[Hit] = []

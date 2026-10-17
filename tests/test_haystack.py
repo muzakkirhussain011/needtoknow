@@ -14,9 +14,11 @@ from needtoknow import (
     AuthorizationError,
     Document,
     FunctionAuthorizer,
+    Hit,
     InMemoryBackend,
     MetadataACLAuthorizer,
     PermissionedRetriever,
+    Query,
     Subject,
 )
 from needtoknow.haystack import NeedToKnowRetriever
@@ -68,3 +70,26 @@ def test_authorizer_failures_reach_the_caller():
     component = NeedToKnowRetriever(PermissionedRetriever(InMemoryBackend(DOCS), failing))
     with pytest.raises(AuthorizationError):
         component.run("leave", BOB)
+
+
+class _Recording:
+    supports_filters = False
+
+    def __init__(self):
+        self.queries = []
+
+    def search(self, query, k, filter=None):
+        self.queries.append(query)
+        return [Hit("handbook", "leave policy", 1.0, {"allowed_groups": ["*"]})]
+
+
+def test_a_query_embedding_is_searched_with_instead_of_the_text():
+    backend = _Recording()
+    component = NeedToKnowRetriever(PermissionedRetriever(backend, MetadataACLAuthorizer()))
+    pipeline = Pipeline()
+    pipeline.add_component("retriever", component)
+    run = {"query": "leave", "subject": BOB, "query_embedding": [1.0, 0.0]}
+    assert [d.id for d in pipeline.run({"retriever": run})["retriever"]["documents"]] == ["handbook"]
+    asyncio.run(component.run_async("", BOB, query_embedding=[0.0, 1.0]))
+    component.run("leave", BOB)
+    assert backend.queries == [Query("leave", [1.0, 0.0]), Query(vector=[0.0, 1.0]), "leave"]

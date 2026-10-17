@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from needtoknow.filters import Filter, matches
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["InMemoryBackend"]
 
@@ -42,8 +42,8 @@ class InMemoryBackend:
     def __len__(self) -> int:
         return len(self._docs)
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
-        terms = set(_tokens(query))
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
+        terms = set(_tokens(Query.of(query).keywords()))
         if not terms or k < 1:
             return []
         hits = []

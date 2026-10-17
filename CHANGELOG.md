@@ -15,6 +15,17 @@ All notable changes are recorded here. The format follows
   fixed `Subject` serves single-user stdio servers. The read-only tool takes `query` and a bounded
   `limit`, returns structured results without metadata unless keys are named, and reports a
   permission service failure to the model without internal details. Extra: `needtoknow[mcp]`.
+- `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
+  subject)` searches an image's or another model's embedding, an embedding from your own service
+  or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword
+  backends the text). Permissions apply exactly as for text. Every vector backend accepts it, and
+  `embed` is now optional on all of them: build a backend without one, write with
+  `add(documents, embeddings=...)` and search with vectors. The LangChain and LlamaIndex store
+  wrappers search by vector, the Haystack component takes a `query_embedding` input, and the
+  LlamaIndex retriever forwards a `QueryBundle`'s embedding. Audit fingerprints use the query's
+  text when there is text and its vector otherwise; events never contain the vector.
+  `check_backend(..., query=...)` runs the conformance kit with any query, and CI runs it with
+  vector queries against every store. Guide: "Your own vectors".
 
 - `RankFusion`: hybrid search. A backend that searches several backends with the same permission
   filter and fuses their rankings by reciprocal rank fusion, with weights, a rank constant and a
@@ -54,6 +65,14 @@ All notable changes are recorded here. The format follows
   UUIDs, with the original kept on the object. `create_collection` sets up a self-provided cosine
   vector, and `WeaviateAsyncClient` gives a native `aretrieve`. Tested with the conformance kit
   against Weaviate 1.39.12. Extra: `needtoknow[weaviate]`.
+
+### Changed
+
+- `SearchBackend.search` receives the query exactly as it was given to `retrieve`, a string or a
+  `Query`, and its `query` parameter is typed `Any`, so backends typed for strings still satisfy
+  the protocol and keep working with string queries.
+- `retrieve` and `aretrieve` raise `TypeError` for a query that is neither a string nor a `Query`,
+  instead of passing it to the backend.
 
 ## [1.2.0] - 2026-10-17
 

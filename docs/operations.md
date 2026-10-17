@@ -159,9 +159,9 @@ passes it to each observer. An observer is any callable taking the event.
 | `search_ms`, `authorize_ms` | Time spent in the backend and in the authorizer |
 | `searches` | Backend searches: one when pre-filtering, more when post-filtering fetched again |
 | `error` | The exception type when the call failed, for example `AuthorizationError` |
-| `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set |
+| `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set: of its text, or of its vector when a `Query` has no text |
 
-Events never contain query or chunk text. A plain hash of a short query could be reversed by
+Events never contain query or chunk text, nor a query's vector. A plain hash of a short query could be reversed by
 guessing, so the fingerprint is an HMAC under your key, and there is none without a key. Equal
 queries under the same key have equal fingerprints, which lets you spot repeated or probing queries
 without storing them. Rotating the key breaks that link, which can be what you want.

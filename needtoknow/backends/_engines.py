@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.filters import And, Filter, In, Or, _is_value, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 TERMS_FIELD = "needtoknow_terms"
 _SEP = "\x1f"  # the ASCII unit separator: field names may not contain it
@@ -78,7 +78,7 @@ class EngineBackend:
         self,
         client: Any,
         index: str,
-        embed: Embed | None,
+        embed: Embed | None = None,
         *,
         vector_field: str = "embedding",
         content_field: str = "content",
@@ -156,17 +156,15 @@ class EngineBackend:
 
     # Searching --------------------------------------------------------------------------------
 
-    def _request(self, text: str, k: int, f: Filter | None) -> dict[str, Any] | None:
+    def _request(self, q: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         query = None
         if f is not None:
             query = filter_to_query(f)
             if query is None:
                 return None  # nothing can match
         if self.mode == "keyword":
-            return self._keyword_request(text, k, query)
-        if self.embed is None:
-            raise ValueError("vector search needs an embed function")
-        return self._search_request([float(x) for x in self.embed(text)], k, query)
+            return self._keyword_request(q.keywords(), k, query)
+        return self._search_request(q.embedded(self.embed), k, query)
 
     def _hits(self, response: Any) -> list[Hit]:
         hits = []
@@ -186,20 +184,20 @@ class EngineBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(query, min(k, _MAX_K), filter)
+        request = self._request(Query.of(query), min(k, _MAX_K), filter)
         if request is None:
             return []
         return self._hits(self.client.search(index=self.index, **request))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, query, min(k, _MAX_K), filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), min(k, _MAX_K), filter)
         if request is None:
             return []
         return self._hits(await self.async_client.search(index=self.index, **request))

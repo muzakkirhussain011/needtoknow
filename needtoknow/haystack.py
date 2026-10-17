@@ -14,6 +14,9 @@ chunk id, text, metadata and score) and `complete` (False when needtoknow knows 
 missing). It has `run_async` for `Pipeline.run_async`. Any authorizer failure raises
 `AuthorizationError`; nothing is returned unfiltered.
 
+Connect a text embedder's `embedding` to the `query_embedding` input to search with that vector
+instead of having the backend embed the query again.
+
 The component holds live connections, so a pipeline containing it cannot be serialized to YAML.
 """
 
@@ -24,9 +27,13 @@ from typing import Any
 from haystack import Document, component
 
 from needtoknow.retriever import PermissionedRetriever, RetrievalResult
-from needtoknow.types import Subject
+from needtoknow.types import Query, Subject
 
 __all__ = ["NeedToKnowRetriever"]
+
+
+def _query(text: str, embedding: list[float] | None) -> str | Query:
+    return text if embedding is None else Query(text=text or None, vector=embedding)
 
 
 def _output(result: RetrievalResult) -> dict[str, Any]:
@@ -51,11 +58,21 @@ class NeedToKnowRetriever:
         return subject
 
     @component.output_types(documents=list[Document], complete=bool)
-    def run(self, query: str, subject: Subject, top_k: int | None = None) -> dict[str, Any]:
-        """Retrieve for `subject`. `top_k` overrides the component's default for this run."""
-        return _output(self.retriever.retrieve(query, self._subject(subject), top_k or self.top_k))
+    def run(
+        self, query: str, subject: Subject, top_k: int | None = None, query_embedding: list[float] | None = None
+    ) -> dict[str, Any]:
+        """Retrieve for `subject`. `top_k` overrides the component's default for this run.
+
+        `query_embedding` (from a text embedder, for example) is searched with instead of embedding
+        `query` again; `query` may then be empty.
+        """
+        q = _query(query, query_embedding)
+        return _output(self.retriever.retrieve(q, self._subject(subject), top_k or self.top_k))
 
     @component.output_types(documents=list[Document], complete=bool)
-    async def run_async(self, query: str, subject: Subject, top_k: int | None = None) -> dict[str, Any]:
+    async def run_async(
+        self, query: str, subject: Subject, top_k: int | None = None, query_embedding: list[float] | None = None
+    ) -> dict[str, Any]:
         """The async form of `run`, with the same inputs and outputs."""
-        return _output(await self.retriever.aretrieve(query, self._subject(subject), top_k or self.top_k))
+        q = _query(query, query_embedding)
+        return _output(await self.retriever.aretrieve(q, self._subject(subject), top_k or self.top_k))

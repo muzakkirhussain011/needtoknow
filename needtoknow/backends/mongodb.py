@@ -26,8 +26,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = [
     "TERMS_FIELD",
@@ -119,7 +120,8 @@ class MongoDBBackend:
     most 10,000): higher finds more of the true nearest chunks and takes longer. `exact=True`
     searches every chunk instead. `wait_timeout` bounds how long `add` and `delete` wait for the
     index. Pass `async_collection` (the same collection from an `AsyncMongoClient`) for a native
-    `asearch`; otherwise async calls run `search` in a thread.
+    `asearch`; otherwise async calls run `search` in a thread. Without `embed`, search with
+    `Query(vector=...)` and pass `embeddings` to `add`.
     """
 
     supports_filters = True
@@ -127,7 +129,7 @@ class MongoDBBackend:
     def __init__(
         self,
         collection: Any,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         index: str = "needtoknow",
         vector_field: str = "embedding",
@@ -176,9 +178,7 @@ class MongoDBBackend:
         from pymongo import ReplaceOne
 
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
+        vectors = document_vectors(docs, embeddings, self.embed)
         # The last version of each id wins, as it would in sequence; each id is then written once,
         # so every batch's marker stays on all of its chunks.
         latest = list({d.id: (d, v) for d, v in zip(docs, vectors, strict=True)}.values())
@@ -198,11 +198,20 @@ class MongoDBBackend:
         selected = list(dict.fromkeys(ids))
         if not selected:
             return
+        probe = self._probe() if wait else None
         self.collection.delete_many({"_id": {"$in": selected}})
-        if wait:
-            probe = [float(x) for x in self.embed("needtoknow")]
+        if probe is not None:
             for start in range(0, len(selected), _MAX_CANDIDATES):
                 self._wait({"_id": {"$in": selected[start : start + _MAX_CANDIDATES]}}, 0, probe)
+
+    def _probe(self) -> list[float] | None:
+        """A query vector for the exact searches that wait for the index, which only count matches."""
+        if self.embed is not None:
+            return [float(x) for x in self.embed("needtoknow")]
+        # Without an embed function, any stored vector has the index's dimensions. With none
+        # stored, the index has nothing to return and there is nothing to wait for.
+        stored = self.collection.find_one({self.vector_field: {"$exists": True}}, {self.vector_field: 1})
+        return [float(x) for x in stored[self.vector_field]] if stored else None
 
     def _count(self, flt: dict[str, Any], probe: list[float]) -> int:
         """How many chunks matching `flt` the search index returns, by an exact search."""
@@ -227,11 +236,11 @@ class MongoDBBackend:
 
     # ---- searching ---------------------------------------------------------------------------
 
-    def _pipeline(self, query: str, k: int, f: Filter | None) -> list[dict[str, Any]] | None:
+    def _pipeline(self, query: Query, k: int, f: Filter | None) -> list[dict[str, Any]] | None:
         stage: dict[str, Any] = {
             "index": self.index,
             "path": self.vector_field,
-            "queryVector": [float(x) for x in self.embed(query)],
+            "queryVector": query.embedded(self.embed),
             "limit": min(k, _MAX_CANDIDATES),
         }
         if self.exact:
@@ -263,20 +272,20 @@ class MongoDBBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        pipeline = self._pipeline(query, k, filter)
+        pipeline = self._pipeline(Query.of(query), k, filter)
         if pipeline is None:
             return []
         return self._hits(self.collection.aggregate(pipeline))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_collection is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        pipeline = await asyncio.to_thread(self._pipeline, query, k, filter)
+        pipeline = await asyncio.to_thread(self._pipeline, Query.of(query), k, filter)
         if pipeline is None:
             return []
         cursor = await self.async_collection.aggregate(pipeline)

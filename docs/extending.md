@@ -27,6 +27,10 @@ decides on it.
 Add `async def asearch(...)` with the same signature for a native async path; otherwise
 `aretrieve` runs `search` in a thread.
 
+`query` is whatever the caller passed to `retrieve`. String queries arrive as strings; a caller
+with its own vector passes a `Query`, and `Query.of(query).embedded(self.embed)` gives the vector
+to search with either way. See [Your own vectors](vectors.md#in-your-own-backend).
+
 ## An authorizer
 
 ```python

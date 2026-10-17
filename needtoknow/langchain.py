@@ -24,7 +24,7 @@ from pydantic import ConfigDict
 
 from needtoknow.filters import Filter
 from needtoknow.retriever import PermissionedRetriever, RetrievalResult
-from needtoknow.types import Hit, Subject
+from needtoknow.types import Hit, Query, Subject
 
 __all__ = ["LangChainVectorStoreBackend", "NeedToKnowRetriever"]
 
@@ -79,7 +79,8 @@ class LangChainVectorStoreBackend:
     """Any LangChain `VectorStore` as a needtoknow backend (post-filtered).
 
     Documents need an id: `Document.id`, or the metadata field named by `id_key`. Scores follow
-    the store's ranking (best first), since stores disagree on what their raw scores mean.
+    the store's ranking (best first), since stores disagree on what their raw scores mean. A
+    `Query` with a vector is searched with `similarity_search_by_vector`.
     """
 
     supports_filters = False
@@ -88,11 +89,16 @@ class LangChainVectorStoreBackend:
         self.vectorstore = vectorstore
         self.id_key = id_key
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
+        q = Query.of(query)
+        if q.vector is not None:
+            docs = self.vectorstore.similarity_search_by_vector(list(q.vector), k=k)
+        else:
+            docs = self.vectorstore.similarity_search(q.keywords(), k=k)
         hits = []
-        for rank, doc in enumerate(self.vectorstore.similarity_search(query, k=k)):
+        for rank, doc in enumerate(docs):
             doc_id = doc.id if self.id_key is None else doc.metadata.get(self.id_key)
             if not doc_id:
                 raise ValueError("every document needs an id (Document.id or the id_key metadata field)")

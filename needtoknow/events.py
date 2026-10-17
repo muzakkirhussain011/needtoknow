@@ -3,10 +3,10 @@
 Every `retrieve`/`aretrieve` call, including failed ones, produces one `RetrievalEvent` and passes
 it to each observer given to `PermissionedRetriever(observers=[...])`.
 
-Events never contain the query text or any chunk text. If the retriever is given an `audit_key`,
-the event carries an HMAC-SHA256 of the query, which lets you match repeated queries without
-storing them; without a key there is no fingerprint at all, because a plain hash of a short query
-can be reversed by guessing.
+Events never contain the query text, the query vector or any chunk text. If the retriever is given
+an `audit_key`, the event carries an HMAC-SHA256 of the query, which lets you match repeated queries
+without storing them; without a key there is no fingerprint at all, because a plain hash of a short
+query can be reversed by guessing.
 
 An observer that raises is logged on the `needtoknow` logger and does not affect retrieval.
 """
@@ -16,10 +16,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import struct
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import IO, Any
+
+from needtoknow.types import Query
 
 __all__ = ["JsonLinesAudit", "Observer", "RetrievalEvent", "query_fingerprint"]
 
@@ -60,9 +63,20 @@ class RetrievalEvent:
 Observer = Callable[[RetrievalEvent], None]
 
 
-def query_fingerprint(query: str, key: bytes) -> str:
-    """HMAC-SHA256 of the query under `key`, in hex. Equal queries give equal fingerprints."""
-    return hmac.new(key, query.encode("utf-8"), hashlib.sha256).hexdigest()
+def query_fingerprint(query: str | Query, key: bytes) -> str:
+    """HMAC-SHA256 of the query under `key`, in hex. Equal queries give equal fingerprints.
+
+    A `Query` with text is fingerprinted by its text, so the same question matches whether or not
+    a vector came with it. A vector-only query is fingerprinted by its vector.
+    """
+    q = Query.of(query)
+    if q.text is not None:
+        message = q.text.encode("utf-8")
+    else:
+        assert q.vector is not None
+        # 0xFF never occurs in UTF-8, so no text query has the same message as a vector.
+        message = b"\xff" + struct.pack(f"<{len(q.vector)}d", *q.vector)
+    return hmac.new(key, message, hashlib.sha256).hexdigest()
 
 
 class JsonLinesAudit:

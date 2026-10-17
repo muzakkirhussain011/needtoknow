@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag, terms
 from needtoknow.backends.mongodb import (
     WRITE_FIELD,
@@ -17,7 +17,7 @@ from needtoknow.backends.mongodb import (
     filter_to_mongo,
     permission_terms,
 )
-from needtoknow.testing import HashingEmbedder, check_backend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 MONGODB_URL = os.environ.get("NEEDTOKNOW_TEST_MONGODB_URL")
@@ -224,6 +224,22 @@ def test_server_passes_the_conformance_kit():
 
     try:
         check_backend(make)
+    finally:
+        collection.drop()
+
+
+def test_server_searches_with_query_vectors_and_waits_without_an_embed_function():
+    collection = _collection()
+    backend, previous = MongoDBBackend(collection), []
+
+    def make(docs):
+        backend.delete(previous)
+        backend.add(docs, [EMBED(d.text) for d in docs])
+        previous[:] = [d.id for d in docs]
+        return backend
+
+    try:
+        check_backend(make, examples=8, query=Query(vector=EMBED(QUERY)))
     finally:
         collection.drop()
 

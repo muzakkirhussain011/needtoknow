@@ -8,9 +8,9 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, RankFusion, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
 from needtoknow.backends._engines import TERMS_FIELD, EngineBackend, _raise_for_items, filter_to_query, tag, terms
-from needtoknow.testing import HashingEmbedder, check_backend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 ES_URL = os.environ.get("NEEDTOKNOW_TEST_ELASTICSEARCH_URL")
@@ -261,5 +261,21 @@ def test_hybrid_search_over_one_index_passes_the_conformance_kit(engine):
         return RankFusion(vector, engine["backend"](engine["client"], previous[0], None, mode="keyword"))
 
     check_backend(make)
+    for name in previous:
+        engine["client"].indices.delete(index=name)
+
+
+def test_hybrid_search_with_one_query_vector_and_no_embed_function(engine):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            engine["client"].indices.delete(index=name)
+        previous[:] = [_new_index(engine)]
+        vector = engine["backend"](engine["client"], previous[0])
+        vector.add(docs, [EMBED(d.text) for d in docs])
+        return RankFusion(vector, engine["backend"](engine["client"], previous[0], mode="keyword"))
+
+    check_backend(make, examples=8, query=Query(QUERY, EMBED(QUERY)))
     for name in previous:
         engine["client"].indices.delete(index=name)
