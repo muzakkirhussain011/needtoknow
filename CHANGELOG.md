@@ -12,6 +12,15 @@ All notable changes are recorded here. The format follows
   filter as its vector search, with no embedding function needed, so one collection serves both
   halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with
   vector search, against Weaviate 1.39.12.
+- Permission sync from Google Drive. `needtoknow.sync.google_drive.GoogleDriveACL` reads who may
+  read a Drive file, in My Drive or a shared drive, through your Drive v3 service, and
+  `needtoknow.sync.with_access` writes the answer onto the file's chunks for
+  `MetadataACLAuthorizer`, keeping their other metadata. Users and groups map to their addresses,
+  a domain to the group `"domain:<domain>"` and anyone to everyone when findable in search.
+  Grants that do not open the file's content grant nothing: sharing by link alone (unless
+  `link_sharing=True`), deleted accounts, expired grants, view grants such as a limited-access
+  folder's metadata view, and inherited grants on limited-access items. `needtoknow.sync.Access`
+  is the source-neutral answer that later connectors return too.
 
 ## [1.3.0] - 2026-10-17
 
