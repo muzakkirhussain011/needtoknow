@@ -3,11 +3,13 @@
 Each store loads the corpus through needtoknow's own backend (so the measured layout is the one
 users get), waits until its index is built, reports what that took, and makes a backend for the
 retrieval runs. `--ef-search` is each store's search breadth: pgvector's `hnsw.ef_search`,
-Qdrant's `hnsw_ef`, Milvus's `ef`, and the candidates per shard of Elasticsearch and OpenSearch.
+Qdrant's `hnsw_ef`, Milvus's `ef`, the candidates per shard of Elasticsearch and OpenSearch, and
+LanceDB's `nprobes`. LanceDB is bulk-loaded with `table.add` in the backend's row layout instead.
 """
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
 from typing import Any
@@ -268,7 +270,63 @@ class Weaviate:
         return WeaviateBackend(self.client, self.collection, embed)
 
 
-STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate")
+class LanceDB:
+    """Embedded: `url` is the directory the table lives in."""
+
+    name = "lancedb"
+
+    def __init__(self, url: str, ef_search: int | None) -> None:
+        import lancedb
+
+        self.db = lancedb.connect(url)
+        self.ef_search = ef_search
+
+    def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
+        """Bulk-load the backend's row layout with `table.add`, as a first load would, then index.
+
+        Loading a million chunks through `add` would run two thousand upserts, each matching ids
+        against the whole table; `add` keeps the table current after a bulk load like this one.
+        """
+        import pyarrow as pa
+
+        from needtoknow.backends.lancedb import KEY_FIELD, TERMS_FIELD, create_indexes, create_table, permission_terms
+
+        self.db.drop_table(NAME, ignore_missing=True)
+        table = create_table(self.db, NAME, int(vectors.shape[1]))
+        started = time.perf_counter()
+        for part in _chunks(len(ids), 100_000):
+            rows = pa.table(
+                {
+                    "id": list(ids[part]),
+                    KEY_FIELD: [i.encode("utf-8").hex() for i in ids[part]],
+                    "content": list(texts[part]),
+                    "metadata": [json.dumps(dict(m)) for m in metadata[part]],
+                    TERMS_FIELD: [permission_terms(m) for m in metadata[part]],
+                    "vector": pa.FixedSizeListArray.from_arrays(
+                        pa.array(np.ascontiguousarray(vectors[part], dtype=np.float32).ravel()), int(vectors.shape[1])
+                    ),
+                }
+            )
+            table.add(rows)
+            log(f"loaded {part.stop} chunks")
+        loaded = time.perf_counter()
+        create_indexes(table)
+        table.create_index(metric="cosine", vector_column_name="vector")
+        indexed = time.perf_counter()
+        return {
+            "rows": table.count_rows(),
+            "load_s": round(loaded - started, 1),
+            "index_s": round(indexed - loaded, 1),
+            "detail": "bulk-loaded with table.add; LanceDB's default vector index (IVF_PQ), cosine",
+        }
+
+    def backend(self, embed: Any, users: int) -> Any:
+        from needtoknow.backends.lancedb import LanceDBBackend
+
+        return LanceDBBackend(self.db.open_table(NAME), embed, nprobes=self.ef_search)
+
+
+STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate", "lancedb")
 
 
 def make_store(
@@ -286,4 +344,6 @@ def make_store(
         return SearchEngine(name, url, ef_search, index_type)
     if name == "weaviate":
         return Weaviate(url, ef_search, grpc_port)
+    if name == "lancedb":
+        return LanceDB(url, ef_search)
     raise ValueError(f"unknown store {name!r}")

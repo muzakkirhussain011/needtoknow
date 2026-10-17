@@ -27,8 +27,11 @@ Each chunk is a row with the columns `id`, `needtoknow_key` (the id, hex-encoded
 searchable as soon as it returns; when one call adds the same id twice, the last version wins.
 Scores are cosine similarity, 1 minus LanceDB's cosine distance. Without an ANN index, LanceDB
 searches every row exactly; add one as for any LanceDB table, and tune it with `nprobes` and
-`refine_factor`. Async calls run in a thread. Without `embed`, write with
-`add(documents, embeddings=...)` and search with [`Query(vector=...)`](../vectors.md).
+`refine_factor`. On a million chunks, LanceDB's default index (IVF_PQ, no refinement) found about
+half of the true top 10 at every share readable
+([Benchmarks](../benchmarks.md#every-store-on-the-same-million-chunks)); set `refine_factor` to
+re-rank with the full vectors before relying on it. Async calls run in a thread. Without `embed`,
+write with `add(documents, embeddings=...)` and search with [`Query(vector=...)`](../vectors.md).
 
 ## How permissions are indexed
 

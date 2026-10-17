@@ -301,6 +301,13 @@ Median latency of a pre-filtered retrieval, one query at a time, in milliseconds
   users. With `int8_hnsw` or `hnsw`, in the later session, Elasticsearch held 244 and 235 requests a
   second at 16 users with a p99 under 90 ms; that session ran on a different machine, so this points
   at the default index without proving it.
+- **LanceDB, embedded, found about half the true top 10 at its defaults.** Measured later, in its
+  own session: LanceDB's default vector index (IVF_PQ, without `refine_factor`) gave 0.47 to 0.51
+  pre-filtered recall at every share readable, 16 to 29 ms median latency and up to 140 requests a
+  second, with no leak or error. Pre-filtering cost no recall: 0.1% readable scored the same as
+  everything readable. The million chunks bulk-loaded with `table.add` in 21 s, and the indexes
+  took 75 s more
+  ([full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-lancedb.md)).
 - **Loading through a backend is the slow part on every store**: 17 to 38 minutes for the million
   chunks through each backend's batched writes over HTTP, against 36 seconds of binary `COPY` into
   PostgreSQL. For a first load of millions of chunks, a store's own bulk loader can write the
@@ -312,7 +319,8 @@ Median latency of a pre-filtered retrieval, one query at a time, in milliseconds
 Two corpora, two embedding models and a few hundred queries each; indexes at their default
 settings; a single 4-CPU machine, which in the load benchmark ran the store, OPA and the client
 together, so no network sat between them; local Chroma, not Chroma's distributed or cloud service;
-Milvus, MongoDB Atlas, Redis and LanceDB not yet measured at a million chunks; OpenFGA not
+Milvus, MongoDB Atlas and Redis not yet measured at a million chunks, and LanceDB only at its
+defaults; OpenFGA not
 measured; and under concurrent load, errors counted but results not checked. Index tuning (pgvector
 `ef_search`, Elasticsearch's index type and `num_candidates`, Chroma's HNSW parameters) moves both
 recall and latency, and is worth measuring on your own data with the same harnesses; only
