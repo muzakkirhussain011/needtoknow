@@ -56,6 +56,14 @@ Issues = "https://github.com/muzakkirhussain011/needtoknow/issues"
 Changelog = "https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md"
 Documentation = "https://muzakkirhussain011.github.io/needtoknow/"
 
+# Used only by CI and the release workflow, which install everything from uv.lock by hash.
+[dependency-groups]
+integration = ["opentelemetry-sdk>=1.30", "pgvector>=0.3", "elasticsearch[async]>=8.12", "opensearch-py[async]>=2.4"]
+release = ["twine==7.0.0", "cyclonedx-bom==7.5.0", "sigstore==4.5.0"]
+
+[tool.uv]
+default-groups = []
+
 [tool.hatch.version]
 path = "needtoknow/__init__.py"
 

@@ -1,0 +1,37 @@
+name: Lock
+
+# Every install in CI and in the release comes from uv.lock (and examples/gateway/uv.lock), by hash.
+# When a branch changes a pyproject.toml, this job runs `uv lock` and commits the result to the
+# same branch, so the locks always match what the project declares; `uv lock --check` in CI fails a
+# pull request whose locks are stale. Dependabot keeps the locked versions current on main.
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: [pyproject.toml, examples/gateway/pyproject.toml, .github/workflows/lock.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to commit the updated locks to this branch
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: { version: "0.12.23", enable-cache: false }
+      - run: uv lock
+      - run: uv lock
+        working-directory: examples/gateway
+      - name: Commit the locks if they changed
+        run: |
+          git add uv.lock examples/gateway/uv.lock
+          if git diff --cached --quiet; then echo "the locks are up to date"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Lock dependencies with uv"
+          git push
