@@ -15,12 +15,20 @@ search results report that id, or the point id for points written by something e
 
 Create the collection with cosine distance, and index the permission fields: `create_collection`
 does both. Without a payload index Qdrant still filters correctly, but slowly on large collections.
+
+For keyword search, `create_collection(..., text_search=True)` adds a sparse vector,
+`needtoknow_bm25`, with Qdrant's IDF modifier. The backend writes each chunk's BM25 term weights
+there (`bm25_terms`), and Qdrant applies the inverse document frequency at search time, so
+`QdrantBackend(..., mode="keyword")` ranks by BM25 under the same `query_filter`, with no model.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
+import zlib
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -31,16 +39,52 @@ from needtoknow.types import Document, Hit, Query
 if TYPE_CHECKING:
     from qdrant_client import models
 
-__all__ = ["ID_KEY", "QdrantBackend", "create_collection", "filter_to_qdrant", "point_id"]
+__all__ = [
+    "ID_KEY",
+    "SPARSE_NAME",
+    "QdrantBackend",
+    "bm25_terms",
+    "create_collection",
+    "filter_to_qdrant",
+    "point_id",
+]
 
 Embed = Callable[[str], Sequence[float]]
 
 ID_KEY = "needtoknow_id"
 """Payload key holding the document id that `add` was given."""
 
+SPARSE_NAME = "needtoknow_bm25"
+"""The sparse vector holding each chunk's BM25 term weights, for `mode="keyword"`."""
+
 _NAMESPACE = uuid.UUID("5e3b1d7c-6b7a-4f0e-9a51-6f1d0c2b8e44")
 _PATH_SYNTAX = frozenset('.[]"')
 _BATCH = 256
+_WORDS = re.compile(r"\w+")
+_K1, _B, _AVG_LEN = 1.2, 0.75, 256.0  # BM25's usual k1 and b, and Qdrant's own average length
+
+
+def _tokens(text: str) -> list[str]:
+    return _WORDS.findall(text.lower())
+
+
+def bm25_terms(text: str) -> tuple[list[int], list[float]]:
+    """A chunk's BM25 term weights, as the indices and values of the sparse vector `needtoknow_bm25`.
+
+    Words are runs of letters, digits and underscores, lowercased; every word is kept. Each word's
+    index is its CRC-32, and its value BM25's term-frequency part, `tf * (k1 + 1) / (tf + k1 *
+    (1 - b + b * length / 256))` with k1 = 1.2 and b = 0.75. Qdrant multiplies in the inverse
+    document frequency at search time. Use it to fill the field for points written by other tools.
+    """
+    counts = Counter(zlib.crc32(t.encode("utf-8")) for t in _tokens(text))
+    norm = _K1 * (1 - _B + _B * sum(counts.values()) / _AVG_LEN)
+    indices = sorted(counts)
+    return indices, [counts[i] * (_K1 + 1) / (counts[i] + norm) for i in indices]
+
+
+def _query_terms(text: str) -> tuple[list[int], list[float]]:
+    indices = sorted({zlib.crc32(t.encode("utf-8")) for t in _tokens(text)})
+    return indices, [1.0] * len(indices)
 
 
 def point_id(document_id: str) -> str:
@@ -102,16 +146,24 @@ def create_collection(
     keyword_fields: Sequence[str] = ("allowed_users", "allowed_groups"),
     metadata_key: str = "metadata",
     vector_name: str | None = None,
+    text_search: bool = False,
 ) -> None:
     """Create a cosine-distance collection if it does not exist, and keyword indexes on the
-    permission fields (`metadata.allowed_users` and `metadata.allowed_groups` by default)."""
+    permission fields (`metadata.allowed_users` and `metadata.allowed_groups` by default).
+
+    `text_search=True` also creates the sparse vector `needtoknow_bm25` with Qdrant's IDF
+    modifier, for `mode="keyword"`. Qdrant can add it to an existing collection only by recreating it.
+    """
     from qdrant_client import models
 
     if not isinstance(dim, int) or dim < 1:
         raise ValueError("dim must be a positive integer")
     if not client.collection_exists(name):
         params = models.VectorParams(size=dim, distance=models.Distance.COSINE)
-        client.create_collection(name, vectors_config=params if vector_name is None else {vector_name: params})
+        sparse = {SPARSE_NAME: models.SparseVectorParams(modifier=models.Modifier.IDF)} if text_search else None
+        client.create_collection(
+            name, vectors_config=params if vector_name is None else {vector_name: params}, sparse_vectors_config=sparse
+        )
     for field in keyword_fields:
         client.create_payload_index(name, _key(metadata_key, field), field_schema=models.PayloadSchemaType.KEYWORD)
 
@@ -125,6 +177,12 @@ class QdrantBackend:
     Scores are Qdrant's: cosine similarity for a cosine collection. Pass `async_client` (an
     `AsyncQdrantClient`) for a native `asearch`; otherwise async calls run `search` in a thread.
     Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
+
+    `mode="keyword"` ranks by BM25 instead, on the sparse vector `needtoknow_bm25` of a collection
+    created with `text_search=True`, under the same `query_filter`. Scores are BM25, higher for
+    better matches. A vector backend writes that sparse vector too when given `text_search=True`,
+    so one collection serves both halves of hybrid search. A keyword backend without `embed`
+    writes chunks with only the sparse vector, which keyword search finds and vector search does not.
     """
 
     supports_filters = True
@@ -135,6 +193,8 @@ class QdrantBackend:
         collection: str,
         embed: Embed | None = None,
         *,
+        mode: str = "vector",
+        text_search: bool = False,
         content_key: str = "page_content",
         metadata_key: str = "metadata",
         vector_name: str | None = None,
@@ -143,6 +203,10 @@ class QdrantBackend:
     ) -> None:
         if not collection:
             raise ValueError("collection must be a non-empty name")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
+        self.mode = mode
+        self.text_search = text_search or mode == "keyword"
         self.client = client
         self.async_client = async_client
         self.collection = collection
@@ -154,16 +218,33 @@ class QdrantBackend:
 
     # ---- writing -----------------------------------------------------------------------------
 
+    def _vector(self, text: str, dense: Sequence[float] | None) -> Any:
+        from qdrant_client import models
+
+        values = None if dense is None else [float(x) for x in dense]
+        if not self.text_search:
+            return values if self.vector_name is None else {self.vector_name: values}
+        vectors: dict[str, Any] = {}
+        if values is not None:
+            vectors[self.vector_name or ""] = values  # "" is Qdrant's name for the unnamed vector
+        indices, weights = bm25_terms(text)
+        vectors[SPARSE_NAME] = models.SparseVector(indices=indices, values=weights)
+        return vectors
+
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         from qdrant_client import models
 
         docs = list(documents)
-        vectors = document_vectors(docs, embeddings, self.embed)
+        vectors: Sequence[Sequence[float] | None]
+        if embeddings is None and self.embed is None and self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only backend without embed writes no dense vector
+        else:
+            vectors = document_vectors(docs, embeddings, self.embed)
         points = [
             models.PointStruct(
                 id=point_id(d.id),
-                vector=[float(x) for x in v] if self.vector_name is None else {self.vector_name: [float(x) for x in v]},
+                vector=self._vector(d.text, v),
                 payload={ID_KEY: d.id, self.content_key: d.text, self.metadata_key: dict(d.metadata)},
             )
             for d, v in zip(docs, vectors, strict=True)
@@ -209,10 +290,21 @@ class QdrantBackend:
             query_filter = filter_to_qdrant(f, self.metadata_key)
             if query_filter is None:
                 return None  # nothing can match
+        search: Any
+        using: str | None
+        if self.mode == "keyword":
+            from qdrant_client import models
+
+            indices, weights = _query_terms(query.keywords())
+            if not indices:
+                return None  # no word to match
+            search, using = models.SparseVector(indices=indices, values=weights), SPARSE_NAME
+        else:
+            search, using = query.embedded(self.embed), self.vector_name
         return {
             "collection_name": self.collection,
-            "query": query.embedded(self.embed),
-            "using": self.vector_name,
+            "query": search,
+            "using": using,
             "query_filter": query_filter,
             "search_params": self.search_params,
             "limit": k,
