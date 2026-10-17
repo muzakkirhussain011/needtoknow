@@ -442,7 +442,8 @@ class PermissionedRetriever:
         given = {h.id: h for h in hits}
         reordered: list[Hit] = []
         for hit in ranked:
-            original = given.pop(getattr(hit, "id", None), None)
+            doc_id = getattr(hit, "id", None)
+            original = given.pop(doc_id, None) if isinstance(doc_id, str) else None
             if original is None:
                 raise ValueError("the reranker returned a chunk it was not given, or one chunk twice")
             score = float(hit.score)
