@@ -1,16 +1,16 @@
 {
   "Binary-Artifacts": 10,
-  "Branch-Protection": 1,
+  "Branch-Protection": 3,
   "CI-Tests": 10,
   "Dangerous-Workflow": 10,
   "Dependency-Update-Tool": 10,
   "Fuzzing": 10,
   "License": 10,
   "Packaging": 10,
-  "Pinned-Dependencies": 6,
+  "Pinned-Dependencies": 10,
   "SAST": 10,
   "Security-Policy": 10,
   "Signed-Releases": 8,
   "Token-Permissions": 10,
-  "Vulnerabilities": 10
+  "Vulnerabilities": 5
 }
