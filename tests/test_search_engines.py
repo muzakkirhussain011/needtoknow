@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, RankFusion, Subject
 from needtoknow.backends._engines import TERMS_FIELD, EngineBackend, _raise_for_items, filter_to_query, tag, terms
 from needtoknow.testing import HashingEmbedder, check_backend
 
@@ -64,6 +64,46 @@ def test_wrong_configuration_is_rejected():
     with pytest.raises(ValueError):
         EngineBackend(None, "i", EMBED, num_candidates=0)
     assert EngineBackend(None, "i", EMBED).search("anything", 0) == []
+    with pytest.raises(ValueError):
+        EngineBackend(None, "i", EMBED, mode="semantic")
+
+
+class Recorder:
+    """A client that records search requests and bulk writes, and finds nothing."""
+
+    def __init__(self):
+        self.searches, self.bulks = [], []
+
+    def search(self, **request):
+        self.searches.append(request)
+        return {"hits": {"hits": []}}
+
+    def bulk(self, **request):
+        self.bulks.append(request)
+        return {"errors": False, "items": []}
+
+
+def test_keyword_mode_sends_a_bm25_query_under_the_same_filter_and_needs_no_embed():
+    from needtoknow.backends.elasticsearch import ElasticsearchBackend
+    from needtoknow.backends.opensearch import OpenSearchBackend
+
+    terms_filter = {"terms": {TERMS_FIELD: [tag("team", "hr")]}}
+    es, os_client = Recorder(), Recorder()
+    ElasticsearchBackend(es, "docs", None, mode="keyword").search("leave policy", 3, In("team", ["hr"]))
+    OpenSearchBackend(os_client, "docs", None, mode="keyword").search("leave policy", 3)
+    (es_request,) = es.searches
+    assert es_request["query"] == {"bool": {"must": [{"match": {"content": "leave policy"}}], "filter": [terms_filter]}}
+    assert es_request["size"] == 3 and es_request["source_excludes"] == ["embedding"]
+    (os_request,) = os_client.searches
+    assert os_request["body"]["query"] == {"bool": {"must": [{"match": {"content": "leave policy"}}], "filter": []}}
+    # A keyword-only backend writes chunks without vectors; a vector backend refuses to without embed.
+    ElasticsearchBackend(es, "docs", None, mode="keyword").add([Document("a", "leave", {"allowed_groups": ["*"]})])
+    _, source = es.bulks[0]["operations"]
+    assert "embedding" not in source and source["content"] == "leave"
+    with pytest.raises(ValueError):
+        ElasticsearchBackend(es, "docs", None).add([Document("a", "leave", {})])
+    with pytest.raises(ValueError):
+        ElasticsearchBackend(es, "docs", None).search("leave", 3)
 
 
 # ---- real servers ------------------------------------------------------------------------------
@@ -192,3 +232,34 @@ def test_a_subject_in_ten_thousand_groups(engine):
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     engine["client"].indices.delete(index=name)
     assert [h.id for h in result.hits] == ["mine"]
+
+
+def test_keyword_mode_passes_the_conformance_kit(engine):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            engine["client"].indices.delete(index=name)
+        previous[:] = [_new_index(engine)]
+        engine["backend"](engine["client"], previous[0], EMBED).add(docs)
+        return engine["backend"](engine["client"], previous[0], None, mode="keyword")
+
+    check_backend(make)
+    for name in previous:
+        engine["client"].indices.delete(index=name)
+
+
+def test_hybrid_search_over_one_index_passes_the_conformance_kit(engine):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            engine["client"].indices.delete(index=name)
+        previous[:] = [_new_index(engine)]
+        vector = engine["backend"](engine["client"], previous[0], EMBED)
+        vector.add(docs)
+        return RankFusion(vector, engine["backend"](engine["client"], previous[0], None, mode="keyword"))
+
+    check_backend(make)
+    for name in previous:
+        engine["client"].indices.delete(index=name)

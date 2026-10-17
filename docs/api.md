@@ -14,6 +14,9 @@ modules and need their extra.
 
 .. autoclass:: needtoknow.SearchBackend
    :members: search
+
+.. autoclass:: needtoknow.RankFusion
+   :members: search, asearch
 ```
 
 `Strategy` is `Literal["auto", "prefilter", "postfilter"]`.
