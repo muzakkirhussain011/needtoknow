@@ -16,6 +16,11 @@ All notable changes are recorded here. The format follows
   under the same permission filter and parameters, in a collection created with
   `create_collection(..., text_search=True)`, so one collection serves both halves of hybrid
   search. Tested with the conformance kit, alone and fused with vector search, against Milvus 3.0.2.
+- `mode="keyword"` on the LanceDB backend: LanceDB's full-text index (BM25) on the text, under the
+  same permission filter, applied before ranking, so one table serves both halves of hybrid search.
+  `create_indexes(table, content_field="content")` builds the index, keeping every word; rows
+  added after it are found by a scan until `table.optimize()`. Tested with the conformance kit,
+  alone and fused with vector search, with LanceDB 0.40.
 
 ### Fixed
 

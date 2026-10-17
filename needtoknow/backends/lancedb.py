@@ -11,11 +11,15 @@ becomes `array_has_any(needtoknow_terms, [...])` conditions on those hex strings
 `0-9` and `a-f`, so no group name or user id is ever part of the SQL. Deletes match a hex-encoded id
 column for the same reason. The metadata is stored as JSON and returned exactly as written, for the
 retriever's re-check. A write is searchable as soon as it returns.
+
+`LanceDBBackend(..., mode="keyword")` searches the text with LanceDB's full-text index (BM25) under
+the same permission filter, once `create_indexes(table, content_field="content")` has built it.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
@@ -40,6 +44,7 @@ KEY_FIELD = "needtoknow_key"
 """The hex-encoded chunk id, which deletes match on."""
 
 _BATCH = 500
+_WORD = re.compile(r"\w")
 
 
 def _hex(text: str) -> str:
@@ -101,12 +106,19 @@ def create_table(
     return db.create_table(name, schema=schema, exist_ok=True)
 
 
-def create_indexes(table: Any) -> None:
+def create_indexes(table: Any, *, content_field: str | None = None) -> None:
     """Index the permission terms (LABEL_LIST) and the ids, which filters and upserts use. Run it
-    once the table holds data; rows added later are searched correctly before they are indexed."""
+    once the table holds data; rows added later are searched correctly before they are indexed.
+
+    With `content_field` (the backend's, `"content"` by default) it also builds the full-text index
+    that `mode="keyword"` searches, keeping every word: no stop words are removed. Rows added later
+    are found by a scan until `table.optimize()` adds them to the index.
+    """
     table.create_scalar_index(TERMS_FIELD, index_type="LABEL_LIST", replace=True)
     table.create_scalar_index("id", replace=True)
     table.create_scalar_index(KEY_FIELD, replace=True)
+    if content_field:
+        table.create_fts_index(content_field, replace=True, remove_stop_words=False)
 
 
 class LanceDBBackend:
@@ -116,6 +128,11 @@ class LanceDBBackend:
     `Query(vector=...)` and pass `embeddings` to `add`. Scores are cosine similarity, 1 minus
     LanceDB's cosine distance. `nprobes` and `refine_factor` tune an IVF index if the table has one.
     Async calls run `search` in a thread.
+
+    `mode="keyword"` searches the text with the table's full-text index instead (build it with
+    `create_indexes(table, content_field="content")`), under the same permission filter. Scores are
+    LanceDB's BM25, higher for better matches. Such a backend needs no `embed`: without one, `add`
+    writes chunks with no vector, which keyword search still finds.
     """
 
     supports_filters = True
@@ -125,12 +142,16 @@ class LanceDBBackend:
         table: Any,
         embed: Embed | None = None,
         *,
+        mode: str = "vector",
         vector_field: str = "vector",
         content_field: str = "content",
         metadata_field: str = "metadata",
         nprobes: int | None = None,
         refine_factor: int | None = None,
     ) -> None:
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
+        self.mode = mode
         self.table = table
         self.embed = embed
         self.vector_field = vector_field
@@ -141,20 +162,24 @@ class LanceDBBackend:
 
     # ---- writing -----------------------------------------------------------------------------
 
-    def _row(self, doc: Document, vector: Sequence[float]) -> dict[str, Any]:
+    def _row(self, doc: Document, vector: Sequence[float] | None) -> dict[str, Any]:
         return {
             "id": doc.id,
             KEY_FIELD: _hex(doc.id),
             self.content_field: doc.text,
             self.metadata_field: json.dumps(dict(doc.metadata)),
             TERMS_FIELD: [_hex(t) for t in terms(doc.id, doc.metadata)],
-            self.vector_field: [float(x) for x in vector],
+            self.vector_field: None if vector is None else [float(x) for x in vector],
         }
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
-        vectors = document_vectors(docs, embeddings, self.embed)
+        vectors: Sequence[Sequence[float] | None]
+        if embeddings is None and self.embed is None and self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only backend without embed writes no vector
+        else:
+            vectors = document_vectors(docs, embeddings, self.embed)
         # The last version of each id wins, as it would in sequence; an upsert batch has each id once.
         latest = list({d.id: (d, v) for d, v in zip(docs, vectors, strict=True)}.values())
         for start in range(0, len(latest), _BATCH):
@@ -199,7 +224,7 @@ class LanceDBBackend:
         return Hit(
             str(row["id"]),
             text if isinstance(text, str) else "",
-            1.0 - float(row["_distance"]),
+            float(row["_score"]) if self.mode == "keyword" else 1.0 - float(row["_distance"]),
             # A row without readable metadata carries no permissions: the re-check denies it.
             metadata if isinstance(metadata, dict) else {},
         )
@@ -212,19 +237,23 @@ class LanceDBBackend:
             where = filter_to_sql(filter)
             if where is None:
                 return []  # nothing can match
-        vector = Query.of(query).embedded(self.embed)
-        builder = (
-            self.table.search(vector, vector_column_name=self.vector_field)
-            .distance_type("cosine")
-            .select(["id", self.content_field, self.metadata_field])
-            .limit(k)
-        )
+        columns = ["id", self.content_field, self.metadata_field]
+        if self.mode == "keyword":
+            text = Query.of(query).keywords()
+            if not _WORD.search(text):
+                return []  # no word to match
+            builder = self.table.search(text, query_type="fts", fts_columns=self.content_field)
+            builder = builder.select(columns).limit(k)
+        else:
+            vector = Query.of(query).embedded(self.embed)
+            builder = self.table.search(vector, vector_column_name=self.vector_field)
+            builder = builder.distance_type("cosine").select(columns).limit(k)
+            if self.nprobes is not None:
+                builder = builder.nprobes(self.nprobes)
+            if self.refine_factor is not None:
+                builder = builder.refine_factor(self.refine_factor)
         if where is not None:
             builder = builder.where(where, prefilter=True)
-        if self.nprobes is not None:
-            builder = builder.nprobes(self.nprobes)
-        if self.refine_factor is not None:
-            builder = builder.refine_factor(self.refine_factor)
         hits = [self._hit(row) for row in builder.to_list()]
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits

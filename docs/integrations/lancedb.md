@@ -65,3 +65,27 @@ row["needtoknow_terms"] = permission_terms(metadata)
 ```
 
 A row whose `metadata` is not a JSON object carries no permissions, so the re-check denies it.
+
+## Keyword search and hybrid search
+
+`mode="keyword"` searches the chunks' text with LanceDB's full-text index (BM25), under the same
+permission filter, applied before the results are ranked. Build the index with
+`create_indexes(table, content_field="content")`, which keeps every word (no stop words are
+removed). One table then serves both halves of [hybrid search](../hybrid.md):
+
+```python
+from needtoknow import RankFusion
+from needtoknow.backends.lancedb import create_indexes
+
+create_indexes(table, content_field="content")
+vector = LanceDBBackend(table, embed=embed)
+keyword = LanceDBBackend(table, mode="keyword")  # needs no embed
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+Rows added after the index was built are found at once, by a scan of the rows the index does not
+hold yet; `table.optimize()` adds them to the index, which keeps keyword search fast as the table
+grows. Scores are LanceDB's BM25, higher for better matches. A keyword backend without `embed`
+writes chunks with no vector, which keyword search finds and vector search does not. CI runs the
+conformance kit in keyword mode and fused with vector search, with the index built before and
+after the rows arrive.
