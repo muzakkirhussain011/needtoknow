@@ -13,7 +13,7 @@ from needtoknow import In, Or, filter_to_dict
 from needtoknow.backends.pgvector import MANY_VALUES, filter_to_sql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "fuzz"))
-from filters_fuzzer import check_document, check_filter  # noqa: E402
+from filters_fuzzer import check_document, check_filter
 
 # Field names and values a hostile policy or a careless pipeline could produce: quotes, SQL and
 # query syntax, control characters (the term separator \x1f among them), non-ASCII text.
