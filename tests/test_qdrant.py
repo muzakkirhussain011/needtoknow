@@ -5,16 +5,28 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+import zlib
 
 import pytest
 
 qdrant_client = pytest.importorskip("qdrant_client")
 from qdrant_client import models  # noqa: E402
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject  # noqa: E402
+from needtoknow import (  # noqa: E402
+    And,
+    Document,
+    In,
+    MetadataACLAuthorizer,
+    Or,
+    PermissionedRetriever,
+    Query,
+    RankFusion,
+    Subject,
+)
 from needtoknow.backends.qdrant import (  # noqa: E402
     ID_KEY,
     QdrantBackend,
+    bm25_terms,
     create_collection,
     filter_to_qdrant,
     point_id,
@@ -190,3 +202,83 @@ def test_a_subject_in_ten_thousand_groups():
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     client.delete_collection(name)
     assert [h.id for h in result.hits] == ["mine"]
+
+
+# ---- keyword search and hybrid search ----------------------------------------------------------
+
+
+def test_bm25_terms_weigh_repeated_words_and_keep_every_word():
+    indices, values = bm25_terms("The leave, the LEAVE policy")
+    the, leave, policy = (zlib.crc32(w.encode()) for w in ("the", "leave", "policy"))
+    assert indices == sorted({the, leave, policy})
+    weights = dict(zip(indices, values, strict=True))
+    assert weights[leave] == weights[the] > weights[policy] > 0
+    assert bm25_terms("") == ([], [])
+
+
+def test_mode_is_checked():
+    with pytest.raises(ValueError):
+        QdrantBackend(None, "c", mode="semantic")
+
+
+@pytest.fixture(params=["local", "server"])
+def any_client(request):
+    if request.param == "server":
+        if not URL:
+            pytest.skip("set NEEDTOKNOW_TEST_QDRANT_URL to run against a Qdrant server")
+        return qdrant_client.QdrantClient(url=URL)
+    return qdrant_client.QdrantClient(":memory:")
+
+
+def _keyword_factory(client, *, hybrid=False):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            client.delete_collection(name)
+        previous[:] = [f"ntk_{uuid.uuid4().hex}"]
+        create_collection(client, previous[0], EMBED.dim, text_search=True)
+        if hybrid:
+            vector = QdrantBackend(client, previous[0], EMBED, text_search=True)
+            vector.add(docs)
+            return RankFusion(vector, QdrantBackend(client, previous[0], mode="keyword"))
+        keyword = QdrantBackend(client, previous[0], mode="keyword")
+        keyword.add(docs)
+        return keyword
+
+    return make
+
+
+def test_keyword_mode_passes_the_conformance_kit(any_client):
+    check_backend(_keyword_factory(any_client))
+
+
+def test_hybrid_search_over_one_collection_passes_the_conformance_kit(any_client):
+    make = _keyword_factory(any_client, hybrid=True)
+    check_backend(make, examples=10)
+    check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+
+
+def test_keyword_mode_ranks_by_bm25_inside_the_filter(any_client):
+    name = f"ntk_{uuid.uuid4().hex}"
+    create_collection(any_client, name, EMBED.dim, text_search=True)
+    keyword = QdrantBackend(any_client, name, mode="keyword")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "the incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    try:
+        hits = keyword.search("leave", 5)
+        assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+        assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+        assert [h.id for h in keyword.search("the", 5)] == ["c"]  # every word is kept
+        assert keyword.search("?! --", 5) == []
+        with pytest.raises(ValueError):
+            keyword.search(Query(vector=EMBED("leave")), 5)
+        keyword.set_metadata({"b": {"allowed_groups": ["*"]}})
+        assert [h.id for h in keyword.search("payouts", 5, In("allowed_groups", ["*"]))] == ["b"]
+    finally:
+        any_client.delete_collection(name)
