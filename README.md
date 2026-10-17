@@ -65,7 +65,7 @@ differently each time.
 pip install needtoknow
 ```
 
-Python 3.10 or newer: every Python version CPython still supports, each dropped in the first minor
+Python 3.11 or newer: every Python version CPython still supports, each dropped in the first minor
 release after its end of life. Adapters for external systems install as optional extras.
 
 ## Quickstart

@@ -13,6 +13,11 @@ All notable changes are recorded here. The format follows
   halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with
   vector search, against Weaviate 1.39.12.
 
+### Removed
+
+- Python 3.10, which reached its end of life on 2026-10-31. needtoknow now requires Python 3.11 or
+  later; following the support policy, this is the first minor release after that date.
+
 ## [1.3.0] - 2026-10-17
 
 Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search
