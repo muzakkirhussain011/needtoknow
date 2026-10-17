@@ -313,3 +313,69 @@ def test_a_subject_in_ten_thousand_groups(client):
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     client.collections.delete(name)
     assert [h.id for h in result.hits] == ["mine"]
+
+
+# ---- keyword search and hybrid search ------------------------------------------------------------
+
+
+def test_mode_is_checked():
+    with pytest.raises(ValueError):
+        WeaviateBackend(None, "Docs", mode="semantic")
+
+
+def test_keyword_mode_passes_the_conformance_kit(client):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            client.collections.delete(name)
+        previous[:] = [_new_collection(client)]
+        WeaviateBackend(client, previous[0], EMBED).add(docs)
+        return WeaviateBackend(client, previous[0], mode="keyword")
+
+    try:
+        check_backend(make)
+    finally:
+        for name in previous:
+            client.collections.delete(name)
+
+
+def test_hybrid_search_over_one_collection_passes_the_conformance_kit(client):
+    from needtoknow import RankFusion
+
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            client.collections.delete(name)
+        previous[:] = [_new_collection(client)]
+        vector = WeaviateBackend(client, previous[0], EMBED)
+        vector.add(docs)
+        return RankFusion(vector, WeaviateBackend(client, previous[0], mode="keyword"))
+
+    try:
+        check_backend(make, examples=10)
+        check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+    finally:
+        for name in previous:
+            client.collections.delete(name)
+
+
+def test_keyword_mode_needs_text_and_ranks_by_bm25(client):
+    name = _new_collection(client)
+    keyword = WeaviateBackend(client, name, mode="keyword")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    try:
+        hits = keyword.search("leave", 5)
+        assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+        assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+        with pytest.raises(ValueError):
+            keyword.search(Query(vector=EMBED("leave")), 5)
+    finally:
+        client.collections.delete(name)

@@ -27,6 +27,23 @@ text, not indexed) and `needtoknow_terms`. Scores are cosine similarity, 1 minus
 distance. For a native `aretrieve`, pass `async_client=` a connected `WeaviateAsyncClient`;
 otherwise async calls run in a thread.
 
+## Keyword search
+
+`mode="keyword"` searches the `content` property with Weaviate's BM25 instead of the vector, under
+the same permission filter, and needs no embedding function. Fused with the vector search by
+`RankFusion`, one collection serves [hybrid search](../hybrid.md):
+
+```python
+from needtoknow import PermissionedRetriever, RankFusion
+
+vector = WeaviateBackend(client, "Chunks", embed=embed)
+keyword = WeaviateBackend(client, "Chunks", mode="keyword")
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+Scores in keyword mode are Weaviate's BM25 scores. CI runs the conformance kit in keyword mode, and
+fused with vector search on one collection, against Weaviate 1.39.12.
+
 ## Ids
 
 Weaviate object ids are UUIDs. `add` uses a document id that is already a UUID as it is, derives a

@@ -18,6 +18,8 @@ Any backends combine: two indexes, two stores, or a store and a LangChain retrie
 needs no embedding function and runs under the same permission filter as the vector search:
 
 - **Elasticsearch and OpenSearch:** a BM25 `match` query on the text.
+- **Weaviate:** Weaviate's own BM25 on the text property, with the same permission filter as its
+  vector search, so one collection serves both.
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python

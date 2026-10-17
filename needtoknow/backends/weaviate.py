@@ -142,6 +142,9 @@ class WeaviateBackend:
     vector. Scores are cosine similarity, 1 minus Weaviate's cosine distance. Pass `async_client` (a
     connected `WeaviateAsyncClient`) for a native `asearch`; otherwise async calls run `search` in a
     thread. Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
+
+    `mode="keyword"` searches the text with Weaviate's BM25 instead, under the same permission
+    filter, for hybrid search with `RankFusion`; `embed` may then be None, and scores are BM25's.
     """
 
     supports_filters = True
@@ -155,10 +158,14 @@ class WeaviateBackend:
         vector_name: str = "embedding",
         content_property: str = "content",
         metadata_property: str = "metadata_json",
+        mode: str = "vector",
         async_client: Any = None,
     ) -> None:
         if not collection:
             raise ValueError("collection must be a non-empty name")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
+        self.mode = mode
         self.client = client
         self.async_client = async_client
         self.collection = collection
@@ -174,7 +181,11 @@ class WeaviateBackend:
         from weaviate.classes.data import DataObject
 
         docs = list(documents)
-        vectors = document_vectors(docs, embeddings, self.embed)
+        vectors: list[Sequence[float] | None]
+        if embeddings is None and self.embed is None and self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only backend without embed writes no vector
+        else:
+            vectors = [*document_vectors(docs, embeddings, self.embed)]
         objects = [
             DataObject(
                 uuid=point_id(d.id),
@@ -184,7 +195,7 @@ class WeaviateBackend:
                     self.metadata_property: json.dumps(dict(d.metadata), sort_keys=True),
                     TERMS_FIELD: [_guarded(t) for t in terms(d.id, d.metadata)],
                 },
-                vector={self.vector_name: [float(x) for x in v]},
+                vector=None if v is None else {self.vector_name: [float(x) for x in v]},
             )
             for d, v in zip(docs, vectors, strict=True)
         ]
@@ -226,13 +237,21 @@ class WeaviateBackend:
             where = filter_to_weaviate(f)
             if where is None:
                 return None  # nothing can match
-        return {
-            "near_vector": query.embedded(self.embed),
-            "target_vector": self.vector_name,
+        common = {
             "limit": k,
             "filters": where,
-            "return_metadata": MetadataQuery(distance=True),
             "return_properties": [ID_PROPERTY, self.content_property, self.metadata_property],
+        }
+        if self.mode == "keyword":
+            return common | {
+                "query": query.keywords(),
+                "query_properties": [self.content_property],
+                "return_metadata": MetadataQuery(score=True),
+            }
+        return common | {
+            "near_vector": query.embedded(self.embed),
+            "target_vector": self.vector_name,
+            "return_metadata": MetadataQuery(distance=True),
         }
 
     def _hit(self, obj: Any) -> Hit:
@@ -243,11 +262,16 @@ class WeaviateBackend:
             metadata = json.loads(properties.get(self.metadata_property) or "")
         except (TypeError, ValueError):
             metadata = None
-        distance = obj.metadata.distance if obj.metadata is not None else None
+        if self.mode == "keyword":  # BM25: higher is better
+            bm25 = obj.metadata.score if obj.metadata is not None else None
+            score = float(bm25) if bm25 is not None else 0.0
+        else:
+            distance = obj.metadata.distance if obj.metadata is not None else None
+            score = 1.0 - float(distance) if distance is not None else 0.0
         return Hit(
             doc_id if isinstance(doc_id, str) else str(obj.uuid),
             text if isinstance(text, str) else "",
-            1.0 - float(distance) if distance is not None else 0.0,
+            score,
             # An object without readable metadata carries no permissions: the re-check denies it.
             metadata if isinstance(metadata, dict) else {},
         )
@@ -263,7 +287,8 @@ class WeaviateBackend:
         request = self._request(Query.of(query), k, filter)
         if request is None:
             return []
-        return self._hits(self.client.collections.get(self.collection).query.near_vector(**request))
+        query_api = self.client.collections.get(self.collection).query
+        return self._hits((query_api.bm25 if self.mode == "keyword" else query_api.near_vector)(**request))
 
     async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
@@ -273,5 +298,5 @@ class WeaviateBackend:
         request = await asyncio.to_thread(self._request, Query.of(query), k, filter)
         if request is None:
             return []
-        handle = self.async_client.collections.get(self.collection)
-        return self._hits(await handle.query.near_vector(**request))
+        query_api = self.async_client.collections.get(self.collection).query
+        return self._hits(await (query_api.bm25 if self.mode == "keyword" else query_api.near_vector)(**request))
