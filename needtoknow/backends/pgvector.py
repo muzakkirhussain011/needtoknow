@@ -94,10 +94,12 @@ def create_schema(
     `text_search` (a text search configuration, such as `"english"`) also creates the full-text GIN
     index that `PgVectorBackend(mode="keyword", text_search=...)` uses; pass the same name to both.
     """
-    from psycopg import sql
-
     if not isinstance(dim, int) or dim < 1:
         raise ValueError("dim must be a positive integer")
+    config = None if text_search is None else _text_search_config(text_search)
+
+    from psycopg import sql
+
     statements = [
         sql.SQL("CREATE EXTENSION IF NOT EXISTS vector"),
         sql.SQL(
@@ -114,8 +116,7 @@ def create_schema(
                 i=sql.Identifier(f"{table}_embedding_hnsw"), t=sql.Identifier(table)
             )
         )
-    if text_search is not None:
-        config = _text_search_config(text_search)
+    if config is not None:
         statements.append(
             sql.SQL("CREATE INDEX IF NOT EXISTS {i} ON {t} USING gin (to_tsvector({c}::regconfig, content))").format(
                 i=sql.Identifier(f"{table}_content_{config}_fts"), t=sql.Identifier(table), c=sql.Literal(config)
@@ -176,8 +177,6 @@ class PgVectorBackend:
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
-        from psycopg import sql
-
         docs = list(documents)
         if embeddings is None and self.embed is None:
             raise ValueError("the table stores a vector for every chunk: pass embeddings, or an embed function")
@@ -186,6 +185,9 @@ class PgVectorBackend:
         if len(vectors) != len(docs):
             raise ValueError("one embedding per document is required")
         rows = [(d.id, d.text, json.dumps(dict(d.metadata)), _vector(v)) for d, v in zip(docs, vectors, strict=True)]
+
+        from psycopg import sql
+
         statement = sql.SQL(
             "INSERT INTO {t} (id, content, metadata, embedding) VALUES (%s, %s, %s::jsonb, %s::vector)"
             " ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, metadata = EXCLUDED.metadata,"
