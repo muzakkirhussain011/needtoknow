@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `mode="keyword"` on the Weaviate backend: Weaviate's BM25 on the text, under the same permission
+  filter as its vector search, with no embedding function needed, so one collection serves both
+  halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with
+  vector search, against Weaviate 1.39.12.
+
 ## [1.3.0] - 2026-10-17
 
 Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search

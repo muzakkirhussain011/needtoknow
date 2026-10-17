@@ -40,7 +40,7 @@ and keeps permission values out of query text. They differ in what is worth know
 | [Qdrant](qdrant.md) | When `add` returns (`wait=True`) | `AsyncQdrantClient` | Filter objects (`MatchAny`) | No | 1.19.2 |
 | [Milvus](milvus.md) | At once (strong consistency, the default) | `AsyncMilvusClient` | `filter_params`, never in the expression | No | 3.0.2 |
 | [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | No | Atlas Local 8.0.30 |
-| [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | No | 1.39.12 |
+| [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | BM25, `mode="keyword"` | 1.39.12 |
 | [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | No | 8.10.2 |
 | [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | No | LanceDB 0.40, embedded |
 
