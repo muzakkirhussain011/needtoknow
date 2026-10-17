@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       # Every extra, so the adapters are checked against the real libraries' types.
-      - run: pip install -e ".[dev,pgvector,chroma,qdrant,milvus,mongodb,weaviate,elasticsearch,opensearch,redis,langchain,llamaindex,haystack,otel]"
+      - run: pip install -e ".[dev,pgvector,chroma,qdrant,milvus,mongodb,weaviate,elasticsearch,opensearch,redis,lancedb,langchain,llamaindex,haystack,otel]"
       - name: mypy --strict
         run: mypy
 
@@ -108,7 +108,7 @@ jobs:
           docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:6333/readyz && break; sleep 1; done
       - run: >-
-          pip install -e ".[dev,pgvector,chroma,qdrant,milvus,mongodb,weaviate,elasticsearch,opensearch,redis,langchain,llamaindex,haystack,otel]"
+          pip install -e ".[dev,pgvector,chroma,qdrant,milvus,mongodb,weaviate,elasticsearch,opensearch,redis,lancedb,langchain,llamaindex,haystack,otel]"
           opentelemetry-sdk pgvector "elasticsearch[async]" "opensearch-py[async]"
       - name: Wait for Elasticsearch, OpenSearch, Milvus and MongoDB
         run: |

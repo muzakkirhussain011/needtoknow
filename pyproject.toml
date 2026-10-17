@@ -41,6 +41,7 @@ milvus = ["pymilvus>=2.6"]
 mongodb = ["pymongo>=4.13"]
 weaviate = ["weaviate-client>=4.16"]
 redis = ["redis>=5"]
+lancedb = ["lancedb>=0.40"]
 langchain = ["langchain-core>=1.0"]
 llamaindex = ["llama-index-core>=0.12"]
 haystack = ["haystack-ai>=2.12"]
@@ -91,6 +92,10 @@ warn_unreachable = true
 [[tool.mypy.overrides]]
 module = ["pymilvus", "pymilvus.*"]
 ignore_missing_imports = true  # pymilvus has no py.typed marker
+
+[[tool.mypy.overrides]]
+module = ["pyarrow", "pyarrow.*"]
+ignore_missing_imports = true  # pyarrow has no py.typed marker
 
 [tool.coverage.run]
 source = ["needtoknow"]

@@ -14,6 +14,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [MongoDB Atlas Vector Search](mongodb.md) | Backend | `needtoknow[mongodb]` | Yes, as the `$vectorSearch` pre-filter |
 | [Weaviate](weaviate.md) | Backend | `needtoknow[weaviate]` | Yes, inside the vector search |
 | [Redis](redis.md) | Backend | `needtoknow[redis]` | Yes, in the same KNN query |
+| [LanceDB](lancedb.md) | Backend | `needtoknow[lancedb]` | Yes, before the vector search ranks |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
@@ -26,7 +27,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 ## Choosing a store
 
 Every store applies the permission filter inside its own search, passes the
-[conformance kit](../extending.md#test-it-with-the-conformance-kit) in CI against a real server,
+[conformance kit](../extending.md#test-it-with-the-conformance-kit) in CI against the real store,
 and keeps permission values out of query text. They differ in what is worth knowing in production:
 
 | Store | A write is searchable | Native `aretrieve` | Permission values travel as | Keyword search | CI tests against |
@@ -40,6 +41,7 @@ and keeps permission values out of query text. They differ in what is worth know
 | [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | No | Atlas Local 8.0.30 |
 | [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | No | 1.39.12 |
 | [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | No | 8.10.2 |
+| [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | No | LanceDB 0.40, embedded |
 
 Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
 stores as well as within one. Measured recall, latency and throughput at a million chunks are in

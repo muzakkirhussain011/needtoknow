@@ -196,6 +196,17 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.redis.filter_to_query
 
 .. autofunction:: needtoknow.backends.redis.permission_terms
+
+.. autoclass:: needtoknow.backends.lancedb.LanceDBBackend
+   :members: add, delete, search
+
+.. autofunction:: needtoknow.backends.lancedb.create_table
+
+.. autofunction:: needtoknow.backends.lancedb.create_indexes
+
+.. autofunction:: needtoknow.backends.lancedb.filter_to_sql
+
+.. autofunction:: needtoknow.backends.lancedb.permission_terms
 ```
 
 ## Frameworks
