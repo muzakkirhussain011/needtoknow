@@ -191,8 +191,8 @@ class Milvus:
 class SearchEngine:
     """Elasticsearch or OpenSearch."""
 
-    def __init__(self, name: str, url: str, ef_search: int | None) -> None:
-        self.name, self.ef_search = name, ef_search
+    def __init__(self, name: str, url: str, ef_search: int | None, index_type: str | None = None) -> None:
+        self.name, self.ef_search, self.index_type = name, ef_search, index_type
         if name == "elasticsearch":
             from elasticsearch import Elasticsearch
 
@@ -213,7 +213,8 @@ class SearchEngine:
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
         if self.client.indices.exists(index=NAME):
             self.client.indices.delete(index=NAME)
-        self._create(self.client, NAME, int(vectors.shape[1]))
+        options = {"index_options": {"type": self.index_type}} if self.index_type else {}
+        self._create(self.client, NAME, int(vectors.shape[1]), **options)
         started = time.perf_counter()
         _add_in_chunks(self._backend(self.client, NAME, None, refresh=False), ids, texts, vectors, metadata)
         loaded = time.perf_counter()
@@ -270,7 +271,11 @@ class Weaviate:
 STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate")
 
 
-def make_store(name: str, url: str, ef_search: int | None, grpc_port: int = 50051) -> Any:
+def make_store(
+    name: str, url: str, ef_search: int | None, grpc_port: int = 50051, index_type: str | None = None
+) -> Any:
+    if index_type is not None and name != "elasticsearch":
+        raise ValueError("--index-type applies to Elasticsearch only")
     if name == "pgvector":
         return PgVector(url, ef_search)
     if name == "qdrant":
@@ -278,7 +283,7 @@ def make_store(name: str, url: str, ef_search: int | None, grpc_port: int = 5005
     if name == "milvus":
         return Milvus(url, ef_search)
     if name in ("elasticsearch", "opensearch"):
-        return SearchEngine(name, url, ef_search)
+        return SearchEngine(name, url, ef_search, index_type)
     if name == "weaviate":
         return Weaviate(url, ef_search, grpc_port)
     raise ValueError(f"unknown store {name!r}")
