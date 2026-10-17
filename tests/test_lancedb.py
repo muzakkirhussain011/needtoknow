@@ -8,7 +8,9 @@ import uuid
 
 import pytest
 
-lancedb = pytest.importorskip("lancedb")
+pytest.importorskip("lancedb")
+
+import lancedb
 
 from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag
@@ -129,7 +131,7 @@ def test_rows_written_by_another_tool_need_their_terms(db):
     metadata = {"allowed_groups": ["hr"]}
     row = {
         "id": "raw",
-        KEY_FIELD: "raw".encode().hex(),
+        KEY_FIELD: b"raw".hex(),
         "content": "leave policy",
         "metadata": json.dumps(metadata),
         "vector": EMBED("leave policy"),
@@ -138,7 +140,7 @@ def test_rows_written_by_another_tool_need_their_terms(db):
     ann = Subject("ann", ["hr"])
     retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
     assert retriever.retrieve("leave", ann, 5).hits == []
-    table.delete(f"{KEY_FIELD} = '{'raw'.encode().hex()}'")
+    table.delete(f"{KEY_FIELD} = '{b'raw'.hex()}'")
     table.add([row | {TERMS_FIELD: permission_terms(metadata)}])
     assert [h.id for h in retriever.retrieve("leave", ann, 5).hits] == ["raw"]
 
@@ -146,7 +148,7 @@ def test_rows_written_by_another_tool_need_their_terms(db):
 def test_rows_without_readable_metadata_are_denied(db):
     table = _new_table(db)
     backend = LanceDBBackend(table, EMBED)
-    row = {"id": "bad", KEY_FIELD: "bad".encode().hex(), "content": "leave", "metadata": "not json"}
+    row = {"id": "bad", KEY_FIELD: b"bad".hex(), "content": "leave", "metadata": "not json"}
     table.add([row | {TERMS_FIELD: [], "vector": EMBED("leave")}])
     (hit,) = backend.search("leave", 5)
     assert hit.metadata == {}
