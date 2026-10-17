@@ -193,6 +193,33 @@ class MongoDBBackend:
             for marker, expected in batches:
                 self._wait({WRITE_FIELD: marker}, expected, probe)
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]], *, wait: bool = True) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        With `wait` (the default), returns once the search index shows the new metadata, or raises
+        `TimeoutError` after `wait_timeout` seconds.
+        """
+        from pymongo import UpdateOne
+
+        items = list(metadata.items())
+        batches: list[tuple[str, int]] = []
+        for start in range(0, len(items), _BATCH):
+            marker = uuid.uuid4().hex
+            changes = [
+                UpdateOne(
+                    {"_id": doc_id},
+                    {"$set": {self.metadata_field: dict(new), TERMS_FIELD: terms(doc_id, new), WRITE_FIELD: marker}},
+                )
+                for doc_id, new in items[start : start + _BATCH]
+            ]
+            result = self.collection.bulk_write(changes, ordered=False)
+            if result.matched_count:
+                batches.append((marker, result.matched_count))
+        probe = self._probe() if wait and batches else None
+        if probe is not None:
+            for marker, expected in batches:
+                self._wait({WRITE_FIELD: marker}, expected, probe)
+
     def delete(self, ids: Iterable[str], *, wait: bool = True) -> None:
         """Delete chunks by id; with `wait`, returns once the search index no longer returns them."""
         selected = list(dict.fromkeys(ids))

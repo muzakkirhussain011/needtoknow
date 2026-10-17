@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from needtoknow.backends._vectors import document_vectors
@@ -170,6 +170,29 @@ class QdrantBackend:
         ]
         for start in range(0, len(points), _BATCH):
             self.client.upsert(self.collection, points=points[start : start + _BATCH], wait=True)
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        from qdrant_client import models
+
+        wanted = {point_id(i): dict(m) for i, m in metadata.items()}
+        selected: list[int | str | uuid.UUID] = list(wanted)
+        for start in range(0, len(selected), _BATCH):
+            found = self.client.retrieve(
+                self.collection, ids=selected[start : start + _BATCH], with_payload=True, with_vectors=False
+            )
+            # The whole payload is rewritten with only the metadata replaced, so no key of the old
+            # metadata survives however the server would merge a partial update.
+            operations: list[Any] = [
+                models.OverwritePayloadOperation(
+                    overwrite_payload=models.SetPayload(
+                        payload={**(p.payload or {}), self.metadata_key: wanted[str(p.id)]}, points=[p.id]
+                    )
+                )
+                for p in found
+            ]
+            if operations:
+                self.client.batch_update_points(self.collection, update_operations=operations, wait=True)
 
     def delete(self, ids: Iterable[str]) -> None:
         from qdrant_client import models
