@@ -27,6 +27,12 @@ is searchable as soon as it returns; replacing a chunk replaces the whole hash. 
 HNSW's search breadth. Scores are cosine similarity, 1 minus Redis's cosine distance. For a native
 `aretrieve`, pass `async_client=redis.asyncio.Redis(...)`; otherwise async calls run in a thread.
 
+HNSW is approximate. Redis indexes a hash again whenever any of its fields changes, so `set_metadata`
+removes and re-adds the chunk's vector in the graph, and a small graph that changes often can miss
+a chunk; it never returns one the filter excludes. `create_index(..., algorithm="FLAT")` compares
+the query with every vector instead: exact, and fast enough up to some tens of thousands of chunks.
+CI checks both, exactly on `FLAT`.
+
 ## How permissions are indexed
 
 The backend uses the same type-tagged terms as [Elasticsearch, OpenSearch](elasticsearch.md#how-permissions-are-indexed)

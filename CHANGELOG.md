@@ -8,6 +8,10 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
+  enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
+  chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
+  can miss a chunk.
 - `mode="keyword"` on the Weaviate backend: Weaviate's BM25 on the text, under the same permission
   filter as its vector search, with no embedding function needed, so one collection serves both
   halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with

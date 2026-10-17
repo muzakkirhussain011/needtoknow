@@ -84,24 +84,35 @@ def create_index(
     prefix: str = "needtoknow:",
     vector_field: str = "embedding",
     content_field: str | None = None,
+    algorithm: str = "HNSW",
     m: int = 16,
     ef_construction: int = 200,
 ) -> None:
-    """Create the index if it does not exist: the permission terms as a TAG field and an HNSW
-    cosine vector, over the hashes whose keys start with `prefix`.
+    """Create the index if it does not exist: the permission terms as a TAG field and a cosine
+    vector index, over the hashes whose keys start with `prefix`.
+
+    `algorithm="HNSW"` (the default, tuned by `m` and `ef_construction`) is approximate. Redis
+    indexes a hash again whenever any of its fields changes, so `set_metadata` removes and re-adds
+    the chunk's vector in the graph, and a small, often-changed graph can then miss a chunk.
+    `algorithm="FLAT"` compares the query with every vector: exact, and fast enough for indexes of
+    up to some tens of thousands of chunks.
 
     With `content_field` (the backend's, `"content"` by default) the chunks' text is indexed as
     well, for `mode="keyword"`, keeping every word: the index has no stop words. An index created
-    without it can add it with `FT.ALTER <index> SCHEMA ADD content TEXT`, though Redis then drops
-    common English words from it.
+    without it can add it with `FT.ALTER <index> SCHEMA ADD content TEXT`.
     """
+    if algorithm == "HNSW":
+        vector = ["HNSW", "10", "TYPE", "FLOAT32", "DIM", str(dim), "DISTANCE_METRIC", "COSINE",
+                  "M", str(m), "EF_CONSTRUCTION", str(ef_construction)]  # fmt: skip
+    elif algorithm == "FLAT":
+        vector = ["FLAT", "6", "TYPE", "FLOAT32", "DIM", str(dim), "DISTANCE_METRIC", "COSINE"]
+    else:
+        raise ValueError(f"algorithm must be 'HNSW' or 'FLAT', not {algorithm!r}")
     text = [content_field, "TEXT"] if content_field else []
     try:
         client.execute_command(
             "FT.CREATE", index, "ON", "HASH", "PREFIX", "1", prefix, "STOPWORDS", "0",
-            "SCHEMA", TERMS_FIELD, "TAG", "SEPARATOR", ",", *text,
-            vector_field, "VECTOR", "HNSW", "10", "TYPE", "FLOAT32", "DIM", str(dim),
-            "DISTANCE_METRIC", "COSINE", "M", str(m), "EF_CONSTRUCTION", str(ef_construction),
+            "SCHEMA", TERMS_FIELD, "TAG", "SEPARATOR", ",", *text, vector_field, "VECTOR", *vector,
         )  # fmt: skip
     except Exception as exc:
         if "already exists" not in str(exc).lower():
