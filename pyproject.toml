@@ -47,7 +47,14 @@ llamaindex = ["llama-index-core>=0.12"]
 haystack = ["haystack-ai>=2.12"]
 mcp = ["mcp>=2.3"]
 otel = ["opentelemetry-api>=1.30"]
-docs = ["sphinx>=9.1", "myst-parser>=5.1", "shibuya>=2026.7.12", "sphinx-design>=0.7", "sphinx-copybutton>=0.5.2"]
+# Sphinx 9 needs Python 3.12, so the documentation is built on 3.12 or later.
+docs = [
+  "sphinx>=9.1; python_version >= '3.12'",
+  "myst-parser>=5.1; python_version >= '3.12'",
+  "shibuya>=2026.7.12; python_version >= '3.12'",
+  "sphinx-design>=0.7; python_version >= '3.12'",
+  "sphinx-copybutton>=0.5.2; python_version >= '3.12'",
+]
 
 [project.urls]
 Homepage = "https://github.com/muzakkirhussain011/needtoknow"

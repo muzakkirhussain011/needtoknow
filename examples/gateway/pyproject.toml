@@ -38,6 +38,13 @@ rampart = "rampart.cli:main"
 [project.urls]
 Repository = "https://github.com/muzakkirhussain011/rampart-ai-gateway"
 
+# The build backend, so the image and CI build the package from uv.lock without build isolation.
+[dependency-groups]
+build = ["hatchling==1.32.4"]
+
+[tool.uv]
+default-groups = []
+
 [tool.hatch.build.targets.wheel]
 packages = ["rampart"]
 
