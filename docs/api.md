@@ -103,6 +103,26 @@ modules and need their extra.
    :members: is_open
 ```
 
+## Permission sync
+
+See [Google Drive](integrations/google-drive.md).
+
+```{eval-rst}
+.. autoclass:: needtoknow.sync.Access
+   :members: metadata
+
+.. autofunction:: needtoknow.sync.with_access
+
+.. autoclass:: needtoknow.sync.google_drive.GoogleDriveACL
+   :members: access, permissions
+
+.. autofunction:: needtoknow.sync.google_drive.drive_access
+
+.. autodata:: needtoknow.sync.google_drive.FIELDS
+
+.. autodata:: needtoknow.sync.google_drive.READ_ROLES
+```
+
 ## Events, audit and tracing
 
 ```{eval-rst}
