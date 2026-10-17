@@ -22,9 +22,11 @@ jobs:
         with: { persist-credentials: false }
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12" }
-      - run: pip install build twine
-      - run: python -m build
-      - run: twine check --strict dist/*
+      # Every tool that touches the published files is pinned by hash, and the build runs without
+      # isolation so it cannot fetch an unpinned backend. pypa/gh-action-pypi-publish checks the
+      # metadata before uploading.
+      - run: pip install --require-hashes --no-deps -r .github/requirements/build.txt
+      - run: python -m build --no-isolation
       - name: The release tag must match the package version
         env:
           TAG: ${{ github.event.release.tag_name }}
