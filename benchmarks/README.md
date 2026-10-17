@@ -58,10 +58,12 @@ with the example policy and gives PostgreSQL enough memory for a million rows.
 `opensearch` or `weaviate`, at `--url` (Weaviate also takes `--grpc-port`). The corpus is loaded
 through needtoknow's own backend for that store, so the layout measured is the one you get, and the
 load time includes waiting until the store's index is built. `--ef-search` sets each store's search
-breadth (see [`stores.py`](stores.py)). On Kaggle, which has no Docker,
-[`kaggle_stores.ipynb`](kaggle_stores.ipynb) runs it on each store in turn, each started from its
-release build by [`kaggle_stores.sh`](kaggle_stores.sh) and stopped before the next. Milvus needs
-Docker or Kubernetes, so it is measured elsewhere.
+breadth (see [`stores.py`](stores.py)), and `--index-type` sets Elasticsearch's vector index type
+(`int8_hnsw`, `hnsw`; its default for 384 dimensions is `bbq_hnsw`). On Kaggle, which has no Docker,
+[`kaggle_stores.ipynb`](kaggle_stores.ipynb) runs a plan of runs in turn, each store started from its
+release build by [`kaggle_stores.sh`](kaggle_stores.sh) and stopped before the next: `every-store`
+measures each store at its defaults, `elasticsearch-index-types` Elasticsearch with other index
+types. Milvus needs Docker or Kubernetes, so it is measured elsewhere.
 
 CI runs a small synthetic version against real PostgreSQL and OPA, and against every other store,
 with `--check`, which fails on any leak or error. `--render load_results.json` prints the tables of

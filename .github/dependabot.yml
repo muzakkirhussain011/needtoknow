@@ -12,3 +12,6 @@ updates:
   - package-ecosystem: docker
     directory: /examples/gateway
     schedule: { interval: weekly }
+  - package-ecosystem: pip
+    directory: /.github/requirements
+    schedule: { interval: weekly }

@@ -30,8 +30,11 @@ in that example are public on purpose and are not vulnerabilities.
 ## Verifying a release
 
 Releases are built and published by [`release.yml`](.github/workflows/release.yml) with PyPI
-trusted publishing; no person or long-lived token uploads them. Each file on PyPI carries a PEP 740
-attestation that ties it to that workflow run. From 1.1.0, the GitHub release also carries the same
+trusted publishing; no person or long-lived token uploads them. The tools that build them (`build`,
+the `hatchling` backend and their dependencies) are pinned by hash in
+[`.github/requirements/build.txt`](.github/requirements/build.txt), and the build runs without
+fetching anything else. Each file on PyPI carries a PEP 740 attestation that ties it to that
+workflow run. From 1.1.0, the GitHub release also carries the same
 files, a Sigstore signature for each (`*.sigstore.json`) and a CycloneDX SBOM (`*.cdx.json`).
 
 To check a downloaded file against its signature, with the version you downloaded:
