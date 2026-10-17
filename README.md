@@ -287,6 +287,10 @@ table = create_table(lancedb.connect("data/chunks"), "chunks", dim=768)
 backend = LanceDBBackend(table, embed=my_embedding_model)
 ```
 
+`create_indexes(table, content_field="content")` builds a full-text index, and
+`LanceDBBackend(table, mode="keyword")` then runs BM25 under the same filter, for hybrid search with
+`RankFusion`.
+
 </details>
 
 <details>
