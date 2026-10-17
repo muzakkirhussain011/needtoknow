@@ -228,6 +228,17 @@ def test_create_index_can_index_the_text_keeping_every_word():
     assert schema[4:6] == ("body", "TEXT")
 
 
+def test_create_index_builds_hnsw_or_an_exact_flat_index():
+    client = FakeClient()
+    create_index(client, "idx", 4, m=8, ef_construction=64)
+    create_index(client, "idx", 4, algorithm="FLAT")
+    hnsw, flat = client.commands
+    assert hnsw[hnsw.index("VECTOR") + 1 :][:2] == ("HNSW", "10") and hnsw[-4:] == ("M", "8", "EF_CONSTRUCTION", "64")
+    assert flat[flat.index("VECTOR") + 1 :] == ("FLAT", "6", "TYPE", "FLOAT32", "DIM", "4", "DISTANCE_METRIC", "COSINE")
+    with pytest.raises(ValueError, match="algorithm"):
+        create_index(client, "idx", 4, algorithm="IVF")
+
+
 def test_asearch_uses_the_async_client_or_a_thread():
     reply = [1, b"needtoknow:a", [b"needtoknow_id", b"a", b"metadata", b"{}", b"__needtoknow_distance", b"0.3"]]
 
@@ -260,9 +271,9 @@ def redis_client():
     client.close()
 
 
-def _store(client):
+def _store(client, algorithm="HNSW"):
     name = f"ntk_{uuid.uuid4().hex}"
-    create_index(client, name, EMBED.dim, prefix=f"{name}:")
+    create_index(client, name, EMBED.dim, prefix=f"{name}:", algorithm=algorithm)
     return name, RedisBackend(client, name, EMBED, prefix=f"{name}:")
 
 
@@ -270,20 +281,23 @@ def _drop(client, name):
     client.execute_command("FT.DROPINDEX", name, "DD")  # DD deletes the hashes too
 
 
-def test_server_passes_the_conformance_kit(redis_client):
+# FLAT is exact. HNSW is approximate, and set_metadata re-adds each changed chunk's vector to the
+# graph, so a small, often-changed graph may miss a chunk: never one it should not return.
+@pytest.mark.parametrize(("algorithm", "exact"), [("FLAT", True), ("HNSW", False)])
+def test_server_passes_the_conformance_kit(redis_client, algorithm, exact):
     made: list[str] = []
 
     def make(docs):
         # A new index and prefix per example keeps examples independent.
         for name in made:
             _drop(redis_client, name)
-        name, backend = _store(redis_client)
+        name, backend = _store(redis_client, algorithm)
         made[:] = [name]
         backend.add(docs)
         return backend
 
     try:
-        check_backend(make)
+        check_backend(make, exact=exact)
     finally:
         for name in made:
             _drop(redis_client, name)
@@ -296,7 +310,7 @@ def test_server_searches_with_query_vectors(redis_client):
         for name in made:
             _drop(redis_client, name)
         name = f"ntk_{uuid.uuid4().hex}"
-        create_index(redis_client, name, EMBED.dim, prefix=f"{name}:")
+        create_index(redis_client, name, EMBED.dim, prefix=f"{name}:", algorithm="FLAT")
         made[:] = [name]
         backend = RedisBackend(redis_client, name, prefix=f"{name}:")
         backend.add(docs, [EMBED(d.text) for d in docs])
@@ -399,7 +413,7 @@ def test_a_subject_in_ten_thousand_groups(redis_client):
 
 def _keyword_index(client):
     name = f"ntk_{uuid.uuid4().hex}"
-    create_index(client, name, EMBED.dim, prefix=f"{name}:", content_field="content")
+    create_index(client, name, EMBED.dim, prefix=f"{name}:", content_field="content", algorithm="FLAT")
     return name
 
 
