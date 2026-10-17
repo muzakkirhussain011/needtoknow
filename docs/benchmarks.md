@@ -241,6 +241,36 @@ median. With
 filter was fetched from OPA once a minute rather than once per query. The price is that a revoked
 permission can take up to the `ttl` to apply (see [Operations](operations.md)).
 
+## Qdrant on the same million chunks
+
+The same million vectors, questions and permissions, loaded through `QdrantBackend` into Qdrant
+1.19.2 at its default settings, and measured the same way on the same Kaggle machine type (4 CPUs,
+shared by the store and the benchmark's client). Run on 2026-10-17 with
+[`kaggle_stores.ipynb`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/kaggle_stores.ipynb);
+every number is in the [full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-qdrant.md).
+
+| Readable | Prefilter recall, pgvector | Prefilter recall, Qdrant | Prefilter p50 ms, pgvector | Prefilter p50 ms, Qdrant |
+|---|---|---|---|---|
+| 0.1% | 0.972 | 0.998 | 11.0 | 3.4 |
+| 1% | 0.933 | 0.994 | 21.2 | 5.1 |
+| 10% | 0.883 | 0.980 | 4.3 | 5.0 |
+| 100% | 0.895 | 0.972 | 3.2 | 5.8 |
+
+Throughput peaked at 312 requests a second with 8 users on Qdrant (p99 45 ms), against 129 with 4
+users on pgvector (p99 72 ms). No retrieval leaked on either store.
+
+- **Both stores ran at their own defaults, which differ.** pgvector searches with `ef_search` 40,
+  the ceiling on its recall above; Qdrant's default search breadth is wider. Most of the recall gap
+  is index settings, which `ef_search=` on either backend changes, not needtoknow.
+- **Post-filtering collapses for selective users on both stores** (0.095 of the top 10 at 0.1%
+  readable on Qdrant, 0.094 on pgvector): it is a property of post-filtering, not of either store,
+  and the reason `strategy="auto"` pre-filters.
+- **Loading through the backend is the slow part.** `QdrantBackend.add` took 14 minutes for the
+  million chunks and Qdrant 6 more to build its index, against 36 seconds of binary `COPY` and 4.5
+  minutes of index build in PostgreSQL. `add` upserts in batches over HTTP and waits for each; a
+  first load of millions of chunks can use Qdrant's own parallel upload instead, with the same
+  point layout (see [Qdrant](integrations/qdrant.md)).
+
 ## Limits of these benchmarks
 
 Two corpora, two embedding models and a few hundred queries each; indexes at their default

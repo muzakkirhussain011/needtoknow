@@ -298,6 +298,7 @@ integrations/cerbos
 integrations/langchain
 integrations/llamaindex
 integrations/haystack
+integrations/mcp
 ```
 
 ```{toctree}
