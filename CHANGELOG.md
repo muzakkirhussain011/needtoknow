@@ -6,6 +6,22 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-17
+
+Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search
+fuses keyword and vector results under the same permission filter (BM25 on Elasticsearch and
+OpenSearch, full-text search on pgvector). A reranker orders the results after the permission
+check, so a cross-encoder or a hosted rerank API never sees a chunk the user may not read. Searches
+can use vectors you computed, from an embedding service or another modality. AI agents get an MCP
+search tool whose permissions come from the verified access token, never from the model, and
+Haystack pipelines get a retriever component. Four more stores: MongoDB Atlas Vector Search,
+Weaviate, Redis and LanceDB. `set_metadata` changes a document's permissions without embedding it
+again, and the conformance kit checks it, like everything else, against every store.
+
+Python 3.10 is still supported. It reaches its end of life on 2026-10-31, after this release, so
+under the support policy the first minor release after that date, 1.4, drops it, not 1.3 as the
+1.2.0 notes said.
+
 ### Added
 
 - `set_metadata({chunk_id: metadata})` on every built-in backend: replaces stored chunks' metadata
@@ -346,7 +362,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
