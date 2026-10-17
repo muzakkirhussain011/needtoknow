@@ -30,7 +30,11 @@ shard considers: higher finds more of the true nearest chunks and takes longer.
 
 Elasticsearch quantizes dense vectors by default (`int8_hnsw` below 384 dimensions, `bbq_hnsw`
 from 384 in 9.1 and later). That saves memory and costs some recall; pass
-`create_index(..., index_options={"type": "hnsw"})` to keep full-precision vectors. For a native
+`create_index(..., index_options={"type": "hnsw"})` to keep full-precision vectors. On a million
+384-dimensional chunks, the default with 100 candidates found 0.62 of the true top 10 for a user
+who may read 1% of them; `int8_hnsw` with `num_candidates=500` found 0.98 at a similar median
+latency (11 ms against 13), in the same 2.2 GiB, and full-precision `hnsw` found 1.00
+([Benchmarks](../benchmarks.md#every-store-on-the-same-million-chunks)). For a native
 `aretrieve`, pass `async_client=AsyncElasticsearch(...)` (install `elasticsearch[async]`).
 
 ## OpenSearch
