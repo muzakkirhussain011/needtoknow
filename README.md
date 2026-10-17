@@ -411,6 +411,7 @@ never from the tool's arguments, and a call without a verified token is refused.
 ```python
 from needtoknow.mcp import add_search_tool
 
+
 def subject_for(token):  # the verified token's user, with their groups
     return Subject(token.subject, groups_of(token.subject))
 
