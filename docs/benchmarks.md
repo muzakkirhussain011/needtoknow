@@ -241,44 +241,76 @@ median. With
 filter was fetched from OPA once a minute rather than once per query. The price is that a revoked
 permission can take up to the `ttl` to apply (see [Operations](operations.md)).
 
-## Qdrant on the same million chunks
+## Every store on the same million chunks
 
-The same million vectors, questions and permissions, loaded through `QdrantBackend` into Qdrant
-1.19.2 at its default settings, and measured the same way on the same Kaggle machine type (4 CPUs,
-shared by the store and the benchmark's client). Run on 2026-10-17 with
+The same million vectors, questions and permissions, loaded through each store's needtoknow backend
+at the store's own default settings, and measured the same way on a Kaggle machine with 4 CPUs
+shared by the store and the benchmark's client. Qdrant, Elasticsearch, OpenSearch and Weaviate ran
+one after another in one session on one machine, on 2026-10-17, with
 [`kaggle_stores.ipynb`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/kaggle_stores.ipynb);
-every number is in the [full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-qdrant.md).
+pgvector ran in an earlier session. Every number is in the full results:
+[four stores](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-every-store.md),
+[pgvector](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md)
+and an [earlier Qdrant run](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-qdrant.md).
 
-| Readable | Prefilter recall, pgvector | Prefilter recall, Qdrant | Prefilter p50 ms, pgvector | Prefilter p50 ms, Qdrant |
-|---|---|---|---|---|
-| 0.1% | 0.972 | 0.998 | 11.0 | 3.4 |
-| 1% | 0.933 | 0.994 | 21.2 | 5.1 |
-| 10% | 0.883 | 0.980 | 4.3 | 5.0 |
-| 100% | 0.895 | 0.972 | 3.2 | 5.8 |
+Pre-filtered recall@10, by the share of the corpus the user may read:
 
-Throughput peaked at 312 requests a second with 8 users on Qdrant (p99 45 ms), against 129 with 4
-users on pgvector (p99 72 ms). No retrieval leaked on either store.
+| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate |
+|---|---|---|---|---|---|
+| 0.1% | 0.972 | 0.998 | 0.935 | 0.998 | 0.998 |
+| 1% | 0.933 | 0.996 | 0.615 | 0.996 | 0.996 |
+| 10% | 0.883 | 0.982 | 0.820 | 0.994 | 0.904 |
+| 100% | 0.895 | 0.979 | 0.874 | 0.972 | 0.965 |
 
-- **Both stores ran at their own defaults, which differ.** pgvector searches with `ef_search` 40,
-  the ceiling on its recall above; Qdrant's default search breadth is wider. Most of the recall gap
-  is index settings, which `ef_search=` on either backend changes, not needtoknow.
-- **Post-filtering collapses for selective users on both stores** (0.095 of the top 10 at 0.1%
-  readable on Qdrant, 0.094 on pgvector): it is a property of post-filtering, not of either store,
-  and the reason `strategy="auto"` pre-filters.
-- **Loading through the backend is the slow part.** `QdrantBackend.add` took 14 minutes for the
-  million chunks and Qdrant 6 more to build its index, against 36 seconds of binary `COPY` and 4.5
-  minutes of index build in PostgreSQL. `add` upserts in batches over HTTP and waits for each; a
-  first load of millions of chunks can use Qdrant's own parallel upload instead, with the same
-  point layout (see [Qdrant](integrations/qdrant.md)).
+Median latency of a pre-filtered retrieval, one query at a time, in milliseconds:
+
+| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate |
+|---|---|---|---|---|---|
+| 0.1% | 11.0 | 17.0 | 31.8 | 47.3 | 6.6 |
+| 1% | 21.2 | 8.4 | 13.0 | 14.2 | 14.9 |
+| 10% | 4.3 | 8.1 | 10.4 | 25.6 | 16.4 |
+| 100% | 3.2 | 8.9 | 9.5 | 10.4 | 9.1 |
+
+| Store | Peak throughput (users, p99) | Loading the million chunks | Then until searchable |
+|---|---|---|---|
+| pgvector | 129 requests/s (4, 72 ms) | 36 s, binary `COPY` | 4.5 min to build the indexes |
+| Qdrant | 201 requests/s (16, 120 ms) | 17.4 min through `add` | 12.2 min to build the index |
+| Elasticsearch | 219 requests/s (4, 34 ms) | 25.2 min through `add` | 1 s |
+| OpenSearch | 160 requests/s (8, 89 ms) | 38.1 min through `add` | 2 s |
+| Weaviate | 230 requests/s (8, 63 ms) | 22.7 min through `add` | none: it indexes while importing |
+
+- **No retrieval leaked on any store**, pre- or post-filtered, at any share readable, and no request
+  failed under load. What the stores differ in is recall and speed at their defaults.
+- **Elasticsearch's lower recall comes from its default index.** For 384-dimensional vectors,
+  Elasticsearch 9.1 and later index with `bbq_hnsw`, a 1-bit quantization that saves memory and
+  costs recall, and the backend asks each shard for 100 candidates. `create_index(...,
+  index_options={"type": "int8_hnsw"})` (or `"hnsw"`, full precision) and a larger
+  `num_candidates=` trade memory and latency for recall; they are not measured here yet.
+- **Post-filtering collapses for selective users on every store** (0.093 to 0.095 of the top 10 at
+  0.1% readable): it is a property of post-filtering, not of any store, and the reason
+  `strategy="auto"` pre-filters.
+- **The two Qdrant runs agree on recall but not on speed.** The earlier session measured 312
+  requests a second and a 3.4 ms median at 0.1% readable; this one 201 and 17.0 ms. Kaggle gave the
+  sessions different machines (the first had GPUs attached), so compare stores within one session,
+  and measure capacity on your own hardware.
+- **Under load on 4 shared CPUs, Elasticsearch peaked early**: its throughput fell after 4 users and
+  its p99 reached 1,074 ms at 16. Qdrant, OpenSearch and Weaviate stayed close to their peak at 16
+  users.
+- **Loading through a backend is the slow part on every store**: 17 to 38 minutes for the million
+  chunks through each backend's batched writes over HTTP, against 36 seconds of binary `COPY` into
+  PostgreSQL. For a first load of millions of chunks, a store's own bulk loader can write the
+  same layout (each [integration page](integrations/index.md) describes it), and `add` and
+  `set_metadata` keep it current afterwards.
 
 ## Limits of these benchmarks
 
 Two corpora, two embedding models and a few hundred queries each; indexes at their default
-settings; a single 4-CPU machine, which in the load benchmark ran PostgreSQL, OPA and the client
+settings; a single 4-CPU machine, which in the load benchmark ran the store, OPA and the client
 together, so no network sat between them; local Chroma, not Chroma's distributed or cloud service;
-OpenFGA not measured; and under concurrent load, errors counted but results not checked. Index
-tuning (pgvector `ef_search`, Chroma's HNSW parameters) moves both recall and latency, and is worth
-measuring on your own data with the same harnesses.
+Milvus, MongoDB Atlas, Redis and LanceDB not yet measured at a million chunks; OpenFGA not
+measured; and under concurrent load, errors counted but results not checked. Index tuning (pgvector
+`ef_search`, Elasticsearch's index type and `num_candidates`, Chroma's HNSW parameters) moves both
+recall and latency, and is worth measuring on your own data with the same harnesses.
 
 ## Reproduce it
 
