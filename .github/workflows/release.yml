@@ -5,7 +5,8 @@ name: Release
 #   project needtoknow, owner muzakkirhussain011, repository needtoknow,
 #   workflow release.yml, environment pypi.
 # The publish action also uploads PEP 740 attestations that tie each file to this workflow run,
-# and the attach job puts the same files on the GitHub release with Sigstore signatures and an SBOM.
+# and the attach job puts the same files on the GitHub release with Sigstore signatures, an SBOM
+# and the SLSA build provenance the build job records (needtoknow-<version>.intoto.jsonl).
 
 on:
   release:
@@ -17,6 +18,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # to sign the build provenance
+      attestations: write # to store it as a GitHub attestation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -35,8 +40,22 @@ jobs:
           if [ ! -f "dist/needtoknow-${version}-py3-none-any.whl" ]; then
             echo "Tag ${TAG} does not match the built package:"; ls dist; exit 1
           fi
+      # SLSA build provenance: an in-toto statement, signed with Sigstore, naming this workflow run
+      # as the builder of each file. `gh attestation verify <file> --repo <repo>` checks it.
+      - id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: { subject-path: dist/* }
+      - name: Keep the provenance for the release
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          mkdir provenance
+          cp "$BUNDLE" "provenance/needtoknow-${TAG#v}.intoto.jsonl"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: dist, path: dist/, if-no-files-found: error }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: provenance, path: provenance/, if-no-files-found: error }
 
   publish:
     needs: build
@@ -53,29 +72,38 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   attach:
-    # Attaches the same files PyPI received to the GitHub release, with a CycloneDX SBOM and a
-    # Sigstore signature for each file, so downloads can be verified without trusting PyPI.
+    # Attaches the same files PyPI received to the GitHub release, with a CycloneDX SBOM, the
+    # build provenance and a Sigstore signature for each file, so downloads can be verified without
+    # trusting PyPI.
     needs: [build, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false } # for uv.lock
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: dist, path: dist/ }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: provenance, path: dist/ }
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12" }
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: { version: "0.12.23", enable-cache: false }
+      - name: Install the release tools from uv.lock, by hash
+        run: |
+          uv export --frozen --no-emit-project --only-group release -o "$RUNNER_TEMP/requirements.txt"
+          pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
       - name: SBOM of the package as installed
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           python -m venv "$RUNNER_TEMP/sbom"
           "$RUNNER_TEMP/sbom/bin/pip" install --no-deps dist/*.whl
-          pip install "cyclonedx-bom==7.5.0"
           cyclonedx-py environment "$RUNNER_TEMP/sbom" --output-format JSON --output-file "dist/needtoknow-${TAG#v}.cdx.json"
       - name: Sign every file with Sigstore
         run: |
-          pip install "sigstore==4.5.0"
           python -m sigstore sign dist/*
       - name: Attach the files, signatures and SBOM to the release
         env:
