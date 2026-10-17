@@ -23,6 +23,12 @@ needs no embedding function and runs under the same permission filter as the vec
 - **Redis:** the Query Engine's BM25 on the text, in an index created with
   `create_index(..., content_field="content")`, so one index serves both
   ([Redis](integrations/redis.md#keyword-search-and-hybrid-search)).
+- **Milvus:** BM25 on a sparse vector Milvus derives from the text, in a collection created with
+  `create_collection(..., text_search=True)`, so one collection serves both
+  ([Milvus](integrations/milvus.md#keyword-search-and-hybrid-search)).
+- **LanceDB:** LanceDB's full-text index (BM25) on the text, built by
+  `create_indexes(table, content_field="content")`, so one table serves both
+  ([LanceDB](integrations/lancedb.md#keyword-search-and-hybrid-search)).
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python

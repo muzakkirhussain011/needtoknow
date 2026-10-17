@@ -212,6 +212,10 @@ create_collection(client, "docs", dim=768)
 backend = MilvusBackend(client, "docs", embed=my_embedding_model)
 ```
 
+`create_collection(..., text_search=True)` also derives a BM25 sparse vector from the text, and
+`MilvusBackend(client, "docs", mode="keyword")` then searches it under the same filter, for hybrid
+search with `RankFusion`.
+
 </details>
 
 <details>
@@ -291,6 +295,10 @@ from needtoknow.backends.lancedb import LanceDBBackend, create_table
 table = create_table(lancedb.connect("data/chunks"), "chunks", dim=768)
 backend = LanceDBBackend(table, embed=my_embedding_model)
 ```
+
+`create_indexes(table, content_field="content")` builds a full-text index, and
+`LanceDBBackend(table, mode="keyword")` then runs BM25 under the same filter, for hybrid search with
+`RankFusion`.
 
 </details>
 

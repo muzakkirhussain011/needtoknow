@@ -21,6 +21,15 @@ All notable changes are recorded here. The format follows
   index serves both halves of hybrid search. Each word of the query is sent as a query parameter,
   never as query syntax. `create_index` now creates indexes without stop words. Tested with the
   conformance kit, alone and fused with vector search, against Redis 8.10.2.
+- `mode="keyword"` on the Milvus backend: BM25 on a sparse vector Milvus derives from the text,
+  under the same permission filter and parameters, in a collection created with
+  `create_collection(..., text_search=True)`, so one collection serves both halves of hybrid
+  search. Tested with the conformance kit, alone and fused with vector search, against Milvus 3.0.2.
+- `mode="keyword"` on the LanceDB backend: LanceDB's full-text index (BM25) on the text, under the
+  same permission filter, applied before ranking, so one table serves both halves of hybrid search.
+  `create_indexes(table, content_field="content")` builds the index, keeping every word; rows
+  added after it are found by a scan until `table.optimize()`. Tested with the conformance kit,
+  alone and fused with vector search, with LanceDB 0.40.
 - Permission sync from Google Drive. `needtoknow.sync.google_drive.GoogleDriveACL` reads who may
   read a Drive file, in My Drive or a shared drive, through your Drive v3 service, and
   `needtoknow.sync.with_access` writes the answer onto the file's chunks for
