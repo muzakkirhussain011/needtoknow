@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- Python 3.10, which reached its end of life on 2026-10-31. needtoknow now requires Python 3.11 or
+  later; following the support policy, this is the first minor release after that date.
+
 ### Added
 
 - `needtoknow.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis

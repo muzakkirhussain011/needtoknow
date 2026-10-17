@@ -6,7 +6,7 @@
 pip install needtoknow
 ```
 
-Python 3.10 or newer: every Python version CPython still supports, each dropped in the first minor
+Python 3.11 or newer: every Python version CPython still supports, each dropped in the first minor
 release after its end of life. The core has no dependencies; each integration is an optional extra, for
 example `pip install "needtoknow[pgvector]"`.
 
