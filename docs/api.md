@@ -15,6 +15,9 @@ modules and need their extra.
 .. autoclass:: needtoknow.SearchBackend
    :members: search
 
+.. autoclass:: needtoknow.Reranker
+   :members: rerank
+
 .. autoclass:: needtoknow.RankFusion
    :members: search, asearch
 ```

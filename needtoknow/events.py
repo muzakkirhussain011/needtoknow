@@ -53,6 +53,10 @@ class RetrievalEvent:
     """Time spent in the authorizer: filters, scopes and checks."""
     searches: int = 0
     """Backend searches made: one when pre-filtering, more when post-filtering fetched again."""
+    rerank_ms: float = 0.0
+    """Time spent in the reranker."""
+    reranked: int = 0
+    """Permitted chunks given to the reranker; 0 when there is none."""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

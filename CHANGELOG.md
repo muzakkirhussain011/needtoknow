@@ -8,6 +8,14 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Reranking after the permission check: `PermissionedRetriever(..., reranker=..., rerank_depth=50)`
+  finds the top `rerank_depth` chunks the subject may read, lets a cross-encoder or hosted rerank
+  API order them, and returns the first k. The reranker never sees a chunk the subject may not
+  read, and can reorder, rescore or drop hits but not add one; returned hits keep their stored
+  text and metadata. Any function or object with `rerank` (and optionally `arerank`) works.
+  Events report `reranked` and `rerank_ms`, and OpenTelemetry records a
+  `needtoknow.rerank.duration` histogram. Guide: "Reranking".
+
 - `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
   subject)` searches an image's or another model's embedding, an embedding from your own service
   or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword
