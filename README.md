@@ -128,6 +128,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
 | [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
 | [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
+| [MCP](https://muzakkirhussain011.github.io/needtoknow/integrations/mcp.html) | Agent tool server | `needtoknow[mcp]` | Search tool; the user comes from the verified token |
 
 Setup for each, with code:
 
@@ -396,6 +397,27 @@ from needtoknow.haystack import NeedToKnowRetriever
 pipeline = Pipeline()
 pipeline.add_component("retriever", NeedToKnowRetriever(PermissionedRetriever(backend, authorizer)))
 result = pipeline.run({"retriever": {"query": question, "subject": subject}})
+```
+
+</details>
+
+<details>
+<summary><b>MCP</b></summary>
+
+**MCP** (`pip install "needtoknow[mcp]"`). `add_search_tool` gives an MCP server a search tool for
+AI assistants and agents. Whose permissions apply comes from the access token the server verified,
+never from the tool's arguments, and a call without a verified token is refused.
+
+```python
+from needtoknow.mcp import add_search_tool
+
+
+def subject_for(token):  # the verified token's user, with their groups
+    return Subject(token.subject, groups_of(token.subject))
+
+
+add_search_tool(server, PermissionedRetriever(backend, authorizer), subject_for)
+server.run(transport="streamable-http")
 ```
 
 </details>
