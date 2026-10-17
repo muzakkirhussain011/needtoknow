@@ -15,8 +15,19 @@ retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
 ```
 
 Any backends combine: two indexes, two stores, or a store and a LangChain retriever. `mode="keyword"`
-is available on the Elasticsearch and OpenSearch backends; it runs a BM25 `match` query on the text
-under the same permission filter as the vector search, and needs no embedding function.
+needs no embedding function and runs under the same permission filter as the vector search:
+
+- **Elasticsearch and OpenSearch:** a BM25 `match` query on the text.
+- **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
+
+```python
+from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+create_schema(pool, dim=768, text_search="english")  # adds the full-text index
+vector = PgVectorBackend(pool, embed)
+keyword = PgVectorBackend(pool, None, mode="keyword", text_search="english")
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
 
 ## How results are fused
 
