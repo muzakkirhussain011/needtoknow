@@ -119,6 +119,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
 | [Weaviate](https://muzakkirhussain011.github.io/needtoknow/integrations/weaviate.html) | Vector store | `needtoknow[weaviate]` | Inside the vector search |
 | [Redis](https://muzakkirhussain011.github.io/needtoknow/integrations/redis.html) | Vector store | `needtoknow[redis]` | In the same KNN query, on hex-encoded terms |
+| [LanceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/lancedb.html) | Vector store, embedded | `needtoknow[lancedb]` | Before the vector search ranks, on hex-encoded terms |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -266,6 +267,24 @@ from needtoknow.backends.redis import RedisBackend, create_index
 client = redis.Redis.from_url(REDIS_URL)
 create_index(client, "chunks", dim=768)
 backend = RedisBackend(client, "chunks", embed=my_embedding_model)
+```
+
+</details>
+
+<details>
+<summary><b>LanceDB</b></summary>
+
+**LanceDB** (`pip install "needtoknow[lancedb]"`). An embedded vector database, on a local directory
+or object storage, with no server to run. The permission filter is applied before the vector
+search ranks, on hex-encoded terms, so no group name or user id is ever part of the SQL.
+
+```python
+import lancedb
+
+from needtoknow.backends.lancedb import LanceDBBackend, create_table
+
+table = create_table(lancedb.connect("data/chunks"), "chunks", dim=768)
+backend = LanceDBBackend(table, embed=my_embedding_model)
 ```
 
 </details>

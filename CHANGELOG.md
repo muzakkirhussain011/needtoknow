@@ -22,6 +22,13 @@ All notable changes are recorded here. The format follows
   text and metadata. Any function or object with `rerank` (and optionally `arerank`) works.
   Events report `reranked` and `rerank_ms`, and OpenTelemetry records a
   `needtoknow.rerank.duration` histogram. Guide: "Reranking".
+- `needtoknow.backends.lancedb`: LanceDB, the embedded vector database, with the permission filter
+  applied before the vector search ranks (LanceDB's pre-filtering). Permission terms are stored
+  hex-encoded in a list column and matched with `array_has_any`, and deletes match a hex-encoded id,
+  so no group name, user id or document id is ever part of the SQL. `add` upserts, keeping the last
+  version of a repeated id; metadata is stored as JSON and returned exactly. `create_table` and
+  `create_indexes` (a `LABEL_LIST` index on the terms) set the table up. Tested with the
+  conformance kit, with text and vector queries, on LanceDB 0.40. Extra: `needtoknow[lancedb]`.
 - `needtoknow.mcp.add_search_tool`: a permission-aware search tool for MCP servers (MCP Python SDK
   2.3 or later), so AI assistants and agents search with the calling user's permissions. The user
   comes from the access token the server verified for the request, through your `subject_for`
