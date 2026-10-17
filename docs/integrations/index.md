@@ -19,6 +19,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
 | [Cerbos](cerbos.md) | Authorizer | none | Yes, from query plans |
+| [Google Drive](google-drive.md) | Permission sync onto the chunks | none (bring Google's client) | Through `MetadataACLAuthorizer` |
 | [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
 | [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
 | [Haystack](haystack.md) | Framework | `needtoknow[haystack]` | Through any needtoknow backend |

@@ -283,9 +283,12 @@ Median latency of a pre-filtered retrieval, one query at a time, in milliseconds
   failed under load. What the stores differ in is recall and speed at their defaults.
 - **Elasticsearch's lower recall comes from its default index.** For 384-dimensional vectors,
   Elasticsearch 9.1 and later index with `bbq_hnsw`, a 1-bit quantization that saves memory and
-  costs recall, and the backend asks each shard for 100 candidates. `create_index(...,
-  index_options={"type": "int8_hnsw"})` (or `"hnsw"`, full precision) and a larger
-  `num_candidates=` trade memory and latency for recall; they are not measured here yet.
+  costs recall, and the backend asks each shard for 100 candidates. Measured again in a later
+  session with `num_candidates=500`, `int8_hnsw` reached 0.988, 0.983, 0.932 and 0.966 pre-filtered
+  recall (0.1% to 100% readable) in the same 2.2 GiB, and full-precision `hnsw` 1.000, 1.000, 0.933
+  and 0.988 in 2.5 GiB, at similar median latency except `hnsw` at 0.1% readable (161 ms)
+  ([full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-elasticsearch-index-types.md)).
+  The index type and the candidate count changed together, so part of the gain is the larger count.
 - **Post-filtering collapses for selective users on every store** (0.093 to 0.095 of the top 10 at
   0.1% readable): it is a property of post-filtering, not of any store, and the reason
   `strategy="auto"` pre-filters.
@@ -295,7 +298,9 @@ Median latency of a pre-filtered retrieval, one query at a time, in milliseconds
   and measure capacity on your own hardware.
 - **Under load on 4 shared CPUs, Elasticsearch peaked early**: its throughput fell after 4 users and
   its p99 reached 1,074 ms at 16. Qdrant, OpenSearch and Weaviate stayed close to their peak at 16
-  users.
+  users. With `int8_hnsw` or `hnsw`, in the later session, Elasticsearch held 244 and 235 requests a
+  second at 16 users with a p99 under 90 ms; that session ran on a different machine, so this points
+  at the default index without proving it.
 - **Loading through a backend is the slow part on every store**: 17 to 38 minutes for the million
   chunks through each backend's batched writes over HTTP, against 36 seconds of binary `COPY` into
   PostgreSQL. For a first load of millions of chunks, a store's own bulk loader can write the
@@ -310,7 +315,8 @@ together, so no network sat between them; local Chroma, not Chroma's distributed
 Milvus, MongoDB Atlas, Redis and LanceDB not yet measured at a million chunks; OpenFGA not
 measured; and under concurrent load, errors counted but results not checked. Index tuning (pgvector
 `ef_search`, Elasticsearch's index type and `num_candidates`, Chroma's HNSW parameters) moves both
-recall and latency, and is worth measuring on your own data with the same harnesses.
+recall and latency, and is worth measuring on your own data with the same harnesses; only
+Elasticsearch's has been measured here.
 
 ## Reproduce it
 
