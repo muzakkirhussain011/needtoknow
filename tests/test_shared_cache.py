@@ -155,7 +155,13 @@ def test_invalid_options_are_refused(options):
 
 @pytest.mark.parametrize(
     "blob",
-    [b"not json", b"{}", b'{"expires": "soon", "value": true}', b'{"expires": 1e12, "value": "yes"}'],
+    [
+        b"not json",
+        b"{}",
+        b'{"expires": "soon", "value": true}',
+        b'{"expires": 1e12, "value": "yes"}',
+        b"[" * 100_000 + b"]" * 100_000,  # nested too deep for the JSON decoder
+    ],
 )
 def test_unreadable_entries_are_misses(blob):
     shared = FakeShared()
@@ -262,3 +268,14 @@ def test_replicas_share_decisions_through_redis():
     b.check(BOB, HITS)
     assert two.checks == 2
     a.invalidate()
+
+
+def test_a_shared_filter_nested_too_deep_is_a_miss():
+    shared = FakeShared()
+    _, (_one, two), (a, b) = _replicas(shared)
+    a.filter_for(BOB)
+    deep = '{"in": {"field": "team", "values": ["a"]}}'
+    for _ in range(150):
+        deep = '{"and": [' + deep + "]}"
+    shared.data = dict.fromkeys(shared.data, ('{"expires": 1e12, "value": {"filter": ' + deep + "}}").encode())
+    assert b.filter_for(BOB) is not None and two.filters == 1
