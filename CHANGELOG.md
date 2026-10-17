@@ -12,6 +12,11 @@ All notable changes are recorded here. The format follows
   filter as its vector search, with no embedding function needed, so one collection serves both
   halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with
   vector search, against Weaviate 1.39.12.
+- `mode="keyword"` on the Redis backend: the Query Engine's BM25 on the text, under the same
+  permission filter, in an index created with `create_index(..., content_field="content")`, so one
+  index serves both halves of hybrid search. Each word of the query is sent as a query parameter,
+  never as query syntax. `create_index` now creates indexes without stop words. Tested with the
+  conformance kit, alone and fused with vector search, against Redis 8.10.2.
 
 ### Fixed
 

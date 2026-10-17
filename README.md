@@ -269,6 +269,10 @@ create_index(client, "chunks", dim=768)
 backend = RedisBackend(client, "chunks", embed=my_embedding_model)
 ```
 
+`create_index(..., content_field="content")` also indexes the text, and
+`RedisBackend(client, "chunks", mode="keyword")` then runs BM25 under the same filter, for hybrid
+search with `RankFusion`.
+
 </details>
 
 <details>
