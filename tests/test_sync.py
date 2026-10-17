@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from needtoknow import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 from needtoknow.sync import Access, with_access
 from needtoknow.sync.google_drive import FIELDS, GoogleDriveACL, drive_access
 
@@ -55,6 +57,18 @@ def test_a_group_named_like_the_everyone_marker_is_refused():
 def test_access_rejects_ambiguous_names(users, groups, everyone, error):
     with pytest.raises(error):
         Access(users, groups, everyone)
+
+
+names = st.sets(st.sampled_from(["alice", "bob", "carol", "eng", "hr", "domain:example.com"]), max_size=3)
+subjects = st.builds(Subject, st.sampled_from(["alice", "bob", "dave"]), names)
+
+
+@given(names, names, st.booleans(), subjects, st.dictionaries(st.text(), st.text()))
+def test_the_acl_authorizer_reads_synced_metadata_as_access_means(users, groups, everyone, subject, other):
+    stale = {**other, "allowed_users": ["mallory"], "allowed_groups": ["*"]}
+    hit = Hit("doc", "text", 1.0, with_access(stale, Access(users, groups, everyone)))
+    expected = everyone or subject.id in users or bool(subject.groups & groups)
+    assert MetadataACLAuthorizer().check(subject, [hit]) == [expected]
 
 
 # ---- drive_access -------------------------------------------------------------------------------
