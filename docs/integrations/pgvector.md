@@ -87,6 +87,23 @@ The backend sets it with `SET LOCAL` in each search's transaction, like the iter
 other users of the connection pool keep their own setting. `None` (the default) leaves the server's
 value. Measure the recall and latency of a few values on your own data before choosing one.
 
+## Keyword search
+
+`mode="keyword"` searches the text with PostgreSQL full-text search instead of the vector, under
+the same permission condition, for [hybrid search](../hybrid.md) with `RankFusion`:
+
+```python
+create_schema(pool, dim=768, text_search="english")
+keyword = PgVectorBackend(pool, None, mode="keyword", text_search="english")
+```
+
+The query is parsed with `websearch_to_tsquery` (quoted phrases, `or`, `-word`) in the
+`text_search` configuration, and results are ranked by `ts_rank_cd`. `create_schema(...,
+text_search=...)` adds a GIN index on `to_tsvector('<configuration>', content)`; the backend writes
+the configuration into the query as a literal, so PostgreSQL uses that index (CI checks the plan).
+Use the same configuration name in both places. A keyword backend reads the table; write chunks
+with a vector backend, since every row stores its embedding.
+
 ## Async
 
 Pass an `AsyncConnectionPool` as `async_pool=` and `aretrieve` uses a native async search.

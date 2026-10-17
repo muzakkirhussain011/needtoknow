@@ -213,3 +213,81 @@ def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_facto
 
     async_result, sync_result = asyncio.run(run())
     assert async_result == sync_result and len(async_result.hits) == 4
+
+
+# ---- pgvector keyword search and hybrid search -------------------------------------------------
+
+
+@pytest.mark.parametrize("config", ["English", "english; DROP TABLE x", "", "pg catalog"])
+def test_pgvector_text_search_configuration_must_be_a_plain_name(config):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None, mode="keyword", text_search=config)
+    with pytest.raises(ValueError):
+        create_schema(None, 4, text_search=config)
+
+
+def test_pgvector_mode_and_embed_are_checked():
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, EMBED, mode="semantic")
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None, mode="keyword").add([Document("a", "doc", {})])
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None).search("doc", 3)
+
+
+@pytest.fixture(scope="module")
+def pgvector_keyword_table(pgvector_pool):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    create_schema(pgvector_pool, EMBED.dim, table="ntk_keyword", hnsw=False, text_search="english")
+    writer = PgVectorBackend(pgvector_pool, EMBED, table="ntk_keyword", iterative_scan=None)
+
+    def load(docs):
+        with pgvector_pool.connection() as conn:
+            conn.execute("TRUNCATE ntk_keyword")
+        writer.add(docs)
+        return writer
+
+    return load
+
+
+def test_pgvector_keyword_mode_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        pgvector_keyword_table(docs)
+        return keyword
+
+    check_backend(make)
+
+
+def test_pgvector_hybrid_search_on_one_table_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
+    from needtoknow import RankFusion
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        return RankFusion(pgvector_keyword_table(docs), keyword)
+
+    check_backend(make)
+
+
+def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvector_keyword_table):
+    from psycopg import sql
+
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    pgvector_keyword_table([Document("a", "leave policy", {"allowed_groups": ["*"]})])
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+    statement, params = keyword._keyword_query("leave", 5, In("allowed_groups", ["*"]))
+    with pgvector_pool.connection() as conn, conn.transaction():
+        conn.execute("SET LOCAL enable_seqscan = off")  # a tiny table would otherwise be scanned
+        plan = "\n".join(row[0] for row in conn.execute(sql.SQL("EXPLAIN ") + statement, params))
+    assert "ntk_keyword_content_english_fts" in plan

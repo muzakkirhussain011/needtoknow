@@ -21,6 +21,10 @@ All notable changes are recorded here. The format follows
   per-backend depth; `aretrieve` searches them concurrently. A chunk two backends return with
   different metadata is left out and logged, since its permissions are uncertain. Guide: "Hybrid
   search".
+- `mode="keyword"` on the pgvector backend: PostgreSQL full-text search (`websearch_to_tsquery`,
+  ranked by `ts_rank_cd`) under the same permission condition, so one table serves hybrid search.
+  `create_schema(..., text_search="english")` adds the full-text GIN index, and CI checks that the
+  query plan uses it. Tested with the conformance kit, alone and fused with vector search.
 - `mode="keyword"` on the Elasticsearch and OpenSearch backends: BM25 on the text under the same
   permission filter, with no embedding function needed. Tested with the conformance kit, alone and
   fused with vector search, against both engines.

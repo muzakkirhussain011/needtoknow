@@ -24,6 +24,28 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [MCP](mcp.md) | Agent tool server | `needtoknow[mcp]` | Through any needtoknow backend |
 | [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
 
+## Choosing a store
+
+Every store applies the permission filter inside its own search, passes the
+[conformance kit](../extending.md#test-it-with-the-conformance-kit) in CI against a real server,
+and keeps permission values out of query text. They differ in what is worth knowing in production:
+
+| Store | A write is searchable | Native `aretrieve` | Permission values travel as | Keyword search | CI tests against |
+|---|---|---|---|---|---|
+| [PostgreSQL + pgvector](pgvector.md) | When `add` commits | `AsyncConnectionPool` | Bound SQL parameters (jsonb containment) | Full-text, `mode="keyword"` | PostgreSQL 17 with pgvector |
+| [Chroma](chroma.md) | When `add` returns | No (a thread) | A `where` dictionary | No | Chroma's in-process client |
+| [Elasticsearch](elasticsearch.md#elasticsearch) | When `add` returns (`refresh="wait_for"`) | `AsyncElasticsearch` | A `terms` query on type-tagged terms | BM25, `mode="keyword"` | 9.5.5 |
+| [OpenSearch](elasticsearch.md#opensearch) | When `add` returns (`refresh="wait_for"`) | `AsyncOpenSearch` | A `terms` query on type-tagged terms | BM25, `mode="keyword"` | 3.9.0 |
+| [Qdrant](qdrant.md) | When `add` returns (`wait=True`) | `AsyncQdrantClient` | Filter objects (`MatchAny`) | No | 1.19.2 |
+| [Milvus](milvus.md) | At once (strong consistency, the default) | `AsyncMilvusClient` | `filter_params`, never in the expression | No | 3.0.2 |
+| [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | No | Atlas Local 8.0.30 |
+| [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | No | 1.39.12 |
+| [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | No | 8.10.2 |
+
+Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
+stores as well as within one. Measured recall, latency and throughput at a million chunks are in
+[Benchmarks](../benchmarks.md) for pgvector and Qdrant.
+
 Backends and authorizers combine freely: pgvector with OpenFGA, Chroma with OPA, a LangChain
 store with permissions on the chunks. A store not listed here needs only a `search` method; see
 [Extending needtoknow](../extending.md).
