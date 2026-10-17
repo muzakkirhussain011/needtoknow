@@ -3,8 +3,9 @@
 Each store loads the corpus through needtoknow's own backend (so the measured layout is the one
 users get), waits until its index is built, reports what that took, and makes a backend for the
 retrieval runs. `--ef-search` is each store's search breadth: pgvector's `hnsw.ef_search`,
-Qdrant's `hnsw_ef`, Milvus's `ef`, the candidates per shard of Elasticsearch and OpenSearch, and
-LanceDB's `nprobes`. LanceDB is bulk-loaded with `table.add` in the backend's row layout instead.
+Qdrant's `hnsw_ef`, Milvus's `ef`, the candidates per shard of Elasticsearch and OpenSearch,
+LanceDB's `nprobes` and Redis's `EF_RUNTIME`. LanceDB is bulk-loaded with `table.add` in the
+backend's row layout instead.
 """
 
 from __future__ import annotations
@@ -326,7 +327,52 @@ class LanceDB:
         return LanceDBBackend(self.db.open_table(NAME), embed, nprobes=self.ef_search)
 
 
-STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate", "lancedb")
+class Redis:
+    name = "redis"
+
+    def __init__(self, url: str, ef_search: int | None) -> None:
+        import redis
+
+        self.client = redis.Redis.from_url(url, socket_timeout=600)
+        self.ef_search = ef_search
+
+    def _info(self) -> dict:
+        reply = self.client.execute_command("FT.INFO", NAME)
+        if isinstance(reply, dict):  # RESP3
+            pairs = reply.items()
+        else:  # RESP2: name, value, name, value, ...
+            pairs = zip(reply[::2], reply[1::2], strict=True)
+        return {(k.decode() if isinstance(k, bytes) else str(k)): v for k, v in pairs}
+
+    def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
+        from needtoknow.backends.redis import RedisBackend, create_index
+
+        if NAME.encode() in self.client.execute_command("FT._LIST"):
+            self.client.execute_command("FT.DROPINDEX", NAME, "DD")
+        create_index(self.client, NAME, int(vectors.shape[1]), prefix=f"{NAME}:")
+        started = time.perf_counter()
+        _add_in_chunks(RedisBackend(self.client, NAME, None, prefix=f"{NAME}:"), ids, texts, vectors, metadata)
+        loaded = time.perf_counter()
+        # Redis indexes each hash as it is written; this waits for any indexing still in progress.
+        _wait(lambda: float(self._info().get("indexing", 0)) == 0, "Redis indexing")
+        indexed = time.perf_counter()
+        info = self._info()
+        docs = info.get("num_docs", b"?")
+        count = docs.decode() if isinstance(docs, bytes) else docs
+        return {
+            "rows": len(ids),
+            "load_s": round(loaded - started, 1),
+            "index_s": round(indexed - loaded, 1),
+            "detail": f"{count} documents, HNSW (M=16, EF_CONSTRUCTION=200)",
+        }
+
+    def backend(self, embed: Any, users: int) -> Any:
+        from needtoknow.backends.redis import RedisBackend
+
+        return RedisBackend(self.client, NAME, embed, prefix=f"{NAME}:", ef_runtime=self.ef_search)
+
+
+STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate", "lancedb", "redis")
 
 
 def make_store(
@@ -346,4 +392,6 @@ def make_store(
         return Weaviate(url, ef_search, grpc_port)
     if name == "lancedb":
         return LanceDB(url, ef_search)
+    if name == "redis":
+        return Redis(url, ef_search)
     raise ValueError(f"unknown store {name!r}")
