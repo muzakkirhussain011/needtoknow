@@ -14,7 +14,7 @@ import asyncio
 import json
 import math
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.backends._vectors import document_vectors
@@ -190,6 +190,18 @@ class PgVectorBackend:
             " ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, metadata = EXCLUDED.metadata,"
             " embedding = EXCLUDED.embedding"
         ).format(t=sql.Identifier(self.table))
+        with self.pool.connection() as conn, conn.cursor() as cur:
+            cur.executemany(statement, rows)
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        rows = [(json.dumps(dict(m)), doc_id) for doc_id, m in metadata.items()]
+        if not rows:
+            return
+
+        from psycopg import sql
+
+        statement = sql.SQL("UPDATE {t} SET metadata = %s::jsonb WHERE id = %s").format(t=sql.Identifier(self.table))
         with self.pool.connection() as conn, conn.cursor() as cur:
             cur.executemany(statement, rows)
 

@@ -8,6 +8,19 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `set_metadata({chunk_id: metadata})` on every built-in backend: replaces stored chunks' metadata
+  without embedding them again, so a document's permission change reaches search without the cost
+  of re-embedding. The whole metadata is replaced (no old permission key survives, including where
+  the store's own partial updates would merge), ids that are not stored are ignored, and it returns
+  once searches see the change, waiting for MongoDB's search index. The conformance kit checks it
+  for any backend that has it, against each real store in CI. Guide: "Changing a document's
+  permissions" in Operations.
+
+### Fixed
+
+- Chroma: `add` deletes and re-adds a replaced chunk, so none of its old metadata keys can remain
+  and match a permission filter; it also checks that there is one embedding per document.
+
 - `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
   subject)` searches an image's or another model's embedding, an embedding from your own service
   or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword

@@ -64,6 +64,7 @@ def filter_to_query(f: Filter) -> dict[str, Any] | None:
 
 Embed = Callable[[str], Sequence[float]]
 _BATCH = 500
+_REPLACE_METADATA = f"ctx._source[params.field] = params.metadata; ctx._source['{TERMS_FIELD}'] = params.terms"
 
 
 class EngineBackend:
@@ -148,6 +149,20 @@ class EngineBackend:
             for doc, source in zip(docs[start : start + _BATCH], sources[start : start + _BATCH], strict=True):
                 operations += [{"index": {"_index": self.index, "_id": doc.id}}, source]
             _raise_for_items(self._bulk(self.client, operations), allow_not_found=False)
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        items = list(metadata.items())
+        for start in range(0, len(items), _BATCH):
+            operations: list[dict[str, Any]] = []
+            for doc_id, new in items[start : start + _BATCH]:
+                params = {"field": self.metadata_field, "metadata": dict(new), "terms": terms(doc_id, new)}
+                operations += [
+                    {"update": {"_index": self.index, "_id": doc_id}},
+                    # A script, because a partial `doc` update would merge the old metadata's keys into the new.
+                    {"script": {"source": _REPLACE_METADATA, "params": params}},
+                ]
+            _raise_for_items(self._bulk(self.client, operations), allow_not_found=True)
 
     def delete(self, ids: Iterable[str]) -> None:
         operations = [{"delete": {"_index": self.index, "_id": i}} for i in ids]

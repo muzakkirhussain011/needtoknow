@@ -195,6 +195,19 @@ class WeaviateBackend:
                 first = next(iter(result.errors.values()))
                 raise RuntimeError(f"Weaviate rejected {len(result.errors)} objects, for example: {first}")
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        handle = self.client.collections.get(self.collection)
+        for doc_id, new in metadata.items():
+            uid = point_id(doc_id)
+            if handle.data.exists(uid):  # an update of a missing object would fail
+                # An update replaces the value of each property it names, and leaves the rest.
+                properties = {
+                    self.metadata_property: json.dumps(dict(new), sort_keys=True),
+                    TERMS_FIELD: [_guarded(t) for t in terms(doc_id, new)],
+                }
+                handle.data.update(uuid=uid, properties=properties)
+
     def delete(self, ids: Iterable[str]) -> None:
         from weaviate.classes.query import Filter as Where
 

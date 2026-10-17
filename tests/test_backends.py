@@ -341,3 +341,26 @@ def test_chroma_searches_with_query_vectors():
         return backend
 
     check_backend(make, examples=8, query=Query(vector=EMBED(KIT_QUERY)))
+
+
+# ---- changing permissions ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("change", ["add", "set_metadata"])
+def test_a_permission_change_leaves_nothing_of_the_old_permissions(factory, change):
+    old = Document("plan", "doc leave plan", {"allowed_groups": ["eng"], "level": 1})
+    backend = factory([old])
+    new_metadata = {"allowed_groups": ["hr"]}
+    if change == "add" and isinstance(backend, InMemoryBackend):
+        backend.add([Document("plan", old.text, new_metadata)])
+    elif change == "add":
+        backend.add([Document("plan", old.text, new_metadata)], embeddings=[EMBED(old.text)])
+    else:
+        backend.set_metadata({"plan": new_metadata})
+    assert backend.search("doc leave", 5, In("allowed_groups", ["eng"])) == []
+    assert backend.search("doc leave", 5, In("level", [1])) == []
+    (hit,) = backend.search("doc leave", 5, In("allowed_groups", ["hr"]))
+    assert hit.text == old.text and hit.metadata == new_metadata
+    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
+    assert retriever.retrieve("doc leave", Subject("bob", ["eng"]), 5).hits == []
+    assert [h.id for h in retriever.retrieve("doc leave", Subject("ann", ["hr"]), 5).hits] == ["plan"]
