@@ -4,11 +4,12 @@
 # release build, in a session of its own so that it outlives the notebook cell, and the script
 # returns once the store answers. `stop` ends the running store and deletes its data, so the next
 # one starts on a free port with free memory. Milvus is not here: it needs Docker or Kubernetes.
+# LanceDB is embedded, so `lancedb` only makes the directory its table goes in.
 #
-#   bash kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|stop
+#   bash kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|stop
 set -euo pipefail
 
-store="${1:?usage: kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|stop}"
+store="${1:?usage: kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|stop}"
 # The stores' files stay out of /kaggle/working, which Kaggle saves as the notebook's output;
 # only their logs are kept there.
 root=/tmp/needtoknow-stores
@@ -82,6 +83,11 @@ case "$store" in
     export DEFAULT_VECTORIZER_MODULE=none CLUSTER_HOSTNAME=node1
     start ./weaviate --host 127.0.0.1 --port 8080 --scheme http
     ready=http://127.0.0.1:8080/v1/.well-known/ready
+    ;;
+  lancedb)
+    mkdir -p "$root/lancedb-data"
+    echo "lancedb is embedded; its table goes in $root/lancedb-data"
+    exit 0
     ;;
   *)
     echo "unknown store: $store" >&2
