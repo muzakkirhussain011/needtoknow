@@ -2,8 +2,8 @@
 
 `drive_access` turns the permission resources that the Drive API v3 returns for a file into an
 `Access`. `GoogleDriveACL` fetches them with your Drive service, page by page, for files in My
-Drive and in shared drives. Install Google's client yourself (`google-api-python-client` and
-`google-auth`); this module never imports it.
+Drive and in shared drives, and applies the shared drive's restrictions. Install Google's client
+yourself (`google-api-python-client` and `google-auth`); this module never imports it.
 
 Drive grants map onto subjects like this:
 
@@ -11,7 +11,7 @@ Drive grants map onto subjects like this:
   contain groups, so a subject's `groups` must list every group it belongs to, directly or not;
 * a domain grant gives the group `"domain:<domain>"`, which a subject has when its account is in
   that domain;
-* an "anyone" grant gives everyone.
+* an "anyone" grant gives everyone or, when your domains are given, everyone in them.
 
 A grant gives nothing (it fails closed) when it does not let its holder read the file's content,
 or when it cannot be read with certainty:
@@ -24,6 +24,8 @@ or when it cannot be read with certainty:
 * a grant that belongs to a view (`metadata`: a limited-access folder's details only; `published`);
 * an inherited grant on a limited-access item, where only owners, organizers and direct grants
   open it;
+* in a shared drive open only to its members, a grant to anyone who is not a member;
+* outside your domains, when they are given, and in a shared drive open only to its domain's users;
 * a grant with an unknown type or role, or without the address or domain it needs.
 """
 
@@ -61,22 +63,26 @@ def _expired(value: Any, now: datetime) -> bool:
     return when.tzinfo is None or when <= now
 
 
-def _direct(details: Any) -> bool:
-    return isinstance(details, list) and any(isinstance(d, Mapping) and d.get("inherited") is False for d in details)
+def _details(permission: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    details = permission.get("permissionDetails")
+    return [d for d in details if isinstance(d, Mapping)] if isinstance(details, list) else []
 
 
-def _reads(permission: Mapping[str, Any], now: datetime) -> bool:
+def _reads(permission: Mapping[str, Any], now: datetime, members_only: bool) -> bool:
     role = permission.get("role")
     if role not in READ_ROLES or permission.get("view") is not None or permission.get("deleted") is True:
         return False
     if _expired(permission.get("expirationTime"), now):
         return False
+    details = _details(permission)
+    if members_only and not any(d.get("permissionType") == "member" for d in details):
+        return False
     if permission.get("inheritedPermissionsDisabled") is True:
-        return role in _ALWAYS_OPEN or _direct(permission.get("permissionDetails"))
+        return role in _ALWAYS_OPEN or any(d.get("inherited") is False for d in details)
     return True
 
 
-def _address(value: Any) -> str | None:
+def _lower(value: Any) -> str | None:
     return value.lower() if isinstance(value, str) and value else None
 
 
@@ -85,33 +91,43 @@ def drive_access(
     *,
     link_sharing: bool = False,
     domain_prefix: str = "domain:",
+    members_only: bool = False,
+    domains: Iterable[str] | None = None,
     now: datetime | None = None,
 ) -> Access:
     """Who may read a file, from the permission resources `permissions.list` returns for it.
 
     Ask for the fields in `FIELDS`. `link_sharing=True` counts sharing by link as access for the
     whole domain or for everyone. A domain grant gives the group `domain_prefix` + the domain.
-    Expiry times are compared with `now`, the current time by default.
+    `members_only=True` counts only grants to a shared drive's members. When `domains` is given,
+    only grants inside those domains count, and an "anyone" grant gives each of their domain
+    groups instead of everyone. Expiry times are compared with `now`, the current time by default.
     """
+    if isinstance(domains, str):
+        raise TypeError("domains must be a collection of domain names, not a single string")
     now = now or datetime.now(timezone.utc)
+    inside = None if domains is None else {d.lower() for d in domains}
     users: set[str] = set()
     groups: set[str] = set()
     everyone = False
     for permission in permissions:
-        if not isinstance(permission, Mapping) or not _reads(permission, now):
+        if not isinstance(permission, Mapping) or not _reads(permission, now, members_only):
             continue
         kind = permission.get("type")
         discoverable = permission.get("allowFileDiscovery") is True or link_sharing
         if kind in ("user", "group"):
-            address = _address(permission.get("emailAddress"))
-            if address is not None:
+            address = _lower(permission.get("emailAddress"))
+            if address is not None and (inside is None or address.rpartition("@")[2] in inside):
                 (users if kind == "user" else groups).add(address)
         elif kind == "domain":
-            domain = _address(permission.get("domain"))
-            if domain is not None and discoverable:
+            domain = _lower(permission.get("domain"))
+            if domain is not None and discoverable and (inside is None or domain in inside):
                 groups.add(domain_prefix + domain)
         elif kind == "anyone" and discoverable:
-            everyone = True
+            if inside is None:
+                everyone = True
+            else:
+                groups.update(domain_prefix + d for d in inside)
     return Access(users, groups, everyone)
 
 
@@ -119,16 +135,30 @@ class GoogleDriveACL:
     """Reads who may read Drive files, through a Drive v3 service.
 
     `service` is `googleapiclient.discovery.build("drive", "v3", credentials=...)`. Its
-    credentials must be able to see each file's sharing, for example a service account with
-    domain-wide delegation acting as a Workspace administrator. Errors from the API, such as a file
-    the credentials cannot see, are raised: a document whose permissions could not be read should
-    keep the permissions it has, not lose or gain any.
+    credentials need the `drive.readonly` scope (shared drives' settings need more than
+    `drive.metadata.readonly`) and must see each file's sharing and each shared drive's settings.
+
+    `domains` lists your organization's domains. When given, grants outside them count for nothing.
+    A file in a shared drive that is open only to its domain's users needs them: reading its
+    access without them raises `ValueError`. Errors from the API, such as a file the credentials
+    cannot see, are raised too: a document whose permissions could not be read should keep the
+    permissions it has, not lose or gain any.
     """
 
-    def __init__(self, service: Any, *, link_sharing: bool = False, domain_prefix: str = "domain:") -> None:
+    def __init__(
+        self,
+        service: Any,
+        *,
+        link_sharing: bool = False,
+        domain_prefix: str = "domain:",
+        domains: Iterable[str] | None = None,
+    ) -> None:
+        if isinstance(domains, str):
+            raise TypeError("domains must be a collection of domain names, not a single string")
         self.service = service
         self.link_sharing = link_sharing
         self.domain_prefix = domain_prefix
+        self.domains = None if domains is None else frozenset(domains)
 
     def permissions(self, file_id: str) -> list[Mapping[str, Any]]:
         """Every permission on the file, across all pages."""
@@ -141,6 +171,31 @@ class GoogleDriveACL:
             if not params["pageToken"]:
                 return found
 
+    def restrictions(self, file_id: str) -> Mapping[str, Any]:
+        """The restrictions of the shared drive that holds the file; empty for a file in My Drive."""
+        file = self.service.files().get(fileId=file_id, fields="driveId", supportsAllDrives=True).execute()
+        drive_id = file.get("driveId")
+        if not drive_id:
+            return {}
+        drive = self.service.drives().get(driveId=drive_id, fields="restrictions").execute()
+        restrictions = drive.get("restrictions", {})
+        if not isinstance(restrictions, Mapping):
+            raise ValueError(f"shared drive {drive_id!r} returned unreadable restrictions: {restrictions!r}")
+        return restrictions
+
     def access(self, file_id: str) -> Access:
-        """Who may read the file."""
-        return drive_access(self.permissions(file_id), link_sharing=self.link_sharing, domain_prefix=self.domain_prefix)
+        """Who may read the file, within its shared drive's restrictions."""
+        restrictions = self.restrictions(file_id)
+        domains = self.domains
+        if restrictions.get("domainUsersOnly") is True and domains is None:
+            raise ValueError(
+                f"file {file_id!r} is in a shared drive open only to its domain's users: pass domains= "
+                "to GoogleDriveACL so grants outside them can be left out"
+            )
+        return drive_access(
+            self.permissions(file_id),
+            link_sharing=self.link_sharing,
+            domain_prefix=self.domain_prefix,
+            members_only=restrictions.get("driveMembersOnly") is True,
+            domains=domains,
+        )

@@ -19,8 +19,10 @@ All notable changes are recorded here. The format follows
   a domain to the group `"domain:<domain>"` and anyone to everyone when findable in search.
   Grants that do not open the file's content grant nothing: sharing by link alone (unless
   `link_sharing=True`), deleted accounts, expired grants, view grants such as a limited-access
-  folder's metadata view, and inherited grants on limited-access items. `needtoknow.sync.Access`
-  is the source-neutral answer that later connectors return too.
+  folder's metadata view, inherited grants on limited-access items, and grants a shared drive's
+  settings shut out (members only, domain users only). `domains=` leaves out grants outside your
+  organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
+  connectors return too.
 
 ## [1.3.0] - 2026-10-17
 

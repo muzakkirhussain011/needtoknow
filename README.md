@@ -383,13 +383,14 @@ authorizer = CerbosAuthorizer("http://localhost:3592")
 **Google Drive** (bring `google-api-python-client`). `GoogleDriveACL` reads who may read a Drive
 file, in My Drive or a shared drive, and `with_access` writes it onto the file's chunks for
 `MetadataACLAuthorizer`. Grants that do not open the content fail closed: link-only sharing,
-deleted accounts, expired grants and limited-access folders' metadata views grant nothing.
+deleted accounts, expired grants, limited-access folders' metadata views and grants a shared drive
+shuts out grant nothing.
 
 ```python
 from needtoknow.sync import with_access
 from needtoknow.sync.google_drive import GoogleDriveACL
 
-access = GoogleDriveACL(drive_service).access(file_id)
+access = GoogleDriveACL(drive_service, domains=["example.com"]).access(file_id)
 backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in chunks.items()})
 ```
 

@@ -18,10 +18,10 @@ from needtoknow.sync.google_drive import GoogleDriveACL
 
 credentials = service_account.Credentials.from_service_account_file(
     "sync-account.json",
-    scopes=["https://www.googleapis.com/auth/drive.metadata.readonly"],
-    subject="admin@example.com",  # domain-wide delegation: read sharing as an administrator
+    scopes=["https://www.googleapis.com/auth/drive.readonly"],
+    subject="indexer@example.com",  # domain-wide delegation: the account your ingestion reads files as
 )
-drive = GoogleDriveACL(build("drive", "v3", credentials=credentials))
+drive = GoogleDriveACL(build("drive", "v3", credentials=credentials), domains=["example.com"])
 
 access = drive.access(file_id)  # who may read the file
 backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in chunks.items()})
@@ -39,7 +39,7 @@ result without embedding the chunks again
 | A user, any role | `allowed_users`: the address, lowercased | its id is that address, lowercased |
 | A group, any role | `allowed_groups`: the address, lowercased | its `groups` list the group |
 | A domain, findable in search | `allowed_groups`: `"domain:example.com"` | its `groups` list `"domain:example.com"` |
-| Anyone, findable in search | `allowed_groups`: `"*"` | always |
+| Anyone, findable in search | `allowed_groups`: `"*"`, or with `domains` each `"domain:..."` | always, or in those domains |
 
 Every Drive role (reader, commenter, writer, file organizer, organizer and owner) can read the
 file's content, so each one counts. Use the same addresses as subject ids, and give each subject
@@ -69,16 +69,34 @@ read with certainty. Skipping fails closed: the file is readable by fewer people
   folder's details, not its content; `published` grants are left out as well.
 - **Inherited grants on a limited-access item.** Only owners, organizers and people added to the
   item directly can open it.
+- **Grants to non-members** in a shared drive open only to its members.
+- **Grants outside your domains**, when you pass `domains`; see below.
 - **Unknown types and roles**, and grants missing the address or domain they need.
+
+## Shared drives and your domains
+
+A shared drive can be open only to its members, or only to users of its domain. Grants made
+before the setting changed can still be listed, but they no longer open the file, so
+`GoogleDriveACL` reads each file's shared drive settings (`drives.get`) and applies them: in a
+members-only drive, only grants that come from drive membership count.
+
+`domains=["example.com"]` lists your organization's domains. Grants to addresses or domains
+outside them then count for nothing, and an "anyone" grant gives each of your domains' groups
+instead of everyone. Pass it when sharing outside the organization is turned off, when your
+subjects only ever come from your own domains, and always for shared drives open only to their
+domain's users: a file in such a drive raises `ValueError` without it. A subdomain counts only
+when it is listed.
 
 ## Credentials
 
-`permissions.list` needs a scope such as `drive.metadata.readonly`, which reads sharing but no
-file content, and an account that can see each file's sharing. A service account with
-[domain-wide delegation](https://support.google.com/a/answer/162106) acting as an administrator
-sees every file in the domain, in My Drive and in shared drives (the reader passes
-`supportsAllDrives`). An error from the API, such as a file the account cannot see, is raised: a
-file whose sharing could not be read keeps the permissions it had until a later sync succeeds.
+The reader needs the `drive.readonly` scope: `drives.get`, which reads a shared drive's settings,
+accepts no narrower one. Use the identity your ingestion already reads the files with, for
+example a service account with
+[domain-wide delegation](https://support.google.com/a/answer/162106) acting as an indexing user
+who can see each file's sharing and is a member of each shared drive you index. An administrator
+does not see other users' files or shared drives they are not a member of, so acting as one is
+not enough. An error from the API, such as a file the identity cannot see, is raised: a file
+whose sharing could not be read keeps the permissions it had until a later sync succeeds.
 
 ## Keeping permissions current
 

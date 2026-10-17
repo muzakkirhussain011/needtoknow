@@ -143,21 +143,53 @@ def test_limited_access_keeps_direct_grants_owners_and_organizers():
 
 
 class FakeDrive:
-    """The slice of a googleapiclient Drive v3 service that GoogleDriveACL uses."""
+    """The slice of a googleapiclient Drive v3 service that GoogleDriveACL uses.
 
-    def __init__(self, pages):
-        self.pages = pages
+    Each method's answers are given in order; an exception as an answer is raised by `execute`.
+    """
+
+    def __init__(self, pages, *, drive_id=None, restrictions=None):
+        self.answers = {
+            "permissions.list": iter(pages),
+            "files.get": iter([{"driveId": drive_id} if drive_id else {}]),
+            "drives.get": iter([{} if restrictions is None else {"restrictions": restrictions}]),
+        }
         self.calls = []
 
     def permissions(self):
-        return self
+        return FakeResource(self, "permissions")
+
+    def files(self):
+        return FakeResource(self, "files")
+
+    def drives(self):
+        return FakeResource(self, "drives")
+
+
+class FakeResource:
+    def __init__(self, drive, name):
+        self.drive, self.name = drive, name
 
     def list(self, **params):
-        self.calls.append(params)
-        return self
+        return self._call("list", params)
+
+    def get(self, **params):
+        return self._call("get", params)
+
+    def _call(self, method, params):
+        self.drive.calls.append((f"{self.name}.{method}", params))
+        answer = next(self.drive.answers[f"{self.name}.{method}"])
+        return FakeRequest(answer)
+
+
+class FakeRequest:
+    def __init__(self, answer):
+        self.answer = answer
 
     def execute(self):
-        return self.pages[len(self.calls) - 1]
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
 
 
 def test_reads_every_page_of_a_files_permissions_including_shared_drives():
@@ -169,7 +201,11 @@ def test_reads_every_page_of_a_files_permissions_including_shared_drives():
     )
     assert GoogleDriveACL(drive).access("file-1") == Access(["alice@example.com"], ["eng@example.com"])
     base = {"fileId": "file-1", "fields": FIELDS, "supportsAllDrives": True, "pageSize": 100}
-    assert drive.calls == [base, {**base, "pageToken": "p2"}]
+    assert drive.calls == [
+        ("files.get", {"fileId": "file-1", "fields": "driveId", "supportsAllDrives": True}),
+        ("permissions.list", base),
+        ("permissions.list", {**base, "pageToken": "p2"}),
+    ]
 
 
 def test_a_file_with_no_permissions_is_readable_by_nobody():
@@ -182,13 +218,77 @@ def test_link_sharing_and_domain_prefix_are_passed_through():
     assert acl.access("file-1").groups == {"d/example.com"}
 
 
-def test_api_errors_are_raised_not_read_as_no_access():
-    class Failing(FakeDrive):
-        def execute(self):
-            raise RuntimeError("403 insufficientFilePermissions")
+def member(email, role="reader"):
+    return user(email, role, permissionDetails=[{"permissionType": "member", "role": role, "inherited": True}])
 
+
+def test_a_shared_drive_open_only_to_members_keeps_only_member_grants():
+    page = {
+        "permissions": [
+            member("alice@example.com"),
+            user("guest@partner.com", permissionDetails=[{"permissionType": "file", "inherited": False}]),
+            user("unknown@example.com"),
+            {"type": "anyone", "role": "reader", "allowFileDiscovery": True},
+        ]
+    }
+    drive = FakeDrive([page], drive_id="drive-1", restrictions={"driveMembersOnly": True})
+    assert GoogleDriveACL(drive).access("file-1") == Access(["alice@example.com"])
+    assert drive.calls[1] == ("drives.get", {"driveId": "drive-1", "fields": "restrictions"})
+
+
+def test_an_unrestricted_shared_drive_keeps_every_grant():
+    page = {"permissions": [member("alice@example.com"), user("guest@partner.com")]}
+    drive = FakeDrive([page], drive_id="drive-1", restrictions={"driveMembersOnly": False})
+    assert GoogleDriveACL(drive).access("file-1").users == {"alice@example.com", "guest@partner.com"}
+
+
+def test_a_shared_drive_open_only_to_its_domain_needs_the_domains_and_keeps_grants_inside_them():
+    page = {
+        "permissions": [
+            member("alice@example.com"),
+            user("guest@partner.com"),
+            group("eng@EXAMPLE.com"),
+            {"type": "domain", "role": "reader", "domain": "partner.com", "allowFileDiscovery": True},
+            {"type": "anyone", "role": "reader", "allowFileDiscovery": True},
+        ]
+    }
+    restricted = {"domainUsersOnly": True}
+    with pytest.raises(ValueError, match="pass domains="):
+        GoogleDriveACL(FakeDrive([page], drive_id="d", restrictions=restricted)).access("file-1")
+    acl = GoogleDriveACL(FakeDrive([page], drive_id="d", restrictions=restricted), domains=["Example.com"])
+    assert acl.access("file-1") == Access(["alice@example.com"], ["eng@example.com", "domain:example.com"])
+
+
+def test_domains_always_leave_out_grants_outside_them_and_turn_anyone_into_their_users():
+    permissions = [
+        user("alice@example.com"),
+        user("bob@sub.example.com"),
+        user("guest@partner.com"),
+        {"type": "domain", "role": "reader", "domain": "example.com", "allowFileDiscovery": True},
+        {"type": "anyone", "role": "reader", "allowFileDiscovery": True},
+    ]
+    access = drive_access(permissions, domains=["example.com", "example.org"], now=NOW)
+    assert access == Access(["alice@example.com"], ["domain:example.com", "domain:example.org"])
+    assert drive_access(permissions[:2], domains=[], now=NOW) == Access()
+
+
+def test_domains_must_be_a_collection():
+    with pytest.raises(TypeError):
+        drive_access([], domains="example.com")
+    with pytest.raises(TypeError):
+        GoogleDriveACL(FakeDrive([]), domains="example.com")
+
+
+def test_missing_drive_restrictions_restrict_nothing_and_unreadable_ones_raise():
+    page = {"permissions": [user("alice@example.com")]}
+    assert GoogleDriveACL(FakeDrive([page], drive_id="d")).access("file-1").users == {"alice@example.com"}
+    with pytest.raises(ValueError, match="unreadable restrictions"):
+        GoogleDriveACL(FakeDrive([page], drive_id="d", restrictions="members only")).access("file-1")
+
+
+def test_api_errors_are_raised_not_read_as_no_access():
     with pytest.raises(RuntimeError, match="403"):
-        GoogleDriveACL(Failing([])).access("file-1")
+        GoogleDriveACL(FakeDrive([RuntimeError("403 insufficientFilePermissions")])).access("file-1")
 
 
 def test_permissions_synced_from_drive_decide_what_a_search_returns():
