@@ -11,7 +11,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Syed Muzakkir Hussain" }]
-keywords = ["rag", "retrieval", "authorization", "access-control", "llm", "vector-search", "openfga", "langchain", "llamaindex", "haystack", "security"]
+keywords = ["rag", "retrieval", "authorization", "access-control", "llm", "vector-search", "openfga", "langchain", "llamaindex", "haystack", "mcp", "security"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -44,6 +44,7 @@ redis = ["redis>=5"]
 langchain = ["langchain-core>=1.0"]
 llamaindex = ["llama-index-core>=0.12"]
 haystack = ["haystack-ai>=2.12"]
+mcp = ["mcp>=2.3"]
 otel = ["opentelemetry-api>=1.30"]
 docs = ["sphinx>=9.1", "myst-parser>=5.1", "shibuya>=2026.7.12", "sphinx-design>=0.7", "sphinx-copybutton>=0.5.2"]
 

@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `needtoknow.mcp.add_search_tool`: a permission-aware search tool for MCP servers (MCP Python SDK
+  2.3 or later), so AI assistants and agents search with the calling user's permissions. The user
+  comes from the access token the server verified for the request, through your `subject_for`
+  function, never from the tool's arguments; a call without a verified token is refused, and a
+  fixed `Subject` serves single-user stdio servers. The read-only tool takes `query` and a bounded
+  `limit`, returns structured results without metadata unless keys are named, and reports a
+  permission service failure to the model without internal details. Extra: `needtoknow[mcp]`.
 - `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
   subject)` searches an image's or another model's embedding, an embedding from your own service
   or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword
