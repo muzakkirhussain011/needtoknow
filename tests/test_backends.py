@@ -286,7 +286,9 @@ def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvecto
 
     pgvector_keyword_table([Document("a", "leave policy", {"allowed_groups": ["*"]})])
     keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
-    statement, params = keyword._keyword_query("leave", 5, In("allowed_groups", ["*"]))
+    # Without a permission condition the full-text index is the only index that can serve the
+    # query; with one, the planner may as well start from the metadata index.
+    statement, params = keyword._keyword_query("leave", 5, None)
     with pgvector_pool.connection() as conn, conn.transaction():
         conn.execute("SET LOCAL enable_seqscan = off")  # a tiny table would otherwise be scanned
         plan = "\n".join(row[0] for row in conn.execute(sql.SQL("EXPLAIN ") + statement, params))
