@@ -171,6 +171,8 @@ def markdown(report: dict) -> str:
         )
         if report["config"].get("index_type"):
             summary += f" Index type: {report['config']['index_type']}."
+        if report["config"].get("refine_factor"):
+            summary += f" Refine factor: {report['config']['refine_factor']}."
     out = [
         f"### Load: {load['rows']} chunks" + ("" if store == "pgvector" else f" in {store}"),
         "",
@@ -207,6 +209,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--grpc-port", type=int, default=50051, help="Weaviate's gRPC port")
     p.add_argument("--ef-search", type=int, help="search breadth (pgvector hnsw.ef_search; see stores.py for the rest)")
     p.add_argument("--index-type", help="Elasticsearch's vector index type, such as int8_hnsw or hnsw")
+    p.add_argument("--refine-factor", type=int, help="LanceDB's refine_factor (re-ranks with the full vectors)")
     p.add_argument("--opa-url", help="an OPA running examples/opa, to measure a remote permission service")
     p.add_argument("--batch-size", type=int, default=256, help="embedding batch size")
     p.add_argument("--seed", type=int, default=7)
@@ -246,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     teams = rng.integers(0, args.teams, len(ids))
     metadata = [{FIELD: tags("r", int(t))} for t in teams]
-    store = make_store(args.backend, url, args.ef_search, args.grpc_port, args.index_type)
+    store = make_store(args.backend, url, args.ef_search, args.grpc_port, args.index_type, args.refine_factor)
     load = store.load(ids, texts, doc_vecs, metadata)
     del texts
     embed: Callable[[str], Any] = dict(zip(queries, query_vecs, strict=True)).__getitem__
