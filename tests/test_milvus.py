@@ -10,7 +10,13 @@ import pytest
 
 from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag, terms
-from needtoknow.backends.milvus import MilvusBackend, create_collection, filter_to_expression, permission_terms
+from needtoknow.backends.milvus import (
+    SPARSE_FIELD,
+    MilvusBackend,
+    create_collection,
+    filter_to_expression,
+    permission_terms,
+)
 from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
@@ -115,6 +121,23 @@ def test_add_writes_terms_in_batches_and_delete_skips_nothing_to_do():
     backend.delete([])
     backend.delete(iter(["d1", "d2"]))
     assert client.deletes == [("c", ["d1", "d2"])]
+
+
+def test_keyword_requests_search_the_sparse_vector_with_the_text_and_the_same_filter():
+    client = FakeClient()
+    backend = MilvusBackend(client, "chunks", mode="keyword")
+    backend.search("Leave policy, please", 7, In("team", ["hr"]))
+    MilvusBackend(client, "chunks", mode="keyword", search_params={"params": {"drop_ratio_search": 0.2}}).search("x", 1)
+    filtered, tuned = client.requests
+    assert filtered["data"] == ["Leave policy, please"] and filtered["anns_field"] == SPARSE_FIELD
+    assert filtered["filter"] == CONTAINS % "p0" and filtered["filter_params"] == {"p0": [tag("team", "hr")]}
+    assert filtered["limit"] == 7 and "search_params" not in filtered
+    assert tuned["search_params"] == {"params": {"drop_ratio_search": 0.2}}
+    assert backend.search("?! --", 5) == [] and len(client.requests) == 2
+    with pytest.raises(ValueError):
+        backend.search(Query(vector=EMBED("leave")), 5)
+    with pytest.raises(ValueError):
+        MilvusBackend(client, "chunks", mode="semantic")
 
 
 def test_wrong_configuration_is_rejected():
@@ -290,3 +313,75 @@ def test_a_subject_in_ten_thousand_groups():
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     client.drop_collection(name)
     assert [h.id for h in result.hits] == ["mine"]
+
+
+# ---- keyword search and hybrid search on a server ----------------------------------------------
+
+
+def _new_text_collection(client):
+    name = f"ntk_{uuid.uuid4().hex}"
+    create_collection(client, name, EMBED.dim, text_search=True)
+    return name
+
+
+def test_server_keyword_mode_passes_the_conformance_kit():
+    client, previous = _client(), []
+
+    def make(docs):
+        for name in previous:
+            client.drop_collection(name)
+        previous[:] = [_new_text_collection(client)]
+        backend = MilvusBackend(client, previous[0], EMBED, mode="keyword")
+        backend.add(docs)
+        return backend
+
+    try:
+        check_backend(make)
+    finally:
+        for name in previous:
+            client.drop_collection(name)
+
+
+def test_server_hybrid_search_over_one_collection_passes_the_conformance_kit():
+    from needtoknow import RankFusion
+
+    client, previous = _client(), []
+
+    def make(docs):
+        for name in previous:
+            client.drop_collection(name)
+        previous[:] = [_new_text_collection(client)]
+        vector = MilvusBackend(client, previous[0], EMBED)
+        vector.add(docs)
+        return RankFusion(vector, MilvusBackend(client, previous[0], mode="keyword"))
+
+    try:
+        check_backend(make, examples=10)
+        check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+    finally:
+        for name in previous:
+            client.drop_collection(name)
+
+
+def test_server_keyword_mode_ranks_by_bm25_inside_the_filter():
+    client = _client()
+    name = _new_text_collection(client)
+    keyword = MilvusBackend(client, name, EMBED, mode="keyword")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "the incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    try:
+        hits = keyword.search("leave", 5)
+        assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+        assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+        assert [h.id for h in keyword.search("the", 5)] == ["c"]  # the standard analyzer keeps every word
+        hostile = 'leave" || ARRAY_CONTAINS_ANY(needtoknow_terms, ["*"]) || "'
+        assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
+        keyword.set_metadata({"b": {"allowed_groups": ["*"]}})
+        assert [h.id for h in keyword.search("payouts", 5, In("allowed_groups", ["*"]))] == ["b"]
+    finally:
+        client.drop_collection(name)

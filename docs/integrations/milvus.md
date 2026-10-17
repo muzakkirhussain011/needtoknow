@@ -90,3 +90,26 @@ row = {"id": doc_id, "embedding": vector, "content": text, "metadata": metadata}
 row["needtoknow_terms"] = permission_terms(metadata)
 client.upsert(collection_name="docs", data=[row])
 ```
+
+## Keyword search and hybrid search
+
+`mode="keyword"` searches the chunks' text with BM25, under the same permission filter and its
+parameters. Milvus computes BM25 from a sparse vector it fills from the text itself, which needs a
+function in the schema when the collection is created: `create_collection(..., text_search=True)`
+adds it, with Milvus's standard analyzer, which keeps every word. One collection then serves both
+halves of [hybrid search](../hybrid.md):
+
+```python
+from needtoknow import RankFusion
+
+create_collection(client, "docs", dim=768, text_search=True)
+vector = MilvusBackend(client, "docs", embed=embed)
+keyword = MilvusBackend(client, "docs", mode="keyword")
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+The query's text is sent as the search data, separate from the filter expression, so it cannot
+change what the filter selects. Scores are Milvus's BM25, higher for better matches. Milvus needs
+every chunk's vector, so write chunks through a backend with `embed`. A collection created without
+`text_search` cannot gain it later; create a new one and load it again. CI runs the conformance kit
+against Milvus 3.0.2 in keyword mode and fused with vector search.

@@ -184,3 +184,70 @@ def test_set_metadata_replaces_permissions_and_ignores_unknown_ids(db):
     assert backend.search("leave", 5, In("level", [1])) == []
     (hit,) = backend.search("leave", 5)
     assert hit.id == "plan" and hit.text == "leave plan" and hit.metadata == {"allowed_groups": ["O'Brien's team"]}
+
+
+# ---- keyword search and hybrid search ----------------------------------------------------------
+
+
+def _indexed_for_keywords(backend):
+    # The full-text index is built on a seed row, then the corpus arrives after it, as in production:
+    # rows added after the index are found by a scan until the table is optimized.
+    backend.add([Document("seed", "seed", {})])
+    create_indexes(backend.table, content_field="content")
+    backend.delete(["seed"])
+    return backend
+
+
+def test_mode_is_checked():
+    with pytest.raises(ValueError):
+        LanceDBBackend(None, mode="semantic")
+
+
+def test_keyword_mode_passes_the_conformance_kit(db):
+    def make(docs):
+        backend = _indexed_for_keywords(LanceDBBackend(_new_table(db), mode="keyword"))
+        backend.add(docs)
+        return backend
+
+    check_backend(make)
+
+
+def test_hybrid_search_over_one_table_passes_the_conformance_kit(db):
+    from needtoknow import RankFusion
+
+    def make(docs):
+        vector = _indexed_for_keywords(LanceDBBackend(_new_table(db), EMBED))
+        vector.add(docs)
+        return RankFusion(vector, LanceDBBackend(vector.table, mode="keyword"))
+
+    check_backend(make, examples=10)
+    check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+
+
+def test_keyword_mode_ranks_by_bm25_inside_the_filter(db):
+    table = _new_table(db)
+    keyword = LanceDBBackend(table, mode="keyword")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "the incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    create_indexes(table, content_field="content")
+    hits = keyword.search("leave", 5)
+    assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+    assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+    assert [h.id for h in keyword.search("the", 5)] == ["c"]  # no stop word is dropped
+    hostile = "leave\" OR content:* ( ) ' --"
+    assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
+    assert {h.id for h in keyword.search(hostile, 5, In("allowed_groups", ["*"]))} == {"a"}
+    assert keyword.search("?! --", 5) == []
+    with pytest.raises(ValueError):
+        keyword.search(Query(vector=EMBED("leave")), 5)
+    keyword.add([Document("d", "leave later", {"allowed_groups": ["*"]})])
+    assert "d" in {h.id for h in keyword.search("leave", 5)}  # found before the index has it
+    table.optimize()
+    assert "d" in {h.id for h in keyword.search("leave", 5)}
+    keyword.set_metadata({"d": {"allowed_groups": ["hr"]}})
+    assert [h.id for h in keyword.search("later", 5, In("allowed_groups", ["hr"]))] == ["d"]

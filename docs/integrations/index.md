@@ -39,11 +39,11 @@ and keeps permission values out of query text. They differ in what is worth know
 | [Elasticsearch](elasticsearch.md#elasticsearch) | When `add` returns (`refresh="wait_for"`) | `AsyncElasticsearch` | A `terms` query on type-tagged terms | BM25, `mode="keyword"` | 9.5.5 |
 | [OpenSearch](elasticsearch.md#opensearch) | When `add` returns (`refresh="wait_for"`) | `AsyncOpenSearch` | A `terms` query on type-tagged terms | BM25, `mode="keyword"` | 3.9.0 |
 | [Qdrant](qdrant.md) | When `add` returns (`wait=True`) | `AsyncQdrantClient` | Filter objects (`MatchAny`) | No | 1.19.2 |
-| [Milvus](milvus.md) | At once (strong consistency, the default) | `AsyncMilvusClient` | `filter_params`, never in the expression | No | 3.0.2 |
+| [Milvus](milvus.md) | At once (strong consistency, the default) | `AsyncMilvusClient` | `filter_params`, never in the expression | BM25, `mode="keyword"` | 3.0.2 |
 | [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | No | Atlas Local 8.0.30 |
 | [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | BM25, `mode="keyword"` | 1.39.12 |
 | [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | BM25, `mode="keyword"` | 8.10.2 |
-| [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | No | LanceDB 0.40, embedded |
+| [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | BM25, `mode="keyword"` | LanceDB 0.40, embedded |
 
 Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
 stores as well as within one. Measured recall, latency and throughput at a million chunks are in
