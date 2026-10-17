@@ -14,7 +14,9 @@ from needtoknow.backends.mongodb import (
     WRITE_FIELD,
     MongoDBBackend,
     create_search_index,
+    create_text_index,
     filter_to_mongo,
+    filter_to_search,
     permission_terms,
 )
 from needtoknow.testing import QUERY, HashingEmbedder, check_backend
@@ -198,6 +200,92 @@ def test_asearch_uses_the_async_collection_or_a_thread():
     assert [h.id for h in asyncio.run(threaded.asearch("leave", 2))] == ["a"]
 
 
+# ---- keyword search (no server) ----------------------------------------------------------------
+
+
+def test_filters_become_atlas_search_operators_on_the_tags():
+    hr, one = (
+        {"in": {"path": TERMS_FIELD, "value": [tag("team", "hr")]}},
+        {"in": {"path": TERMS_FIELD, "value": [tag("level", 1)]}},
+    )
+    assert filter_to_search(In("team", ["hr"])) == hr
+    assert filter_to_search(And(In("team", ["hr"]), In("level", [1]))) == {"compound": {"filter": [hr, one]}}
+    either = filter_to_search(Or(In("team", ["hr"]), In("level", [1])))
+    assert either == {"compound": {"should": [hr, one], "minimumShouldMatch": 1}}
+    assert filter_to_search(Or(In("team", ["hr"]), In("level", []))) == hr
+    assert filter_to_search(And(In("team", ["hr"]), In("level", []))) is None
+    with pytest.raises(ValueError):
+        filter_to_search(In("a\x1fb", ["x"]))
+
+
+class FakeTextCollection(FakeCollection):
+    """A FakeCollection with a text index too, which sees writes only after `text_lag` probes of it."""
+
+    def __init__(self, results=None, lag=0, text_lag=0):
+        super().__init__(results, lag)
+        self.text_lag, self.text_indexed, self.text_probes = text_lag, {}, 0
+
+    def aggregate(self, pipeline):
+        if "$vectorSearch" in pipeline[0]:
+            return super().aggregate(pipeline)
+        self.pipelines.append(pipeline)
+        search = pipeline[0]["$search"]
+        if "in" not in search:
+            return list(self.results)
+        self.text_probes += 1
+        if self.text_lag > 0:
+            self.text_lag -= 1
+        else:
+            self.text_indexed = dict(self.documents)
+        path, values = search["in"]["path"], search["in"]["value"]
+        return [{"_id": d["_id"]} for d in self.text_indexed.values() if d.get(path) in values]
+
+
+def test_keyword_pipelines_search_the_text_inside_the_filter():
+    collection = FakeTextCollection()
+    backend = MongoDBBackend(collection, mode="keyword")
+    backend.search("leave policy", 7, In("team", ["hr"]))
+    backend.search("leave", 3)
+    filtered, unfiltered = collection.pipelines
+    search = filtered[0]["$search"]
+    assert search["index"] == "needtoknow_text"
+    assert search["compound"]["must"] == [{"text": {"query": "leave policy", "path": "content"}}]
+    assert search["compound"]["filter"] == [{"in": {"path": TERMS_FIELD, "value": [tag("team", "hr")]}}]
+    projection = {"content": 1, "metadata": 1, "score": {"$meta": "searchScore"}}
+    assert filtered[1:] == [{"$limit": 7}, {"$project": projection}]
+    assert unfiltered[0]["$search"] == {"index": "needtoknow_text", "text": {"query": "leave", "path": "content"}}
+    assert backend.search("?! --", 5) == [] and backend.search("leave", 5, In("team", [])) == []
+    assert len(collection.pipelines) == 2
+    with pytest.raises(ValueError):
+        backend.search(Query(vector=EMBED("leave")), 5)
+    with pytest.raises(ValueError):
+        MongoDBBackend(None, mode="semantic")
+    with pytest.raises(ValueError):
+        MongoDBBackend(None, EMBED, text_index="")
+
+
+def test_a_keyword_backend_waits_for_the_text_index_only_and_needs_no_embed():
+    pytest.importorskip("pymongo")
+    collection = FakeTextCollection(text_lag=2)
+    backend = MongoDBBackend(collection, mode="keyword")
+    backend.add([Document("a", "leave", {"allowed_groups": ["hr"]})])
+    assert collection.text_probes == 3 and collection.probes == 0
+    assert "embedding" not in collection.documents["a"]
+    collection.text_lag, before = 1, collection.text_probes
+    backend.delete(["a"])
+    assert collection.text_probes - before == 2 and collection.documents == {}
+
+
+def test_a_vector_backend_given_a_text_index_waits_for_both():
+    pytest.importorskip("pymongo")
+    collection = FakeTextCollection(lag=1, text_lag=1)
+    MongoDBBackend(collection, EMBED, text_index="needtoknow_text").add([Document("a", "leave", {})])
+    assert collection.probes == 2 and collection.text_probes == 2
+    plain = FakeTextCollection(lag=1, text_lag=1)
+    MongoDBBackend(plain, EMBED).add([Document("a", "leave", {})])
+    assert plain.probes == 2 and plain.text_probes == 0
+
+
 # ---- a local Atlas deployment ------------------------------------------------------------------
 
 
@@ -313,3 +401,72 @@ def test_a_subject_in_ten_thousand_groups():
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     collection.drop()
     assert [h.id for h in result.hits] == ["mine"]
+
+
+# ---- keyword search and hybrid search on a local Atlas deployment ------------------------------
+
+
+def _text_collection():
+    collection = _collection()
+    create_text_index(collection)
+    return collection
+
+
+def test_server_keyword_mode_passes_the_conformance_kit():
+    collection = _text_collection()
+    backend, previous = MongoDBBackend(collection, mode="keyword"), []
+
+    def make(docs):
+        backend.delete(previous)
+        backend.add(docs)
+        previous[:] = [d.id for d in docs]
+        return backend
+
+    try:
+        check_backend(make)
+    finally:
+        collection.drop()
+
+
+def test_server_hybrid_search_over_one_collection_passes_the_conformance_kit():
+    from needtoknow import RankFusion
+
+    collection = _text_collection()
+    # The vector backend writes, and waits for both indexes; the keyword backend only searches.
+    vector = MongoDBBackend(collection, EMBED, text_index="needtoknow_text")
+    hybrid, previous = RankFusion(vector, MongoDBBackend(collection, mode="keyword")), []
+
+    def make(docs):
+        vector.delete(previous)
+        vector.add(docs)
+        previous[:] = [d.id for d in docs]
+        return hybrid
+
+    try:
+        check_backend(make, examples=10)
+        check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+    finally:
+        collection.drop()
+
+
+def test_server_keyword_mode_ranks_by_bm25_inside_the_filter():
+    collection = _text_collection()
+    keyword = MongoDBBackend(collection, mode="keyword")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "the incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    try:
+        hits = keyword.search("leave", 5)
+        assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+        assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+        assert [h.id for h in keyword.search("the", 5)] == ["c"]  # lucene.standard keeps every word
+        hostile = 'leave {"$where": "true"} ($or)'
+        assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
+        keyword.set_metadata({"b": {"allowed_groups": ["*"]}})
+        assert [h.id for h in keyword.search("payouts", 5, In("allowed_groups", ["*"]))] == ["b"]
+    finally:
+        collection.drop()

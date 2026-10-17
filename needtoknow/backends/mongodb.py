@@ -15,14 +15,20 @@ Atlas Vector Search indexes a write shortly after it happens, not at once. So `a
 wait (by default) until the index shows the change: every write carries a fresh marker,
 `needtoknow_write`, and the wait ends when the index returns each chunk with its marker, which is
 also when its new permission terms are searchable.
+
+`MongoDBBackend(..., mode="keyword")` searches the text with Atlas Search (`$search`, BM25) under
+the same permission filter, written with Atlas Search's own operators, in an index that
+`create_text_index` creates. A backend given `text_index` waits for that index too.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from functools import partial
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, TERMS_FIELD, tag, terms
@@ -35,7 +41,9 @@ __all__ = [
     "WRITE_FIELD",
     "MongoDBBackend",
     "create_search_index",
+    "create_text_index",
     "filter_to_mongo",
+    "filter_to_search",
     "permission_terms",
 ]
 
@@ -46,6 +54,7 @@ WRITE_FIELD = "needtoknow_write"
 
 _BATCH = 500
 _MAX_CANDIDATES = 10_000  # Atlas Vector Search's limit for numCandidates (and so for limit)
+_WORD = re.compile(r"\w")
 
 
 def permission_terms(metadata: Mapping[str, Any]) -> list[str]:
@@ -73,6 +82,42 @@ def filter_to_mongo(f: Filter) -> dict[str, Any] | None:
     raise TypeError(f"not a filter: {f!r}")
 
 
+def filter_to_search(f: Filter) -> dict[str, Any] | None:
+    """Translate a filter into an Atlas Search operator on the tagged terms, for `$search`, or
+    `None` when nothing can match: `in` for each `In`, and `compound` for `And` and `Or`."""
+    if isinstance(f, In):
+        if _SEP in f.field:
+            raise ValueError(f"field {f.field!r} may not contain \\x1f")
+        values = _ordered(f.values)
+        return {"in": {"path": TERMS_FIELD, "value": [tag(f.field, v) for v in values]}} if values else None
+    if isinstance(f, And):
+        parts = [filter_to_search(c) for c in f.clauses]
+        if any(p is None for p in parts):
+            return None
+        return parts[0] if len(parts) == 1 else {"compound": {"filter": parts}}
+    if isinstance(f, Or):
+        kept = [p for p in (filter_to_search(c) for c in f.clauses) if p is not None]
+        if not kept:
+            return None
+        return kept[0] if len(kept) == 1 else {"compound": {"should": kept, "minimumShouldMatch": 1}}
+    raise TypeError(f"not a filter: {f!r}")
+
+
+def _create_index(collection: Any, model: Any, name: str, wait: bool, timeout: float) -> None:
+    database = collection.database
+    if collection.name not in database.list_collection_names():
+        database.create_collection(collection.name)
+    collection.create_search_index(model)
+    if not wait:
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if any(index.get("queryable") for index in collection.list_search_indexes(name)):
+            return
+        time.sleep(0.5)
+    raise TimeoutError(f"search index {name!r} was not queryable after {timeout} seconds")
+
+
 def create_search_index(
     collection: Any,
     dim: int,
@@ -90,9 +135,6 @@ def create_search_index(
     """
     from pymongo.operations import SearchIndexModel
 
-    database = collection.database
-    if collection.name not in database.list_collection_names():
-        database.create_collection(collection.name)
     definition = {
         "fields": [
             {"type": "vector", "path": vector_field, "numDimensions": dim, "similarity": similarity},
@@ -101,15 +143,39 @@ def create_search_index(
             {"type": "filter", "path": "_id"},
         ]
     }
-    collection.create_search_index(SearchIndexModel(definition=definition, name=name, type="vectorSearch"))
-    if not wait:
-        return
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if any(index.get("queryable") for index in collection.list_search_indexes(name)):
-            return
-        time.sleep(0.5)
-    raise TimeoutError(f"search index {name!r} was not queryable after {timeout} seconds")
+    model = SearchIndexModel(definition=definition, name=name, type="vectorSearch")
+    _create_index(collection, model, name, wait, timeout)
+
+
+def create_text_index(
+    collection: Any,
+    *,
+    name: str = "needtoknow_text",
+    content_field: str = "content",
+    wait: bool = True,
+    timeout: float = 120.0,
+) -> None:
+    """Create the Atlas Search index that `mode="keyword"` searches, creating the collection if needed.
+
+    The index holds the text, with the `lucene.standard` analyzer, which keeps every word, and as
+    tokens the permission terms, the write marker and `_id`. With `wait`, it returns once the index
+    is queryable, or raises `TimeoutError`.
+    """
+    from pymongo.operations import SearchIndexModel
+
+    definition = {
+        "mappings": {
+            "dynamic": False,
+            "fields": {
+                content_field: {"type": "string", "analyzer": "lucene.standard"},
+                TERMS_FIELD: {"type": "token"},
+                WRITE_FIELD: {"type": "token"},
+                "_id": {"type": "token"},
+            },
+        }
+    }
+    model = SearchIndexModel(definition=definition, name=name, type="search")
+    _create_index(collection, model, name, wait, timeout)
 
 
 class MongoDBBackend:
@@ -122,6 +188,13 @@ class MongoDBBackend:
     index. Pass `async_collection` (the same collection from an `AsyncMongoClient`) for a native
     `asearch`; otherwise async calls run `search` in a thread. Without `embed`, search with
     `Query(vector=...)` and pass `embeddings` to `add`.
+
+    `mode="keyword"` searches the text with Atlas Search (BM25) instead, in the index named
+    `text_index` (`"needtoknow_text"` by default; see `create_text_index`), under the same
+    permission filter. Scores are Atlas Search's, higher for better matches. Such a backend needs
+    no `embed`: without one, `add` writes chunks with no vector, which keyword search still finds.
+    A vector backend given `text_index` also waits for that index after each write, so writes
+    through it are searchable by both halves of hybrid search when they return.
     """
 
     supports_filters = True
@@ -131,7 +204,9 @@ class MongoDBBackend:
         collection: Any,
         embed: Embed | None = None,
         *,
+        mode: str = "vector",
         index: str = "needtoknow",
+        text_index: str | None = None,
         vector_field: str = "embedding",
         content_field: str = "content",
         metadata_field: str = "metadata",
@@ -140,14 +215,20 @@ class MongoDBBackend:
         wait_timeout: float = 60.0,
         async_collection: Any = None,
     ) -> None:
-        if not index:
-            raise ValueError("index must be a non-empty name")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
+        if mode == "keyword" and text_index is None:
+            text_index = "needtoknow_text"
+        if not index or text_index == "":
+            raise ValueError("index and text_index must be non-empty names")
         if num_candidates < 1 or wait_timeout <= 0:
             raise ValueError("num_candidates and wait_timeout must be positive")
+        self.mode = mode
         self.collection = collection
         self.async_collection = async_collection
         self.embed = embed
         self.index = index
+        self.text_index = text_index
         self.vector_field = vector_field
         self.content_field = content_field
         self.metadata_field = metadata_field
@@ -157,15 +238,17 @@ class MongoDBBackend:
 
     # ---- writing -----------------------------------------------------------------------------
 
-    def _document(self, doc: Document, vector: Sequence[float], marker: str) -> dict[str, Any]:
-        return {
+    def _document(self, doc: Document, vector: Sequence[float] | None, marker: str) -> dict[str, Any]:
+        document: dict[str, Any] = {
             "_id": doc.id,
             self.content_field: doc.text,
             self.metadata_field: dict(doc.metadata),
             TERMS_FIELD: terms(doc.id, doc.metadata),
-            self.vector_field: [float(x) for x in vector],
             WRITE_FIELD: marker,
         }
+        if vector is not None:
+            document[self.vector_field] = [float(x) for x in vector]
+        return document
 
     def add(
         self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None, *, wait: bool = True
@@ -178,7 +261,11 @@ class MongoDBBackend:
         from pymongo import ReplaceOne
 
         docs = list(documents)
-        vectors = document_vectors(docs, embeddings, self.embed)
+        vectors: Sequence[Sequence[float] | None]
+        if embeddings is None and self.embed is None and self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only backend without embed writes no vector
+        else:
+            vectors = document_vectors(docs, embeddings, self.embed)
         # The last version of each id wins, as it would in sequence; each id is then written once,
         # so every batch's marker stays on all of its chunks.
         latest = list({d.id: (d, v) for d, v in zip(docs, vectors, strict=True)}.values())
@@ -189,9 +276,10 @@ class MongoDBBackend:
             self.collection.bulk_write([ReplaceOne({"_id": r["_id"]}, r, upsert=True) for r in rows], ordered=False)
             batches.append((marker, len(rows)))
         if wait and latest:
-            probe = [float(x) for x in latest[0][1]]
+            first = latest[0][1]
+            probe = [float(x) for x in first] if self.mode == "vector" and first is not None else None
             for marker, expected in batches:
-                self._wait({WRITE_FIELD: marker}, expected, probe)
+                self._settle({WRITE_FIELD: marker}, {"in": {"path": WRITE_FIELD, "value": [marker]}}, expected, probe)
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]], *, wait: bool = True) -> None:
         """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
@@ -215,10 +303,10 @@ class MongoDBBackend:
             result = self.collection.bulk_write(changes, ordered=False)
             if result.matched_count:
                 batches.append((marker, result.matched_count))
-        probe = self._probe() if wait and batches else None
-        if probe is not None:
+        if wait and batches:
+            probe = self._probe()
             for marker, expected in batches:
-                self._wait({WRITE_FIELD: marker}, expected, probe)
+                self._settle({WRITE_FIELD: marker}, {"in": {"path": WRITE_FIELD, "value": [marker]}}, expected, probe)
 
     def delete(self, ids: Iterable[str], *, wait: bool = True) -> None:
         """Delete chunks by id; with `wait`, returns once the search index no longer returns them."""
@@ -227,12 +315,16 @@ class MongoDBBackend:
             return
         probe = self._probe() if wait else None
         self.collection.delete_many({"_id": {"$in": selected}})
-        if probe is not None:
+        if wait:
             for start in range(0, len(selected), _MAX_CANDIDATES):
-                self._wait({"_id": {"$in": selected[start : start + _MAX_CANDIDATES]}}, 0, probe)
+                part = selected[start : start + _MAX_CANDIDATES]
+                self._settle({"_id": {"$in": part}}, {"in": {"path": "_id", "value": part}}, 0, probe)
 
     def _probe(self) -> list[float] | None:
-        """A query vector for the exact searches that wait for the index, which only count matches."""
+        """A query vector for the exact searches that wait for the vector index, which only count
+        matches; None for a keyword backend, which does not wait for a vector index."""
+        if self.mode == "keyword":
+            return None
         if self.embed is not None:
             return [float(x) for x in self.embed("needtoknow")]
         # Without an embed function, any stored vector has the index's dimensions. With none
@@ -241,7 +333,7 @@ class MongoDBBackend:
         return [float(x) for x in stored[self.vector_field]] if stored else None
 
     def _count(self, flt: dict[str, Any], probe: list[float]) -> int:
-        """How many chunks matching `flt` the search index returns, by an exact search."""
+        """How many chunks matching `flt` the vector search index returns, by an exact search."""
         stage: dict[str, Any] = {
             "index": self.index,
             "path": self.vector_field,
@@ -252,10 +344,26 @@ class MongoDBBackend:
         }
         return len(list(self.collection.aggregate([{"$vectorSearch": stage}, {"$project": {"_id": 1}}])))
 
-    def _wait(self, flt: dict[str, Any], expected: int, probe: list[float]) -> None:
+    def _count_text(self, operator: dict[str, Any]) -> int:
+        """How many chunks matching `operator` the text index returns."""
+        pipeline = [
+            {"$search": {"index": self.text_index, **operator}},
+            {"$limit": _MAX_CANDIDATES},
+            {"$project": {"_id": 1}},
+        ]
+        return len(list(self.collection.aggregate(pipeline)))
+
+    def _settle(self, flt: dict[str, Any], operator: dict[str, Any], expected: int, probe: list[float] | None) -> None:
+        """Wait until each index this backend uses returns `expected` chunks for the change."""
+        if probe is not None:
+            self._wait(partial(self._count, flt, probe), expected)
+        if self.text_index is not None:
+            self._wait(partial(self._count_text, operator), expected)
+
+    def _wait(self, count: Callable[[], int], expected: int) -> None:
         deadline = time.monotonic() + self.wait_timeout
         while True:
-            if self._count(flt, probe) == expected:
+            if count() == expected:
                 return
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"the search index did not catch up within {self.wait_timeout} seconds")
@@ -264,6 +372,8 @@ class MongoDBBackend:
     # ---- searching ---------------------------------------------------------------------------
 
     def _pipeline(self, query: Query, k: int, f: Filter | None) -> list[dict[str, Any]] | None:
+        if self.mode == "keyword":
+            return self._keyword_pipeline(query, k, f)
         stage: dict[str, Any] = {
             "index": self.index,
             "path": self.vector_field,
@@ -281,6 +391,20 @@ class MongoDBBackend:
             stage["filter"] = mongo_filter
         projection = {self.content_field: 1, self.metadata_field: 1, "score": {"$meta": "vectorSearchScore"}}
         return [{"$vectorSearch": stage}, {"$project": projection}]
+
+    def _keyword_pipeline(self, query: Query, k: int, f: Filter | None) -> list[dict[str, Any]] | None:
+        text = query.keywords()
+        if not _WORD.search(text):
+            return None  # no word to match
+        match = {"text": {"query": text, "path": self.content_field}}
+        search: dict[str, Any] = {"index": self.text_index, **match}
+        if f is not None:
+            operator = filter_to_search(f)
+            if operator is None:
+                return None  # nothing can match
+            search = {"index": self.text_index, "compound": {"must": [match], "filter": [operator]}}
+        projection = {self.content_field: 1, self.metadata_field: 1, "score": {"$meta": "searchScore"}}
+        return [{"$search": search}, {"$limit": k}, {"$project": projection}]
 
     def _hits(self, documents: Iterable[Mapping[str, Any]]) -> list[Hit]:
         hits = []

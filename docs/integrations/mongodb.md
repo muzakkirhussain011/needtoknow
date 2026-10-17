@@ -74,3 +74,31 @@ from needtoknow.backends.mongodb import permission_terms
 
 document["needtoknow_terms"] = permission_terms(document["metadata"])
 ```
+
+## Keyword search and hybrid search
+
+`mode="keyword"` searches the chunks' text with Atlas Search (`$search`, BM25), under the same
+permission filter. Atlas Search keeps text in an index of its own, which `create_text_index`
+creates: the text with the `lucene.standard` analyzer, which keeps every word, and the permission
+terms, the write marker and `_id` as tokens. One collection then serves both halves of
+[hybrid search](../hybrid.md):
+
+```python
+from needtoknow import RankFusion
+from needtoknow.backends.mongodb import create_text_index
+
+create_search_index(collection, dim=768)
+create_text_index(collection)  # the "needtoknow_text" index
+vector = MongoDBBackend(collection, embed=embed, text_index="needtoknow_text")
+keyword = MongoDBBackend(collection, mode="keyword")
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+Atlas Search also indexes writes a moment after they happen. A backend given `text_index` waits for
+that index as well, so write through the vector backend above and both searches see each change
+when `add`, `set_metadata` or `delete` returns. The filter is written with Atlas Search's own
+operators (`in` on the permission terms, `compound` for `And` and `Or`), so values stay data, and
+the query's text is the `text` operator's query, separate from the filter. Scores are Atlas
+Search's BM25, higher for better matches. A keyword backend without `embed` writes chunks with no
+vector, which keyword search finds and vector search does not. CI runs the conformance kit against
+Atlas Local in keyword mode and fused with vector search.

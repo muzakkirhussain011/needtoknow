@@ -8,6 +8,11 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `mode="keyword"` on the MongoDB backend: Atlas Search's BM25 (`$search`) on the text, under the
+  same permission filter written with Atlas Search's own operators, in an index that the new
+  `create_text_index` creates, so one collection serves both halves of hybrid search. A backend
+  given `text_index` also waits for that index after each write. Tested with the conformance kit,
+  alone and fused with vector search, against Atlas Local 8.0.30.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
   enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
   chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
