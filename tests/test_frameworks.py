@@ -12,6 +12,7 @@ from needtoknow import (
     InMemoryBackend,
     MetadataACLAuthorizer,
     PermissionedRetriever,
+    Query,
     Subject,
 )
 
@@ -116,3 +117,52 @@ def test_an_existing_llamaindex_index_can_be_post_filtered(li):
     result = PermissionedRetriever(li.LlamaIndexBackend(index), MetadataACLAuthorizer()).retrieve("leave", BOB, k=5)
     assert result.strategy == "postfilter"
     assert {h.id for h in result.hits} == {"handbook", "runbook", "bob-review"}
+
+
+def test_a_langchain_store_searches_with_a_query_vector(lc):
+    from langchain_core.documents import Document as LCDocument
+    from langchain_core.embeddings import DeterministicFakeEmbedding
+    from langchain_core.vectorstores import InMemoryVectorStore
+
+    embedding = DeterministicFakeEmbedding(size=16)
+    store = InMemoryVectorStore(embedding)
+    store.add_documents([LCDocument(id=d.id, page_content=d.text, metadata=dict(d.metadata)) for d in DOCS])
+    backend = lc.LangChainVectorStoreBackend(store)
+    by_text = [h.id for h in backend.search("leave", 4)]
+    assert [h.id for h in backend.search(Query(vector=embedding.embed_query("leave")), 4)] == by_text
+    result = PermissionedRetriever(backend, MetadataACLAuthorizer()).retrieve(
+        Query(vector=embedding.embed_query("leave")), BOB, k=5
+    )
+    assert {h.id for h in result.hits} == {"handbook", "runbook", "bob-review"}
+
+
+class _Recording:
+    supports_filters = False
+
+    def __init__(self):
+        self.queries = []
+
+    def search(self, query, k, filter=None):
+        self.queries.append(query)
+        return []
+
+
+def test_llamaindex_passes_on_an_embedding_it_already_computed(li):
+    from llama_index.core.schema import QueryBundle
+
+    backend = _Recording()
+    retriever = li.NeedToKnowRetriever(PermissionedRetriever(backend, MetadataACLAuthorizer()), BOB)
+    retriever.retrieve(QueryBundle("leave", embedding=[1.0, 0.0]))
+    retriever.retrieve("leave")
+    assert backend.queries == [Query("leave", [1.0, 0.0]), "leave"]
+
+
+def test_an_existing_llamaindex_index_searches_with_a_query_vector(li):
+    from llama_index.core import VectorStoreIndex
+    from llama_index.core.embeddings import MockEmbedding
+    from llama_index.core.schema import TextNode
+
+    nodes = [TextNode(id_=d.id, text=d.text, metadata=dict(d.metadata)) for d in DOCS]
+    index = VectorStoreIndex(nodes, embed_model=MockEmbedding(embed_dim=8))
+    backend = li.LlamaIndexBackend(index)
+    assert {h.id for h in backend.search(Query(vector=[0.5] * 8), 4)} == {d.id for d in DOCS}

@@ -271,6 +271,7 @@ quickstart
 concepts
 combining
 hybrid
+vectors
 security
 operations
 production

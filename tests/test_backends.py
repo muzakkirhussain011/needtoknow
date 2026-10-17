@@ -16,7 +16,8 @@ from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labe
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject
+from needtoknow.testing import QUERY as KIT_QUERY
 from needtoknow.testing import check_backend
 
 EMBED = HashingEmbedder()
@@ -291,3 +292,52 @@ def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvecto
         conn.execute("SET LOCAL enable_seqscan = off")  # a tiny table would otherwise be scanned
         plan = "\n".join(row[0] for row in conn.execute(sql.SQL("EXPLAIN ") + statement, params))
     assert "ntk_keyword_content_english_fts" in plan
+
+
+# ---- searching with your own vectors -----------------------------------------------------------
+
+
+def test_pgvector_without_embed_searches_with_query_vectors(pgvector_pool):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    create_schema(pgvector_pool, EMBED.dim, table="ntk_vectors", hnsw=False)
+    backend = PgVectorBackend(pgvector_pool, table="ntk_vectors", iterative_scan=None)
+
+    def make(docs):
+        with pgvector_pool.connection() as conn:
+            conn.execute("TRUNCATE ntk_vectors")
+        backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
+        return backend
+
+    check_backend(make, examples=8, query=Query(vector=EMBED(KIT_QUERY)))
+    with pytest.raises(ValueError, match="embed function"):
+        backend.search(KIT_QUERY, 3)
+
+
+def test_pgvector_hybrid_search_with_one_query_vector(pgvector_pool, pgvector_keyword_table):
+    from needtoknow import RankFusion
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    vector = PgVectorBackend(pgvector_pool, table="ntk_keyword", iterative_scan=None)
+    keyword = PgVectorBackend(pgvector_pool, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        pgvector_keyword_table(docs)
+        return RankFusion(vector, keyword)
+
+    check_backend(make, examples=8, query=Query(KIT_QUERY, EMBED(KIT_QUERY)))
+
+
+def test_chroma_searches_with_query_vectors():
+    chromadb = pytest.importorskip("chromadb")
+    from needtoknow.backends.chroma import ChromaBackend
+
+    client = chromadb.EphemeralClient()
+
+    def make(docs):
+        collection = client.create_collection(f"ntk_{uuid.uuid4().hex}", embedding_function=None)
+        backend = ChromaBackend(collection)
+        backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
+        return backend
+
+    check_backend(make, examples=8, query=Query(vector=EMBED(KIT_QUERY)))

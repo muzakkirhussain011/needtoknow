@@ -17,8 +17,9 @@ import re
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["MANY_VALUES", "PgVectorBackend", "create_schema", "filter_to_sql"]
 
@@ -130,6 +131,7 @@ class PgVectorBackend:
     """Cosine-similarity search over a pgvector table, with the filter in the WHERE clause.
 
     `pool` is a psycopg `ConnectionPool`; `embed` turns text into a vector (your embedding model).
+    Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
     Scores are cosine similarity, `1 - cosine distance`. Pass `async_pool` (an
     `AsyncConnectionPool`) for a native `asearch`; otherwise async calls run `search` in a thread.
     `ef_search` sets pgvector's `hnsw.ef_search` (1 to 1000) for each search: higher finds more of
@@ -146,7 +148,7 @@ class PgVectorBackend:
     def __init__(
         self,
         pool: Any,
-        embed: Embed | None,
+        embed: Embed | None = None,
         *,
         table: str = "needtoknow_chunks",
         iterative_scan: str | None = "relaxed_order",
@@ -179,13 +181,8 @@ class PgVectorBackend:
         from psycopg import sql
 
         docs = list(documents)
-        if embeddings is None and self.embed is None:
-            raise ValueError("the table stores a vector for every chunk: pass embeddings, or an embed function")
-        embed = self.embed
-        vectors = list(embeddings) if embeddings is not None else [embed(d.text) for d in docs if embed is not None]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
-        rows = [(d.id, d.text, json.dumps(dict(d.metadata)), _vector(v)) for d, v in zip(docs, vectors, strict=True)]
+        vectors = document_vectors(docs, embeddings, self.embed)  # the table stores a vector for every chunk
+        rows =[(d.id, d.text, json.dumps(dict(d.metadata)), _vector(v)) for d, v in zip(docs, vectors, strict=True)]
         statement = sql.SQL(
             "INSERT INTO {t} (id, content, metadata, embedding) VALUES (%s, %s, %s::jsonb, %s::vector)"
             " ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, metadata = EXCLUDED.metadata,"
@@ -233,18 +230,16 @@ class PgVectorBackend:
         ).format(c=sql.Literal(self.text_search), t=sql.Identifier(self.table), cond=sql.SQL(condition))
         return statement, [text, text, *params, k]
 
-    def _statement(self, query: str, query_vector: str | None, k: int, f: Filter | None) -> tuple[Any, list[Any]]:
+    def _statement(self, query: Query, query_vector: str | None, k: int, f: Filter | None) -> tuple[Any, list[Any]]:
         if self.mode == "keyword":
-            return self._keyword_query(query, k, f)
+            return self._keyword_query(query.keywords(), k, f)
         assert query_vector is not None
         return self._query(query_vector, k, f)
 
-    def _query_vector(self, query: str) -> str | None:
+    def _query_vector(self, query: Query) -> str | None:
         if self.mode == "keyword":
             return None
-        if self.embed is None:
-            raise ValueError("vector search needs an embed function")
-        return _vector(self.embed(query))
+        return _vector(query.embedded(self.embed))
 
     def _settings(self) -> list[Any]:
         """`SET LOCAL` statements for the search's transaction, so pooled connections keep their own."""
@@ -264,23 +259,25 @@ class PgVectorBackend:
             return [Hit(r[0], r[1], float(r[3]), r[2] or {}) for r in rows]
         return [Hit(r[0], r[1], 1.0 - float(r[3]), r[2] or {}) for r in rows]
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        statement, params = self._statement(query, self._query_vector(query), k, filter)
+        q = Query.of(query)
+        statement, params = self._statement(q, self._query_vector(q), k, filter)
         with self.pool.connection() as conn, conn.transaction():
             for setting in self._settings():
                 conn.execute(setting)
             rows = conn.execute(statement, params).fetchall()
         return self._hits(rows)
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_pool is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        vector = await asyncio.to_thread(self._query_vector, query)
-        statement, params = self._statement(query, vector, k, filter)
+        q = Query.of(query)
+        vector = await asyncio.to_thread(self._query_vector, q)
+        statement, params = self._statement(q, vector, k, filter)
         async with self.async_pool.connection() as conn, conn.transaction():
             for setting in self._settings():
                 await conn.execute(setting)

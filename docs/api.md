@@ -21,7 +21,7 @@ modules and need their extra.
 
 `Strategy` is `Literal["auto", "prefilter", "postfilter"]`.
 
-## Subjects, documents and hits
+## Subjects, documents, hits and queries
 
 ```{eval-rst}
 .. autoclass:: needtoknow.Subject
@@ -35,6 +35,9 @@ modules and need their extra.
 .. autoclass:: needtoknow.Hit
    :members:
    :undoc-members:
+
+.. autoclass:: needtoknow.Query
+   :members: of, embedded, keywords
 ```
 
 ## Filters

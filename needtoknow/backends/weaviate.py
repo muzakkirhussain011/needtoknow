@@ -25,8 +25,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = [
     "ID_PROPERTY",
@@ -140,7 +141,7 @@ class WeaviateBackend:
     `embed` turns text into a vector (your embedding model). `vector_name` is the collection's named
     vector. Scores are cosine similarity, 1 minus Weaviate's cosine distance. Pass `async_client` (a
     connected `WeaviateAsyncClient`) for a native `asearch`; otherwise async calls run `search` in a
-    thread.
+    thread. Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
     """
 
     supports_filters = True
@@ -149,7 +150,7 @@ class WeaviateBackend:
         self,
         client: Any,
         collection: str,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         vector_name: str = "embedding",
         content_property: str = "content",
@@ -173,9 +174,7 @@ class WeaviateBackend:
         from weaviate.classes.data import DataObject
 
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
+        vectors = document_vectors(docs, embeddings, self.embed)
         objects = [
             DataObject(
                 uuid=point_id(d.id),
@@ -206,7 +205,7 @@ class WeaviateBackend:
 
     # ---- searching ---------------------------------------------------------------------------
 
-    def _request(self, query: str, k: int, f: Filter | None) -> dict[str, Any] | None:
+    def _request(self, query: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         from weaviate.classes.query import MetadataQuery
 
         where = None
@@ -215,7 +214,7 @@ class WeaviateBackend:
             if where is None:
                 return None  # nothing can match
         return {
-            "near_vector": [float(x) for x in self.embed(query)],
+            "near_vector": query.embedded(self.embed),
             "target_vector": self.vector_name,
             "limit": k,
             "filters": where,
@@ -245,20 +244,20 @@ class WeaviateBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(query, k, filter)
+        request = self._request(Query.of(query), k, filter)
         if request is None:
             return []
         return self._hits(self.client.collections.get(self.collection).query.near_vector(**request))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, query, k, filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), k, filter)
         if request is None:
             return []
         handle = self.async_client.collections.get(self.collection)

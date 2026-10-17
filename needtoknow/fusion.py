@@ -3,6 +3,7 @@
     vector = ElasticsearchBackend(client, "docs", embed)
     keyword = ElasticsearchBackend(client, "docs", None, mode="keyword")
     retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+    retriever.retrieve("travel policy", subject)  # or Query(text=..., vector=...) to embed it yourself
 
 Every backend is searched with the filter the retriever passes, so each fused chunk came from a
 backend that applied the permission filter, and the retriever still checks the results as it does
@@ -24,14 +25,14 @@ from typing import Any
 
 from needtoknow.filters import Filter
 from needtoknow.retriever import SearchBackend
-from needtoknow.types import Hit
+from needtoknow.types import Hit, Query
 
 __all__ = ["RankFusion"]
 
 _log = logging.getLogger("needtoknow")
 
 
-async def _asearch(backend: SearchBackend, query: str, k: int, filter: Filter | None) -> list[Hit]:
+async def _asearch(backend: SearchBackend, query: str | Query, k: int, filter: Filter | None) -> list[Hit]:
     native = getattr(backend, "asearch", None)
     if native is not None:
         return list(await native(query, k, filter))
@@ -44,7 +45,9 @@ class RankFusion:
     `weights` (one per backend, default 1 each) scale each backend's contribution.
     `rank_constant` (default 60, as in the original RRF paper) damps the advantage of the very top
     ranks. `depth` is how many results each backend is asked for (default: the `k` requested).
-    Filters are supported when every backend supports them.
+    Filters are supported when every backend supports them. Every backend gets the same query: a
+    `Query` with both `text` and `vector` gives keyword backends the text and vector backends the
+    vector, so the query is embedded once, by you, however many vector backends there are.
     """
 
     def __init__(
@@ -97,13 +100,13 @@ class RankFusion:
         fused.sort(key=lambda h: (-h.score, h.id))
         return fused[:k]
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
         depth = self.depth or k
         return self._fuse([list(b.search(query, depth, filter)) for b in self.backends], k)
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
         depth = self.depth or k

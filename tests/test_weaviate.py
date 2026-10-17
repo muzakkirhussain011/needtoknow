@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag, terms
 from needtoknow.backends.weaviate import (
     ID_PROPERTY,
@@ -20,7 +20,7 @@ from needtoknow.backends.weaviate import (
     permission_terms,
     point_id,
 )
-from needtoknow.testing import HashingEmbedder, check_backend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 WEAVIATE_URL = os.environ.get("NEEDTOKNOW_TEST_WEAVIATE_URL")
@@ -209,6 +209,24 @@ def test_server_passes_the_conformance_kit(client):
 
     try:
         check_backend(make)
+    finally:
+        for name in previous:
+            client.collections.delete(name)
+
+
+def test_server_searches_with_query_vectors(client):
+    previous: list[str] = []
+
+    def make(docs):
+        for name in previous:
+            client.collections.delete(name)
+        previous[:] = [_new_collection(client)]
+        backend = WeaviateBackend(client, previous[0])
+        backend.add(docs, [EMBED(d.text) for d in docs])
+        return backend
+
+    try:
+        check_backend(make, examples=8, query=Query(vector=EMBED(QUERY)))
     finally:
         for name in previous:
             client.collections.delete(name)

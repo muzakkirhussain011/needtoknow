@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.filters import And, Filter, In, Or, _is_value, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["JSON_KEY", "NEVER", "ChromaBackend", "filter_to_where"]
 
@@ -109,8 +109,9 @@ class ChromaBackend:
     """Search a Chroma collection with the permission filter applied by Chroma.
 
     If `embed` is given, queries and added documents are embedded with it; otherwise the
-    collection's own embedding function is used. Scores are `1 - distance`, so create the
-    collection with cosine distance for scores in [-1, 1].
+    collection's own embedding function is used. A `Query` with a vector is searched with that
+    vector. Scores are `1 - distance`, so create the collection with cosine distance for scores in
+    [-1, 1].
     """
 
     supports_filters = True
@@ -137,17 +138,18 @@ class ChromaBackend:
     def delete(self, ids: Iterable[str]) -> None:
         self.collection.delete(ids=list(ids))
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
+        q = Query.of(query)
         where = filter_to_where(filter) if filter is not None else None
         if k < 1 or where is NEVER or self.collection.count() == 0:
             return []
         kwargs: dict[str, Any] = {"n_results": k, "include": ["documents", "metadatas", "distances"]}
         if where is not None:
             kwargs["where"] = where
-        if self.embed is not None:
-            kwargs["query_embeddings"] = [list(map(float, self.embed(query)))]
+        if q.vector is not None or self.embed is not None:
+            kwargs["query_embeddings"] = [q.embedded(self.embed)]
         else:
-            kwargs["query_texts"] = [query]
+            kwargs["query_texts"] = [q.keywords()]  # the collection's embedding function embeds it
         result = self.collection.query(**kwargs)
         rows = zip(
             result["ids"][0], result["documents"][0], result["metadatas"][0], result["distances"][0], strict=True

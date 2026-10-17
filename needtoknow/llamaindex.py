@@ -21,9 +21,16 @@ from pydantic import ConfigDict
 from needtoknow.authz import AuthorizationError
 from needtoknow.filters import Filter
 from needtoknow.retriever import PermissionedRetriever, RetrievalResult
-from needtoknow.types import Hit, Subject
+from needtoknow.types import Hit, Query, Subject
 
 __all__ = ["LlamaIndexBackend", "NeedToKnowRetriever", "PermissionNodePostprocessor"]
+
+
+def _query(bundle: QueryBundle) -> str | Query:
+    """The bundle's text, with its embedding when LlamaIndex already computed one."""
+    if bundle.embedding is None:
+        return bundle.query_str
+    return Query(text=bundle.query_str or None, vector=bundle.embedding)
 
 
 def _nodes(result: RetrievalResult) -> list[NodeWithScore]:
@@ -45,10 +52,10 @@ class NeedToKnowRetriever(BaseRetriever):
         super().__init__(**kwargs)
 
     def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
-        return _nodes(self._permissioned.retrieve(query_bundle.query_str, self._subject, self._k))
+        return _nodes(self._permissioned.retrieve(_query(query_bundle), self._subject, self._k))
 
     async def _aretrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
-        return _nodes(await self._permissioned.aretrieve(query_bundle.query_str, self._subject, self._k))
+        return _nodes(await self._permissioned.aretrieve(_query(query_bundle), self._subject, self._k))
 
 
 class PermissionNodePostprocessor(BaseNodePostprocessor):
@@ -89,8 +96,10 @@ class LlamaIndexBackend:
     def __init__(self, index: Any) -> None:
         self.index = index
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        nodes = self.index.as_retriever(similarity_top_k=k).retrieve(query)
+        q = Query.of(query)
+        bundle = q.keywords() if q.vector is None else QueryBundle(query_str=q.text or "", embedding=list(q.vector))
+        nodes = self.index.as_retriever(similarity_top_k=k).retrieve(bundle)
         return [Hit(n.node.node_id, n.node.get_content(), n.score or 0.0, dict(n.node.metadata)) for n in nodes]
