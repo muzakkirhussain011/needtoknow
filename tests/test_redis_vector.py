@@ -162,6 +162,72 @@ def test_create_index_tolerates_an_existing_index_only():
         create_index(Broken(), "idx", 4)
 
 
+# ---- keyword mode (no server) ------------------------------------------------------------------
+
+
+def test_keyword_mode_passes_each_word_as_a_parameter_beside_the_filter():
+    client = FakeClient()
+    backend = RedisBackend(client, "idx", mode="keyword")
+    backend.search("Leave? leave POLICY } | @needtoknow_terms:{*", 7, In("team", ["hr"]))
+    backend.search("leave", 3)
+    filtered, unfiltered = client.commands
+    assert filtered[2] == f"@content:($w0 | $w1 | $w2) (@{TERMS_FIELD}:{{{_h('team', 'hr')}}})"
+    params = filtered[filtered.index("PARAMS") + 1 :]
+    assert params[:7] == ("6", "w0", "leave", "w1", "policy", "w2", "needtoknow_terms")
+    assert filtered[3:6] == ("WITHSCORES", "SCORER", "BM25STD")
+    assert filtered[-2:] == ("DIALECT", "2") and filtered[filtered.index("LIMIT") + 2] == "7"
+    assert unfiltered[2] == "@content:($w0)" and "vec" not in unfiltered
+
+
+def test_keyword_mode_needs_words_and_keeps_the_first_sixty_four():
+    client = FakeClient()
+    backend = RedisBackend(client, "idx", mode="keyword")
+    assert backend.search("?! --", 5) == []
+    assert client.commands == []
+    with pytest.raises(ValueError):
+        backend.search(Query(vector=EMBED("leave")), 5)
+    with pytest.raises(ValueError):
+        RedisBackend(client, "idx", mode="semantic")
+    backend.search(" ".join(f"word{i}" for i in range(100)), 5)
+    (command,) = client.commands
+    assert command[command.index("PARAMS") + 1] == "128"  # 64 words, each a name and a value
+
+
+def test_keyword_replies_carry_bm25_scores_in_both_protocols():
+    resp2 = [
+        2,
+        b"needtoknow:a", b"1.5", [b"needtoknow_id", b"a", b"content", b"leave policy", b"metadata", b"{}"],
+        b"needtoknow:b", b"3.25", [b"needtoknow_id", b"b", b"metadata", b'{"level": 1}'],
+    ]  # fmt: skip
+    hits = RedisBackend(FakeClient(resp2), "idx", mode="keyword").search("leave", 2)
+    assert [(h.id, h.score, h.metadata) for h in hits] == [("b", 3.25, {"level": 1}), ("a", 1.5, {})]
+    resp3 = {
+        "total_results": 1,
+        "results": [{"id": "needtoknow:c", "score": 0.75, "extra_attributes": {"needtoknow_id": "c"}}],
+    }
+    (hit,) = RedisBackend(FakeClient(resp3), "idx", mode="keyword").search("leave", 1)
+    assert hit.id == "c" and hit.score == 0.75
+
+
+def test_a_keyword_backend_without_embed_writes_no_vector():
+    client = FakeClient()
+    RedisBackend(client, "idx", mode="keyword").add([Document("a", "leave policy", {})])
+    _, _, mapping = client.calls[1]
+    assert "embedding" not in mapping and mapping["content"] == "leave policy"
+    with pytest.raises(ValueError, match="embed"):
+        RedisBackend(client, "idx").add([Document("a", "leave", {})])
+
+
+def test_create_index_can_index_the_text_keeping_every_word():
+    client = FakeClient()
+    create_index(client, "idx", 4)
+    create_index(client, "idx", 4, content_field="body")
+    plain, text = client.commands
+    assert "TEXT" not in plain and plain[7:9] == ("STOPWORDS", "0")
+    schema = text[text.index("SCHEMA") + 1 :]
+    assert schema[4:6] == ("body", "TEXT")
+
+
 def test_asearch_uses_the_async_client_or_a_thread():
     reply = [1, b"needtoknow:a", [b"needtoknow_id", b"a", b"metadata", b"{}", b"__needtoknow_distance", b"0.3"]]
 
@@ -326,3 +392,73 @@ def test_a_subject_in_ten_thousand_groups(redis_client):
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", subject, 5)
     _drop(redis_client, name)
     assert [h.id for h in result.hits] == ["mine"]
+
+
+# ---- keyword mode and hybrid search on a server ------------------------------------------------
+
+
+def _keyword_index(client):
+    name = f"ntk_{uuid.uuid4().hex}"
+    create_index(client, name, EMBED.dim, prefix=f"{name}:", content_field="content")
+    return name
+
+
+def test_server_keyword_mode_passes_the_conformance_kit(redis_client):
+    made: list[str] = []
+
+    def make(docs):
+        for name in made:
+            _drop(redis_client, name)
+        made[:] = [_keyword_index(redis_client)]
+        backend = RedisBackend(redis_client, made[0], mode="keyword", prefix=f"{made[0]}:")
+        backend.add(docs)
+        return backend
+
+    try:
+        check_backend(make)
+    finally:
+        for name in made:
+            _drop(redis_client, name)
+
+
+def test_server_hybrid_search_over_one_index_passes_the_conformance_kit(redis_client):
+    from needtoknow import RankFusion
+
+    made: list[str] = []
+
+    def make(docs):
+        for name in made:
+            _drop(redis_client, name)
+        made[:] = [_keyword_index(redis_client)]
+        vector = RedisBackend(redis_client, made[0], EMBED, prefix=f"{made[0]}:")
+        vector.add(docs)
+        return RankFusion(vector, RedisBackend(redis_client, made[0], mode="keyword", prefix=f"{made[0]}:"))
+
+    try:
+        check_backend(make, examples=10)
+        check_backend(make, examples=5, query=Query(QUERY, EMBED(QUERY)))
+    finally:
+        for name in made:
+            _drop(redis_client, name)
+
+
+def test_server_keyword_mode_ranks_by_bm25_inside_the_filter(redis_client):
+    name = _keyword_index(redis_client)
+    keyword = RedisBackend(redis_client, name, mode="keyword", prefix=f"{name}:")
+    keyword.add(
+        [
+            Document("a", "leave policy for staff", {"allowed_groups": ["*"]}),
+            Document("b", "leave leave leave payouts", {"allowed_groups": ["hr"]}),
+            Document("c", "the incident runbook", {"allowed_groups": ["*"]}),
+        ]
+    )
+    try:
+        hits = keyword.search("leave", 5)
+        assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
+        assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
+        assert [h.id for h in keyword.search("the", 5)] == ["c"]  # no stop word is dropped
+        hostile = 'leave"} | @needtoknow_terms:{* | -@content:(x)'
+        assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
+        assert {h.id for h in keyword.search(hostile, 5, In("allowed_groups", ["*"]))} == {"a"}
+    finally:
+        _drop(redis_client, name)

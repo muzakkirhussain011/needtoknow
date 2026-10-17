@@ -11,14 +11,17 @@ and `a-f`: no group name or user id can add query syntax, and Redis's case-insen
 matching cannot merge two values. The metadata is stored as JSON in the hash and returned exactly
 as written, for the retriever's re-check.
 
-`create_index` creates the index over the hashes under `prefix`, with an HNSW cosine vector. A
-write is searchable as soon as it returns.
+`create_index` creates the index over the hashes under `prefix`, with an HNSW cosine vector and,
+with `content_field=`, the chunks' text for keyword search. A write is searchable as soon as it
+returns. `RedisBackend(..., mode="keyword")` searches the text with BM25 under the same permission
+filter; the query's words are passed as parameters, never as query syntax.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 import struct
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
@@ -35,6 +38,8 @@ Embed = Callable[[str], Sequence[float]]
 ID_FIELD = "needtoknow_id"
 _SCORE = "__needtoknow_distance"
 _BATCH = 500
+_WORDS = re.compile(r"\w+")
+_MAX_WORDS = 64  # a keyword query longer than this keeps its first 64 distinct words
 _SET_IF_STORED = (
     "if redis.call('EXISTS', KEYS[1]) == 1 then redis.call('HSET', KEYS[1], ARGV[1], ARGV[2], ARGV[3], ARGV[4]) end"
 )
@@ -78,15 +83,23 @@ def create_index(
     *,
     prefix: str = "needtoknow:",
     vector_field: str = "embedding",
+    content_field: str | None = None,
     m: int = 16,
     ef_construction: int = 200,
 ) -> None:
     """Create the index if it does not exist: the permission terms as a TAG field and an HNSW
-    cosine vector, over the hashes whose keys start with `prefix`."""
+    cosine vector, over the hashes whose keys start with `prefix`.
+
+    With `content_field` (the backend's, `"content"` by default) the chunks' text is indexed as
+    well, for `mode="keyword"`, keeping every word: the index has no stop words. An index created
+    without it can add it with `FT.ALTER <index> SCHEMA ADD content TEXT`, though Redis then drops
+    common English words from it.
+    """
+    text = [content_field, "TEXT"] if content_field else []
     try:
         client.execute_command(
-            "FT.CREATE", index, "ON", "HASH", "PREFIX", "1", prefix,
-            "SCHEMA", TERMS_FIELD, "TAG", "SEPARATOR", ",",
+            "FT.CREATE", index, "ON", "HASH", "PREFIX", "1", prefix, "STOPWORDS", "0",
+            "SCHEMA", TERMS_FIELD, "TAG", "SEPARATOR", ",", *text,
             vector_field, "VECTOR", "HNSW", "10", "TYPE", "FLOAT32", "DIM", str(dim),
             "DISTANCE_METRIC", "COSINE", "M", str(m), "EF_CONSTRUCTION", str(ef_construction),
         )  # fmt: skip
@@ -109,6 +122,12 @@ class RedisBackend:
     Scores are cosine similarity, 1 minus Redis's cosine distance. Pass `async_client` (a
     `redis.asyncio.Redis`) for a native `asearch`; otherwise async calls run `search` in a thread.
     Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
+
+    `mode="keyword"` searches the text with BM25 instead, under the same permission filter, in an
+    index created with `content_field=`. Each word of the query (letters, digits and underscores)
+    becomes a parameter, so none can act as query syntax, and up to 64 distinct words are kept.
+    Scores are Redis's BM25, higher for better matches. Such a backend needs no `embed`: without
+    one, `add` writes chunks with no vector, which keyword search still finds.
     """
 
     supports_filters = True
@@ -119,6 +138,7 @@ class RedisBackend:
         index: str,
         embed: Embed | None = None,
         *,
+        mode: str = "vector",
         prefix: str = "needtoknow:",
         vector_field: str = "embedding",
         content_field: str = "content",
@@ -128,8 +148,11 @@ class RedisBackend:
     ) -> None:
         if not index or not prefix:
             raise ValueError("index and prefix must be non-empty")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
         if ef_runtime is not None and ef_runtime < 1:
             raise ValueError("ef_runtime must be positive")
+        self.mode = mode
         self.client = client
         self.async_client = async_client
         self.index = index
@@ -145,22 +168,25 @@ class RedisBackend:
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
-        vectors = document_vectors(docs, embeddings, self.embed)
+        vectors: Sequence[Sequence[float] | None]
+        if embeddings is None and self.embed is None and self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only backend without embed writes no vector
+        else:
+            vectors = document_vectors(docs, embeddings, self.embed)
         for start in range(0, len(docs), _BATCH):
             pipe = self.client.pipeline(transaction=False)
             for d, v in zip(docs[start : start + _BATCH], vectors[start : start + _BATCH], strict=True):
                 key = self.prefix + d.id
+                fields: dict[str, Any] = {
+                    ID_FIELD: d.id,
+                    self.content_field: d.text,
+                    self.metadata_field: json.dumps(dict(d.metadata), sort_keys=True),
+                    TERMS_FIELD: ",".join(_hex(t) for t in terms(d.id, d.metadata)),
+                }
+                if v is not None:
+                    fields[self.vector_field] = struct.pack(f"<{len(v)}f", *(float(x) for x in v))
                 pipe.delete(key)  # a replaced chunk keeps no field of its old version
-                pipe.hset(
-                    key,
-                    mapping={
-                        ID_FIELD: d.id,
-                        self.content_field: d.text,
-                        self.metadata_field: json.dumps(dict(d.metadata), sort_keys=True),
-                        TERMS_FIELD: ",".join(_hex(t) for t in terms(d.id, d.metadata)),
-                        self.vector_field: struct.pack(f"<{len(v)}f", *(float(x) for x in v)),
-                    },
-                )
+                pipe.hset(key, mapping=fields)
             pipe.execute()
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
@@ -189,6 +215,8 @@ class RedisBackend:
             if expression is None:
                 return None  # nothing can match
             where = f"({expression})"
+        if self.mode == "keyword":
+            return self._keyword_command(query, k, where)
         breadth = f" EF_RUNTIME {self.ef_runtime}" if self.ef_runtime else ""
         knn = f"{where}=>[KNN {k} @{self.vector_field} $vec{breadth} AS {_SCORE}]"
         vector = query.embedded(self.embed)
@@ -200,7 +228,21 @@ class RedisBackend:
             "LIMIT", "0", str(k), "DIALECT", "2",
         ]  # fmt: skip
 
-    def _hit(self, key: Any, fields: Mapping[str, Any]) -> Hit:
+    def _keyword_command(self, query: Query, k: int, where: str) -> list[Any] | None:
+        words = list(dict.fromkeys(w.lower() for w in _WORDS.findall(query.keywords())))[:_MAX_WORDS]
+        if not words:
+            return None  # no word to match
+        params = [item for i, word in enumerate(words) for item in (f"w{i}", word)]
+        match = f"@{self.content_field}:({' | '.join(f'$w{i}' for i in range(len(words)))})"
+        return [
+            "FT.SEARCH", self.index, match if where == "*" else f"{match} {where}",
+            "WITHSCORES", "SCORER", "BM25STD",
+            "PARAMS", str(len(params)), *params,
+            "RETURN", "3", ID_FIELD, self.content_field, self.metadata_field,
+            "LIMIT", "0", str(k), "DIALECT", "2",
+        ]  # fmt: skip
+
+    def _hit(self, key: Any, fields: Mapping[str, Any], score: Any = None) -> Hit:
         doc_id = _text(fields.get(ID_FIELD))
         if doc_id is None:
             name = _text(key) or ""
@@ -210,11 +252,16 @@ class RedisBackend:
             metadata = json.loads(_text(fields.get(self.metadata_field)) or "")
         except ValueError:
             metadata = None
-        distance = _text(fields.get(_SCORE))
+        if self.mode == "keyword":  # BM25: higher is better
+            value = _text(score) if isinstance(score, bytes) else score
+            relevance = float(value) if value is not None else 0.0
+        else:
+            distance = _text(fields.get(_SCORE))
+            relevance = 1.0 - float(distance) if distance is not None else 0.0
         return Hit(
             doc_id,
             text or "",
-            1.0 - float(distance) if distance is not None else 0.0,
+            relevance,
             # A hash without readable metadata carries no permissions: the re-check denies it.
             metadata if isinstance(metadata, dict) else {},
         )
@@ -225,12 +272,14 @@ class RedisBackend:
             for result in reply.get("results", reply.get(b"results", [])):
                 attributes = result.get("extra_attributes", result.get(b"extra_attributes", {}))
                 fields = {_text(name) or "": value for name, value in attributes.items()}
-                hits.append(self._hit(result.get("id", result.get(b"id")), fields))
-        else:  # RESP2: [total, key, [field, value, ...], key, [...], ...]
-            for i in range(1, len(reply) - 1, 2):
-                pairs = reply[i + 1]
+                score = result.get("score", result.get(b"score"))
+                hits.append(self._hit(result.get("id", result.get(b"id")), fields, score))
+        else:  # RESP2: [total, key, [field, value, ...], ...], or [total, key, score, [...], ...] with scores
+            step = 3 if self.mode == "keyword" else 2
+            for i in range(1, len(reply) - step + 2, step):
+                pairs = reply[i + step - 1] or []
                 fields = {_text(pairs[j]) or "": pairs[j + 1] for j in range(0, len(pairs) - 1, 2)}
-                hits.append(self._hit(reply[i], fields))
+                hits.append(self._hit(reply[i], fields, reply[i + 1] if step == 3 else None))
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 

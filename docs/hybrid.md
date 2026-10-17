@@ -20,6 +20,9 @@ needs no embedding function and runs under the same permission filter as the vec
 - **Elasticsearch and OpenSearch:** a BM25 `match` query on the text.
 - **Weaviate:** Weaviate's own BM25 on the text property, with the same permission filter as its
   vector search, so one collection serves both.
+- **Redis:** the Query Engine's BM25 on the text, in an index created with
+  `create_index(..., content_field="content")`, so one index serves both
+  ([Redis](integrations/redis.md#keyword-search-and-hybrid-search)).
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python
