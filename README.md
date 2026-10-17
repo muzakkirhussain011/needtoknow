@@ -236,6 +236,10 @@ create_search_index(collection, dim=768)
 backend = MongoDBBackend(collection, embed=my_embedding_model)
 ```
 
+`create_text_index(collection)` adds an Atlas Search index on the text, and
+`MongoDBBackend(collection, mode="keyword")` then runs BM25 under the same filter, for hybrid search
+with `RankFusion`.
+
 </details>
 
 <details>
