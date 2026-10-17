@@ -46,7 +46,8 @@ and keeps permission values out of query text. They differ in what is worth know
 
 Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
 stores as well as within one. Measured recall, latency and throughput at a million chunks are in
-[Benchmarks](../benchmarks.md) for pgvector and Qdrant.
+[Benchmarks](../benchmarks.md#every-store-on-the-same-million-chunks) for pgvector, Qdrant,
+Elasticsearch, OpenSearch and Weaviate.
 
 Backends and authorizers combine freely: pgvector with OpenFGA, Chroma with OPA, a LangChain
 store with permissions on the chunks. A store not listed here needs only a `search` method; see
