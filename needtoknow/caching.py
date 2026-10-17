@@ -174,7 +174,7 @@ class CachingAuthorizer:
         try:
             entry = json.loads(blob)
             expires, payload = float(entry["expires"]), entry["value"]
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError, RecursionError):  # nested too deep to decode: a miss
             return _MISS, 0.0
         remaining = min(expires - now, self.ttl)
         if remaining <= 0:

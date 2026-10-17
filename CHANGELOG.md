@@ -24,6 +24,21 @@ All notable changes are recorded here. The format follows
   organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
   connectors return too.
 
+### Fixed
+
+- `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
+  a deep enough document from a policy engine or a shared cache recursed until Python raised
+  `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
+  miss.
+
+### Security
+
+- Filter parsing, and the pgvector, LanceDB and Redis translations that write query text, are
+  fuzzed with ClusterFuzzLite (Atheris) on pull requests and every week. The fuzz target checks
+  that parsing either round-trips or raises `ValueError`, that pgvector binds every field name and
+  value as a parameter, and that LanceDB and Redis queries carry only hex-encoded terms. The test
+  suite runs the same checks on generated filters.
+
 ## [1.3.0] - 2026-10-17
 
 Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search
