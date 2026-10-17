@@ -30,7 +30,7 @@ backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in ch
 `chunks` maps the file's chunk ids to the metadata you stored with them. `with_access` replaces
 `allowed_users` and `allowed_groups` and keeps every other key, and `set_metadata` stores the
 result without embedding the chunks again
-([Changing a document's permissions](../operations.md#changing-a-document-s-permissions)).
+([Changing a document's permissions](../operations.md#changing-a-documents-permissions)).
 
 ## How Drive sharing maps onto subjects
 
@@ -105,13 +105,12 @@ reports every file whose content or sharing changed since a saved page token. Re
 schedule and sync each changed file you index:
 
 ```python
-service = build("drive", "v3", credentials=credentials)
-token = load_token() or service.changes().getStartPageToken(supportsAllDrives=True).execute()["startPageToken"]
+changes = build("drive", "v3", credentials=credentials).changes()
+token = load_token() or changes.getStartPageToken(supportsAllDrives=True).execute()["startPageToken"]
+fields = "nextPageToken,newStartPageToken,changes(fileId,removed)"
 while token:
-    page = service.changes().list(
-        pageToken=token, includeItemsFromAllDrives=True, supportsAllDrives=True,
-        fields="nextPageToken,newStartPageToken,changes(fileId,removed)",
-    ).execute()
+    request = changes.list(pageToken=token, includeItemsFromAllDrives=True, supportsAllDrives=True, fields=fields)
+    page = request.execute()
     for change in page.get("changes", []):
         if change.get("removed"):
             backend.delete(chunk_ids(change["fileId"]))
@@ -126,7 +125,7 @@ while token:
 Sharing a folder changes who may read every file inside it, and the feed lists those files. Save
 the token only after the files are synced, so a crash repeats the work rather than skipping it.
 Until a change is synced, the chunks keep their old permissions; sync often enough that this
-window is acceptable, and see [Operations](../operations.md#changing-a-document-s-permissions)
+window is acceptable, and see [Operations](../operations.md#changing-a-documents-permissions)
 for what changes take effect at once.
 
 ## Checking the mapping
