@@ -11,7 +11,7 @@ import pytest
 qdrant_client = pytest.importorskip("qdrant_client")
 from qdrant_client import models  # noqa: E402
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject  # noqa: E402
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject  # noqa: E402
 from needtoknow.backends.qdrant import (  # noqa: E402
     ID_KEY,
     QdrantBackend,
@@ -19,14 +19,15 @@ from needtoknow.backends.qdrant import (  # noqa: E402
     filter_to_qdrant,
     point_id,
 )
-from needtoknow.testing import HashingEmbedder, check_backend  # noqa: E402
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend  # noqa: E402
 
 EMBED = HashingEmbedder()
 URL = os.environ.get("NEEDTOKNOW_TEST_QDRANT_URL")
 needs_server = pytest.mark.skipif(not URL, reason="set NEEDTOKNOW_TEST_QDRANT_URL to run against a Qdrant server")
 
 
-def _factory(client):
+def _factory(client, *, own_vectors=False):
+    """Backends holding exactly the given documents; with `own_vectors`, built without `embed`."""
     previous: list[str] = []
 
     def make(docs):
@@ -35,8 +36,8 @@ def _factory(client):
             client.delete_collection(name)
         previous[:] = [f"ntk_{uuid.uuid4().hex}"]
         create_collection(client, previous[0], EMBED.dim)
-        backend = QdrantBackend(client, previous[0], EMBED)
-        backend.add(docs)
+        backend = QdrantBackend(client, previous[0], None if own_vectors else EMBED)
+        backend.add(docs, [EMBED(d.text) for d in docs] if own_vectors else None)
         return backend
 
     return make
@@ -85,6 +86,11 @@ def test_point_ids_keep_uuids_and_derive_the_rest():
 
 def test_local_mode_passes_the_conformance_kit():
     check_backend(_factory(qdrant_client.QdrantClient(":memory:")))
+
+
+def test_local_mode_searches_with_query_vectors():
+    client = qdrant_client.QdrantClient(":memory:")
+    check_backend(_factory(client, own_vectors=True), examples=8, query=Query(vector=EMBED(QUERY)))
 
 
 def test_points_written_by_langchain_are_searchable_and_carry_their_permissions():

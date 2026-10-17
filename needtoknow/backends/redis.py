@@ -24,8 +24,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["TERMS_FIELD", "RedisBackend", "create_index", "filter_to_query", "permission_terms"]
 
@@ -34,6 +35,9 @@ Embed = Callable[[str], Sequence[float]]
 ID_FIELD = "needtoknow_id"
 _SCORE = "__needtoknow_distance"
 _BATCH = 500
+_SET_IF_STORED = (
+    "if redis.call('EXISTS', KEYS[1]) == 1 then redis.call('HSET', KEYS[1], ARGV[1], ARGV[2], ARGV[3], ARGV[4]) end"
+)
 
 
 def _hex(term: str) -> str:
@@ -104,6 +108,7 @@ class RedisBackend:
     document id appended). `ef_runtime` is HNSW's search breadth (Redis's default when None).
     Scores are cosine similarity, 1 minus Redis's cosine distance. Pass `async_client` (a
     `redis.asyncio.Redis`) for a native `asearch`; otherwise async calls run `search` in a thread.
+    Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
     """
 
     supports_filters = True
@@ -112,7 +117,7 @@ class RedisBackend:
         self,
         client: Any,
         index: str,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         prefix: str = "needtoknow:",
         vector_field: str = "embedding",
@@ -140,9 +145,7 @@ class RedisBackend:
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
+        vectors = document_vectors(docs, embeddings, self.embed)
         for start in range(0, len(docs), _BATCH):
             pipe = self.client.pipeline(transaction=False)
             for d, v in zip(docs[start : start + _BATCH], vectors[start : start + _BATCH], strict=True):
@@ -160,6 +163,18 @@ class RedisBackend:
                 )
             pipe.execute()
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        items = list(metadata.items())
+        for start in range(0, len(items), _BATCH):
+            pipe = self.client.pipeline(transaction=False)
+            for doc_id, new in items[start : start + _BATCH]:
+                encoded = json.dumps(dict(new), sort_keys=True)
+                hexed = ",".join(_hex(t) for t in terms(doc_id, new))
+                # One script per chunk, so a hash deleted meanwhile is not recreated without its vector.
+                pipe.eval(_SET_IF_STORED, 1, self.prefix + doc_id, self.metadata_field, encoded, TERMS_FIELD, hexed)
+            pipe.execute()
+
     def delete(self, ids: Iterable[str]) -> None:
         keys = [self.prefix + i for i in dict.fromkeys(ids)]
         for start in range(0, len(keys), _BATCH):
@@ -167,7 +182,7 @@ class RedisBackend:
 
     # ---- searching ---------------------------------------------------------------------------
 
-    def _command(self, query: str, k: int, f: Filter | None) -> list[Any] | None:
+    def _command(self, query: Query, k: int, f: Filter | None) -> list[Any] | None:
         where = "*"
         if f is not None:
             expression = filter_to_query(f)
@@ -176,7 +191,7 @@ class RedisBackend:
             where = f"({expression})"
         breadth = f" EF_RUNTIME {self.ef_runtime}" if self.ef_runtime else ""
         knn = f"{where}=>[KNN {k} @{self.vector_field} $vec{breadth} AS {_SCORE}]"
-        vector = [float(x) for x in self.embed(query)]
+        vector = query.embedded(self.embed)
         return [
             "FT.SEARCH", self.index, knn,
             "PARAMS", "2", "vec", struct.pack(f"<{len(vector)}f", *vector),
@@ -219,20 +234,20 @@ class RedisBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        command = self._command(query, k, filter)
+        command = self._command(Query.of(query), k, filter)
         if command is None:
             return []
         return self._hits(self.client.execute_command(*command))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        command = await asyncio.to_thread(self._command, query, k, filter)
+        command = await asyncio.to_thread(self._command, Query.of(query), k, filter)
         if command is None:
             return []
         return self._hits(await self.async_client.execute_command(*command))

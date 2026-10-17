@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from needtoknow.filters import Filter, matches
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["InMemoryBackend"]
 
@@ -39,11 +40,18 @@ class InMemoryBackend:
         for doc in documents:
             self._docs[doc.id] = doc
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text. Ids not stored are ignored."""
+        for doc_id, new in metadata.items():
+            old = self._docs.get(doc_id)
+            if old is not None:
+                self._docs[doc_id] = Document(doc_id, old.text, dict(new))
+
     def __len__(self) -> int:
         return len(self._docs)
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
-        terms = set(_tokens(query))
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
+        terms = set(_tokens(Query.of(query).keywords()))
         if not terms or k < 1:
             return []
         hits = []

@@ -24,8 +24,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["TERMS_FIELD", "MilvusBackend", "create_collection", "filter_to_expression", "permission_terms"]
 
@@ -134,6 +135,7 @@ class MilvusBackend:
     type. `consistency_level` is passed to every search ("Strong" by default, so writes are visible
     at once; "Bounded" is faster when a short delay is acceptable). Pass `async_client` (an
     `AsyncMilvusClient`) for a native `asearch`; otherwise async calls run `search` in a thread.
+    Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
     """
 
     supports_filters = True
@@ -142,7 +144,7 @@ class MilvusBackend:
         self,
         client: Any,
         collection: str,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         vector_field: str = "embedding",
         content_field: str = "content",
@@ -181,12 +183,28 @@ class MilvusBackend:
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
-        if len(vectors) != len(docs):
-            raise ValueError("one embedding per document is required")
+        vectors = document_vectors(docs, embeddings, self.embed)
         rows = [self._row(d, v) for d, v in zip(docs, vectors, strict=True)]
         for start in range(0, len(rows), _BATCH):
             self.client.upsert(collection_name=self.collection, data=rows[start : start + _BATCH])
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        ids = list(metadata)
+        for start in range(0, len(ids), _BATCH):
+            stored = self.client.get(
+                collection_name=self.collection,
+                ids=ids[start : start + _BATCH],
+                output_fields=[self.vector_field, self.content_field],
+                consistency_level="Strong",  # rows written just before must be found
+            )
+            # Whole rows, read and written back: the result does not depend on how a partial update merges.
+            rows = [
+                self._row(Document(r[ID_FIELD], r[self.content_field], metadata[r[ID_FIELD]]), r[self.vector_field])
+                for r in stored
+            ]
+            if rows:
+                self.client.upsert(collection_name=self.collection, data=rows)
 
     def delete(self, ids: Iterable[str]) -> None:
         selected = list(ids)
@@ -195,10 +213,10 @@ class MilvusBackend:
 
     # ---- searching ---------------------------------------------------------------------------
 
-    def _request(self, query: str, k: int, f: Filter | None) -> dict[str, Any] | None:
+    def _request(self, query: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         request: dict[str, Any] = {
             "collection_name": self.collection,
-            "data": [[float(x) for x in self.embed(query)]],
+            "data": [query.embedded(self.embed)],
             "anns_field": self.vector_field,
             "limit": k,
             "output_fields": [self.content_field, self.metadata_field],
@@ -230,20 +248,20 @@ class MilvusBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(query, k, filter)
+        request = self._request(Query.of(query), k, filter)
         if request is None:
             return []
         return self._hits(self.client.search(**request))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, query, k, filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), k, filter)
         if request is None:
             return []
         return self._hits(await self.async_client.search(**request))

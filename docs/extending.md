@@ -27,6 +27,15 @@ decides on it.
 Add `async def asearch(...)` with the same signature for a native async path; otherwise
 `aretrieve` runs `search` in a thread.
 
+Optionally, give it `set_metadata(metadata: Mapping[str, Mapping[str, Any]])` to replace stored
+chunks' metadata without re-embedding them ([Changing a document's permissions](operations.md#changing-a-documents-permissions)):
+replace the whole metadata, ignore ids that are not stored, and return once searches see the
+change. The conformance kit checks it when it is there.
+
+`query` is whatever the caller passed to `retrieve`. String queries arrive as strings; a caller
+with its own vector passes a `Query`, and `Query.of(query).embedded(self.embed)` gives the vector
+to search with either way. See [Your own vectors](vectors.md#in-your-own-backend).
+
 ## An authorizer
 
 ```python

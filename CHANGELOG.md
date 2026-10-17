@@ -11,8 +11,76 @@ All notable changes are recorded here. The format follows
 - Python 3.10, which reached its end of life on 2026-10-31. needtoknow now requires Python 3.11 or
   later; following the support policy, this is the first minor release after that date.
 
+## [1.3.0] - 2026-10-17
+
+Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search
+fuses keyword and vector results under the same permission filter (BM25 on Elasticsearch and
+OpenSearch, full-text search on pgvector). A reranker orders the results after the permission
+check, so a cross-encoder or a hosted rerank API never sees a chunk the user may not read. Searches
+can use vectors you computed, from an embedding service or another modality. AI agents get an MCP
+search tool whose permissions come from the verified access token, never from the model, and
+Haystack pipelines get a retriever component. Four more stores: MongoDB Atlas Vector Search,
+Weaviate, Redis and LanceDB. `set_metadata` changes a document's permissions without embedding it
+again, and the conformance kit checks it, like everything else, against every store.
+
+Python 3.10 is still supported. It reaches its end of life on 2026-10-31, after this release, so
+under the support policy the first minor release after that date, 1.4, drops it, not 1.3 as the
+1.2.0 notes said.
+
 ### Added
 
+- `set_metadata({chunk_id: metadata})` on every built-in backend: replaces stored chunks' metadata
+  without embedding them again, so a document's permission change reaches search without the cost
+  of re-embedding. The whole metadata is replaced (no old permission key survives, including where
+  the store's own partial updates would merge), ids that are not stored are ignored, and it returns
+  once searches see the change, waiting for MongoDB's search index. The conformance kit checks it
+  for any backend that has it, against each real store in CI. Guide: "Changing a document's
+  permissions" in Operations.
+- Reranking after the permission check: `PermissionedRetriever(..., reranker=..., rerank_depth=50)`
+  finds the top `rerank_depth` chunks the subject may read, lets a cross-encoder or hosted rerank
+  API order them, and returns the first k. The reranker never sees a chunk the subject may not
+  read, and can reorder, rescore or drop hits but not add one; returned hits keep their stored
+  text and metadata. Any function or object with `rerank` (and optionally `arerank`) works.
+  Events report `reranked` and `rerank_ms`, and OpenTelemetry records a
+  `needtoknow.rerank.duration` histogram. Guide: "Reranking".
+- `needtoknow.backends.lancedb`: LanceDB, the embedded vector database, with the permission filter
+  applied before the vector search ranks (LanceDB's pre-filtering). Permission terms are stored
+  hex-encoded in a list column and matched with `array_has_any`, and deletes match a hex-encoded id,
+  so no group name, user id or document id is ever part of the SQL. `add` upserts, keeping the last
+  version of a repeated id; metadata is stored as JSON and returned exactly. `create_table` and
+  `create_indexes` (a `LABEL_LIST` index on the terms) set the table up. Tested with the
+  conformance kit, with text and vector queries, on LanceDB 0.40. Extra: `needtoknow[lancedb]`.
+- `needtoknow.mcp.add_search_tool`: a permission-aware search tool for MCP servers (MCP Python SDK
+  2.3 or later), so AI assistants and agents search with the calling user's permissions. The user
+  comes from the access token the server verified for the request, through your `subject_for`
+  function, never from the tool's arguments; a call without a verified token is refused, and a
+  fixed `Subject` serves single-user stdio servers. The read-only tool takes `query` and a bounded
+  `limit`, returns structured results without metadata unless keys are named, and reports a
+  permission service failure to the model without internal details. Extra: `needtoknow[mcp]`.
+- `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
+  subject)` searches an image's or another model's embedding, an embedding from your own service
+  or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword
+  backends the text). Permissions apply exactly as for text. Every vector backend accepts it, and
+  `embed` is now optional on all of them: build a backend without one, write with
+  `add(documents, embeddings=...)` and search with vectors. The LangChain and LlamaIndex store
+  wrappers search by vector, the Haystack component takes a `query_embedding` input, and the
+  LlamaIndex retriever forwards a `QueryBundle`'s embedding. Audit fingerprints use the query's
+  text when there is text and its vector otherwise; events never contain the vector.
+  `check_backend(..., query=...)` runs the conformance kit with any query, and CI runs it with
+  vector queries against every store. Guide: "Your own vectors".
+
+- `RankFusion`: hybrid search. A backend that searches several backends with the same permission
+  filter and fuses their rankings by reciprocal rank fusion, with weights, a rank constant and a
+  per-backend depth; `aretrieve` searches them concurrently. A chunk two backends return with
+  different metadata is left out and logged, since its permissions are uncertain. Guide: "Hybrid
+  search".
+- `mode="keyword"` on the pgvector backend: PostgreSQL full-text search (`websearch_to_tsquery`,
+  ranked by `ts_rank_cd`) under the same permission condition, so one table serves hybrid search.
+  `create_schema(..., text_search="english")` adds the full-text GIN index, and CI checks that the
+  query plan uses it. Tested with the conformance kit, alone and fused with vector search.
+- `mode="keyword"` on the Elasticsearch and OpenSearch backends: BM25 on the text under the same
+  permission filter, with no embedding function needed. Tested with the conformance kit, alone and
+  fused with vector search, against both engines.
 - `needtoknow.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis
   Stack), with the permission filter in the same KNN query. Permission terms are stored
   hex-encoded in a TAG field, so no group name or user id can add query syntax and TAG matching's
@@ -39,6 +107,19 @@ All notable changes are recorded here. The format follows
   UUIDs, with the original kept on the object. `create_collection` sets up a self-provided cosine
   vector, and `WeaviateAsyncClient` gives a native `aretrieve`. Tested with the conformance kit
   against Weaviate 1.39.12. Extra: `needtoknow[weaviate]`.
+
+### Changed
+
+- `SearchBackend.search` receives the query exactly as it was given to `retrieve`, a string or a
+  `Query`, and its `query` parameter is typed `Any`, so backends typed for strings still satisfy
+  the protocol and keep working with string queries.
+- `retrieve` and `aretrieve` raise `TypeError` for a query that is neither a string nor a `Query`,
+  instead of passing it to the backend.
+
+### Fixed
+
+- Chroma: `add` deletes and re-adds a replaced chunk, so none of its old metadata keys can remain
+  and match a permission filter; it also checks that there is one embedding per document.
 
 ## [1.2.0] - 2026-10-17
 
@@ -286,7 +367,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1

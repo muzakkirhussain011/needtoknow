@@ -119,6 +119,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
 | [Weaviate](https://muzakkirhussain011.github.io/needtoknow/integrations/weaviate.html) | Vector store | `needtoknow[weaviate]` | Inside the vector search |
 | [Redis](https://muzakkirhussain011.github.io/needtoknow/integrations/redis.html) | Vector store | `needtoknow[redis]` | In the same KNN query, on hex-encoded terms |
+| [LanceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/lancedb.html) | Vector store, embedded | `needtoknow[lancedb]` | Before the vector search ranks, on hex-encoded terms |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -128,6 +129,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
 | [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
 | [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
+| [MCP](https://muzakkirhussain011.github.io/needtoknow/integrations/mcp.html) | Agent tool server | `needtoknow[mcp]` | Search tool; the user comes from the verified token |
 
 Setup for each, with code:
 
@@ -270,6 +272,24 @@ backend = RedisBackend(client, "chunks", embed=my_embedding_model)
 </details>
 
 <details>
+<summary><b>LanceDB</b></summary>
+
+**LanceDB** (`pip install "needtoknow[lancedb]"`). An embedded vector database, on a local directory
+or object storage, with no server to run. The permission filter is applied before the vector
+search ranks, on hex-encoded terms, so no group name or user id is ever part of the SQL.
+
+```python
+import lancedb
+
+from needtoknow.backends.lancedb import LanceDBBackend, create_table
+
+table = create_table(lancedb.connect("data/chunks"), "chunks", dim=768)
+backend = LanceDBBackend(table, embed=my_embedding_model)
+```
+
+</details>
+
+<details>
 <summary><b>Elasticsearch and OpenSearch</b></summary>
 
 **Elasticsearch and OpenSearch** (`pip install "needtoknow[elasticsearch]"` or `[opensearch]`).
@@ -285,6 +305,10 @@ client = Elasticsearch("http://localhost:9200")
 create_index(client, "docs", dim=768)
 backend = ElasticsearchBackend(client, "docs", embed=my_embedding_model)
 ```
+
+`mode="keyword"` runs BM25 on the same index under the same filter. `RankFusion(vector, keyword)`
+fuses the two into hybrid search, and fuses any other backends the same way
+([hybrid search](https://muzakkirhussain011.github.io/needtoknow/hybrid.html)).
 
 </details>
 
@@ -396,6 +420,27 @@ result = pipeline.run({"retriever": {"query": question, "subject": subject}})
 
 </details>
 
+<details>
+<summary><b>MCP</b></summary>
+
+**MCP** (`pip install "needtoknow[mcp]"`). `add_search_tool` gives an MCP server a search tool for
+AI assistants and agents. Whose permissions apply comes from the access token the server verified,
+never from the tool's arguments, and a call without a verified token is refused.
+
+```python
+from needtoknow.mcp import add_search_tool
+
+
+def subject_for(token):  # the verified token's user, with their groups
+    return Subject(token.subject, groups_of(token.subject))
+
+
+add_search_tool(server, PermissionedRetriever(backend, authorizer), subject_for)
+server.run(transport="streamable-http")
+```
+
+</details>
+
 Filter values are strings or integers, the types permission identifiers use. That keeps every
 backend's answer identical to the reference semantics, which the test suite checks for each one.
 
@@ -486,8 +531,11 @@ versioning: no breaking change without a major version and a deprecation period 
 Since 1.0, 1.1 added resilient connections to remote permission services and signed, verifiable
 releases. 1.2 added the Qdrant, Milvus, Elasticsearch and OpenSearch backends, the SpiceDB and
 Cerbos authorizers, combined and multi-tenant authorizers, a permission cache shared across
-replicas, OpenTelemetry metrics and a conformance kit. Next, in rough order: permission sync from
-Google Drive, SharePoint and Confluence, and more vector stores. Contributions are welcome; see
+replicas, OpenTelemetry metrics and a conformance kit. 1.3 added hybrid search, reranking after the
+permission check, searches with your own vectors, permission changes without re-embedding, an MCP
+search tool for AI agents, a Haystack component, and the MongoDB Atlas, Weaviate, Redis and LanceDB
+backends. Next, in rough order: permission sync from Google Drive, SharePoint and Confluence, and
+more vector stores. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment

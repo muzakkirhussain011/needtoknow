@@ -16,7 +16,8 @@ from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labe
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject
+from needtoknow.testing import QUERY as KIT_QUERY
 from needtoknow.testing import check_backend
 
 EMBED = HashingEmbedder()
@@ -213,3 +214,155 @@ def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_facto
 
     async_result, sync_result = asyncio.run(run())
     assert async_result == sync_result and len(async_result.hits) == 4
+
+
+# ---- pgvector keyword search and hybrid search -------------------------------------------------
+
+
+@pytest.mark.parametrize("config", ["English", "english; DROP TABLE x", "", "pg catalog"])
+def test_pgvector_text_search_configuration_must_be_a_plain_name(config):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None, mode="keyword", text_search=config)
+    with pytest.raises(ValueError):
+        create_schema(None, 4, text_search=config)
+
+
+def test_pgvector_mode_and_embed_are_checked():
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, EMBED, mode="semantic")
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None, mode="keyword").add([Document("a", "doc", {})])
+    with pytest.raises(ValueError):
+        PgVectorBackend(None, None).search("doc", 3)
+
+
+@pytest.fixture(scope="module")
+def pgvector_keyword_table(pgvector_pool):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    create_schema(pgvector_pool, EMBED.dim, table="ntk_keyword", hnsw=False, text_search="english")
+    writer = PgVectorBackend(pgvector_pool, EMBED, table="ntk_keyword", iterative_scan=None)
+
+    def load(docs):
+        with pgvector_pool.connection() as conn:
+            conn.execute("TRUNCATE ntk_keyword")
+        writer.add(docs)
+        return writer
+
+    return load
+
+
+def test_pgvector_keyword_mode_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        pgvector_keyword_table(docs)
+        return keyword
+
+    check_backend(make)
+
+
+def test_pgvector_hybrid_search_on_one_table_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
+    from needtoknow import RankFusion
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        return RankFusion(pgvector_keyword_table(docs), keyword)
+
+    check_backend(make)
+
+
+def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvector_keyword_table):
+    from psycopg import sql
+
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    pgvector_keyword_table([Document("a", "leave policy", {"allowed_groups": ["*"]})])
+    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+    # Without a permission condition the full-text index is the only index that can serve the
+    # query; with one, the planner may as well start from the metadata index.
+    statement, params = keyword._keyword_query("leave", 5, None)
+    with pgvector_pool.connection() as conn, conn.transaction():
+        conn.execute("SET LOCAL enable_seqscan = off")  # a tiny table would otherwise be scanned
+        plan = "\n".join(row[0] for row in conn.execute(sql.SQL("EXPLAIN ") + statement, params))
+    assert "ntk_keyword_content_english_fts" in plan
+
+
+# ---- searching with your own vectors -----------------------------------------------------------
+
+
+def test_pgvector_without_embed_searches_with_query_vectors(pgvector_pool):
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    create_schema(pgvector_pool, EMBED.dim, table="ntk_vectors", hnsw=False)
+    backend = PgVectorBackend(pgvector_pool, table="ntk_vectors", iterative_scan=None)
+
+    def make(docs):
+        with pgvector_pool.connection() as conn:
+            conn.execute("TRUNCATE ntk_vectors")
+        backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
+        return backend
+
+    check_backend(make, examples=8, query=Query(vector=EMBED(KIT_QUERY)))
+    with pytest.raises(ValueError, match="embed function"):
+        backend.search(KIT_QUERY, 3)
+
+
+def test_pgvector_hybrid_search_with_one_query_vector(pgvector_pool, pgvector_keyword_table):
+    from needtoknow import RankFusion
+    from needtoknow.backends.pgvector import PgVectorBackend
+
+    vector = PgVectorBackend(pgvector_pool, table="ntk_keyword", iterative_scan=None)
+    keyword = PgVectorBackend(pgvector_pool, table="ntk_keyword", mode="keyword")
+
+    def make(docs):
+        pgvector_keyword_table(docs)
+        return RankFusion(vector, keyword)
+
+    check_backend(make, examples=8, query=Query(KIT_QUERY, EMBED(KIT_QUERY)))
+
+
+def test_chroma_searches_with_query_vectors():
+    chromadb = pytest.importorskip("chromadb")
+    from needtoknow.backends.chroma import ChromaBackend
+
+    client = chromadb.EphemeralClient()
+
+    def make(docs):
+        collection = client.create_collection(f"ntk_{uuid.uuid4().hex}", embedding_function=None)
+        backend = ChromaBackend(collection)
+        backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
+        return backend
+
+    check_backend(make, examples=8, query=Query(vector=EMBED(KIT_QUERY)))
+
+
+# ---- changing permissions ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("change", ["add", "set_metadata"])
+def test_a_permission_change_leaves_nothing_of_the_old_permissions(factory, change):
+    old = Document("plan", "doc leave plan", {"allowed_groups": ["eng"], "level": 1})
+    backend = factory([old])
+    new_metadata = {"allowed_groups": ["hr"]}
+    if change == "add" and isinstance(backend, InMemoryBackend):
+        backend.add([Document("plan", old.text, new_metadata)])
+    elif change == "add":
+        backend.add([Document("plan", old.text, new_metadata)], embeddings=[EMBED(old.text)])
+    else:
+        backend.set_metadata({"plan": new_metadata})
+    assert backend.search("doc leave", 5, In("allowed_groups", ["eng"])) == []
+    assert backend.search("doc leave", 5, In("level", [1])) == []
+    (hit,) = backend.search("doc leave", 5, In("allowed_groups", ["hr"]))
+    assert hit.text == old.text and hit.metadata == new_metadata
+    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
+    assert retriever.retrieve("doc leave", Subject("bob", ["eng"]), 5).hits == []
+    assert [h.id for h in retriever.retrieve("doc leave", Subject("ann", ["hr"]), 5).hits] == ["plan"]

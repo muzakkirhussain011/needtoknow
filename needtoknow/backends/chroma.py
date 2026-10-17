@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.filters import And, Filter, In, Or, _is_value, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 __all__ = ["JSON_KEY", "NEVER", "ChromaBackend", "filter_to_where"]
 
@@ -109,8 +109,9 @@ class ChromaBackend:
     """Search a Chroma collection with the permission filter applied by Chroma.
 
     If `embed` is given, queries and added documents are embedded with it; otherwise the
-    collection's own embedding function is used. Scores are `1 - distance`, so create the
-    collection with cosine distance for scores in [-1, 1].
+    collection's own embedding function is used. A `Query` with a vector is searched with that
+    vector. Scores are `1 - distance`, so create the collection with cosine distance for scores in
+    [-1, 1].
     """
 
     supports_filters = True
@@ -123,31 +124,62 @@ class ChromaBackend:
         docs = list(documents)
         if not docs:
             return
-        kwargs: dict[str, Any] = {
-            "ids": [d.id for d in docs],
-            "documents": [d.text for d in docs],
-            "metadatas": [_encode_metadata(d.id, d.metadata) for d in docs],
-        }
+        vectors = None
         if embeddings is not None:
-            kwargs["embeddings"] = [list(map(float, v)) for v in embeddings]
+            vectors = [list(map(float, v)) for v in embeddings]
+            if len(vectors) != len(docs):
+                raise ValueError("one embedding per document is required")
         elif self.embed is not None:
-            kwargs["embeddings"] = [list(map(float, self.embed(d.text))) for d in docs]
-        self.collection.upsert(**kwargs)
+            vectors = [list(map(float, self.embed(d.text))) for d in docs]
+        # The last version of each id wins, as it would in sequence.
+        keep = sorted({d.id: i for i, d in enumerate(docs)}.values())
+        kwargs: dict[str, Any] = {
+            "ids": [docs[i].id for i in keep],
+            "documents": [docs[i].text for i in keep],
+            "metadatas": [_encode_metadata(docs[i].id, docs[i].metadata) for i in keep],
+        }
+        if vectors is not None:
+            kwargs["embeddings"] = [vectors[i] for i in keep]
+        self._replace(kwargs)
+
+    def _replace(self, records: dict[str, Any]) -> None:
+        # Delete, then add: a replaced chunk keeps none of its old metadata keys, whatever an
+        # update would merge.
+        self.collection.delete(ids=records["ids"])
+        self.collection.add(**records)
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        ids = list(metadata)
+        if not ids:
+            return
+        stored = self.collection.get(ids=ids, include=["documents", "embeddings"])
+        found = list(stored["ids"])
+        if found:
+            self._replace(
+                {
+                    "ids": found,
+                    "documents": stored["documents"],
+                    "embeddings": stored["embeddings"],
+                    "metadatas": [_encode_metadata(i, metadata[i]) for i in found],
+                }
+            )
 
     def delete(self, ids: Iterable[str]) -> None:
         self.collection.delete(ids=list(ids))
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
+        q = Query.of(query)
         where = filter_to_where(filter) if filter is not None else None
         if k < 1 or where is NEVER or self.collection.count() == 0:
             return []
         kwargs: dict[str, Any] = {"n_results": k, "include": ["documents", "metadatas", "distances"]}
         if where is not None:
             kwargs["where"] = where
-        if self.embed is not None:
-            kwargs["query_embeddings"] = [list(map(float, self.embed(query)))]
+        if q.vector is not None or self.embed is not None:
+            kwargs["query_embeddings"] = [q.embedded(self.embed)]
         else:
-            kwargs["query_texts"] = [query]
+            kwargs["query_texts"] = [q.keywords()]  # the collection's embedding function embeds it
         result = self.collection.query(**kwargs)
         rows = zip(
             result["ids"][0], result["documents"][0], result["metadatas"][0], result["distances"][0], strict=True

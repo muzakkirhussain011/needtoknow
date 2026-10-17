@@ -41,8 +41,8 @@ sits between your application and your vector store, and closes that gap.
 :gutter: 3
 
 :::{grid-item-card} {octicon}`stack;1.4em;sd-text-primary` Works with what you have
-pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, Elasticsearch, OpenSearch, Chroma or any
-LangChain or LlamaIndex store; OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The
+pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, LanceDB, Elasticsearch, OpenSearch, Chroma or
+any LangChain or LlamaIndex store; OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The
 core has no dependencies.
 :::
 
@@ -180,6 +180,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 - [MongoDB Atlas Vector Search](integrations/mongodb.md)
 - [Weaviate](integrations/weaviate.md)
 - [Redis](integrations/redis.md)
+- [LanceDB](integrations/lancedb.md)
 - [Elasticsearch and OpenSearch](integrations/elasticsearch.md)
 - [Chroma](integrations/chroma.md)
 - Any [LangChain](integrations/langchain.md) or [LlamaIndex](integrations/llamaindex.md) store
@@ -270,6 +271,9 @@ Scorecard.
 quickstart
 concepts
 combining
+hybrid
+vectors
+reranking
 security
 operations
 production
@@ -288,6 +292,7 @@ integrations/milvus
 integrations/mongodb
 integrations/weaviate
 integrations/redis
+integrations/lancedb
 integrations/opa
 integrations/openfga
 integrations/spicedb
@@ -295,6 +300,7 @@ integrations/cerbos
 integrations/langchain
 integrations/llamaindex
 integrations/haystack
+integrations/mcp
 ```
 
 ```{toctree}

@@ -80,6 +80,31 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
 Another store works too: pass any object with `get_many`, `set_many` and `delete_prefix`
 (`needtoknow.caching.SharedCache`).
 
+## Changing a document's permissions
+
+When a document is shared with someone new, or access to it is taken away, its chunks' metadata
+has to change before searches can see it. `set_metadata` replaces the metadata of stored chunks
+without embedding them again:
+
+```python
+backend.set_metadata({chunk_id: {"allowed_groups": ["hr"]} for chunk_id in chunk_ids})
+```
+
+- The whole metadata is replaced: no key of the old permissions survives. Ids that are not stored
+  are ignored, so nothing is created from metadata alone.
+- It returns once searches see the change, as `add` does for that store
+  ([Choosing a store](integrations/index.md#choosing-a-store)); MongoDB waits for its search index.
+- Every built-in backend has it, and the [conformance kit](extending.md#test-it-with-the-conformance-kit)
+  checks it against each real store. Keep each source document's chunk ids (for example
+  `"handbook#12"`) so you can find them when its permissions change.
+- With [hybrid search](hybrid.md) over several indexes, update each of them; until they agree,
+  `RankFusion` leaves the chunk out.
+
+A change on the other side, such as a user leaving a group, needs no update to the chunks: the
+subject's groups are read at query time. `CachingAuthorizer` keys each decision by the chunk's
+metadata, so a chunk whose metadata changed is decided again at once, and cached filters expire
+after `ttl`.
+
 ## Resilience of remote permission services
 
 `OPAAuthorizer` and `OpenFGAAuthorizer` share an HTTP client built for permission checks on every
@@ -158,10 +183,11 @@ passes it to each observer. An observer is any callable taking the event.
 | `duration_ms`, `started_at` | Timing (`started_at` is Unix time) |
 | `search_ms`, `authorize_ms` | Time spent in the backend and in the authorizer |
 | `searches` | Backend searches: one when pre-filtering, more when post-filtering fetched again |
+| `reranked`, `rerank_ms` | Chunks given to the [reranker](reranking.md) (0 without one), and the time it took |
 | `error` | The exception type when the call failed, for example `AuthorizationError` |
-| `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set |
+| `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set: of its text, or of its vector when a `Query` has no text |
 
-Events never contain query or chunk text. A plain hash of a short query could be reversed by
+Events never contain query or chunk text, nor a query's vector. A plain hash of a short query could be reversed by
 guessing, so the fingerprint is an HMAC under your key, and there is none without a key. Equal
 queries under the same key have equal fingerprints, which lets you spot repeated or probing queries
 without storing them. Rotating the key breaks that link, which can be what you want.
@@ -170,7 +196,7 @@ without storing them. Rotating the key breaks that link, which can be what you w
 flushes after each event:
 
 ```json
-{"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
+{"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","rerank_ms":0.0,"reranked":0,"returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
 ```
 
 An observer that raises is logged on the `needtoknow` logger and never changes what retrieval
@@ -190,6 +216,7 @@ the call and parented to the span that was current when it ran.
 | `needtoknow.returned`, `needtoknow.examined`, `needtoknow.denied`, `needtoknow.violations` | Counts |
 | `needtoknow.complete` | As `RetrievalResult.complete` |
 | `needtoknow.searches`, `needtoknow.search.duration_ms`, `needtoknow.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
+| `needtoknow.reranked`, `needtoknow.rerank.duration_ms` | Chunks reranked and the reranker's time, on reranked retrievals only |
 | `error.type`, `needtoknow.error` | The exception type; the span status is then ERROR |
 | `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 
@@ -215,6 +242,7 @@ retriever = PermissionedRetriever(backend, authorizer, observers=observers)
 | `needtoknow.retrievals` | Counter | Retrievals by `needtoknow.outcome`: `complete`, `incomplete` or `error` |
 | `needtoknow.search.duration` | Histogram, s | Time spent in the backend during one retrieval |
 | `needtoknow.authorize.duration` | Histogram, s | Time spent in the authorizer during one retrieval |
+| `needtoknow.rerank.duration` | Histogram, s | Time spent in the reranker, on reranked retrievals only |
 | `needtoknow.chunks.returned`, `.examined`, `.denied` | Counters | Chunks returned, checked by the authorizer, and withheld |
 | `needtoknow.violations` | Counter | Pre-filtered chunks the re-check rejected |
 

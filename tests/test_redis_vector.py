@@ -10,10 +10,10 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag, terms
 from needtoknow.backends.redis import RedisBackend, create_index, filter_to_query, permission_terms
-from needtoknow.testing import HashingEmbedder, check_backend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 REDIS_URL = os.environ.get("NEEDTOKNOW_TEST_REDIS_URL")
@@ -218,6 +218,26 @@ def test_server_passes_the_conformance_kit(redis_client):
 
     try:
         check_backend(make)
+    finally:
+        for name in made:
+            _drop(redis_client, name)
+
+
+def test_server_searches_with_query_vectors(redis_client):
+    made: list[str] = []
+
+    def make(docs):
+        for name in made:
+            _drop(redis_client, name)
+        name = f"ntk_{uuid.uuid4().hex}"
+        create_index(redis_client, name, EMBED.dim, prefix=f"{name}:")
+        made[:] = [name]
+        backend = RedisBackend(redis_client, name, prefix=f"{name}:")
+        backend.add(docs, [EMBED(d.text) for d in docs])
+        return backend
+
+    try:
+        check_backend(make, examples=8, query=Query(vector=EMBED(QUERY)))
     finally:
         for name in made:
             _drop(redis_client, name)

@@ -34,6 +34,9 @@ fails. Each item links to the page with the details.
   Post-filtering alone loses recall for users who may read little of the index.
   ([Benchmarks](benchmarks.md#what-the-load-results-show))
 - [ ] `max_candidates` is sized for your least-privileged users, and `complete=False` is monitored.
+- [ ] A permission change at the source reaches the chunks' metadata (`set_metadata`) within your
+  revocation target, and you know each source document's chunk ids.
+  ([Operations](operations.md#changing-a-documents-permissions))
 
 **The permission service**
 

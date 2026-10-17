@@ -63,10 +63,13 @@ def create_index(
 class ElasticsearchBackend(EngineBackend):
     """Search an Elasticsearch index with the permission filter applied during the kNN search.
 
-    `embed` turns text into a vector. `num_candidates` is how many nearest neighbours each shard
-    considers (at least k, at most 10,000): higher finds more of the true nearest chunks and takes
-    longer. Scores are Elasticsearch's: `(1 + cosine) / 2` for a cosine field. `refresh` is passed
-    to bulk writes (`"wait_for"` by default, so written chunks are searchable when `add` returns).
+    `embed` turns text into a vector; without it, search with `Query(vector=...)` and pass
+    `embeddings` to `add`. `num_candidates` is how many nearest neighbours each shard considers (at
+    least k, at most 10,000): higher finds more of the true nearest chunks and takes longer. Scores
+    are Elasticsearch's: `(1 + cosine) / 2` for a cosine field. `refresh` is passed to bulk writes
+    (`"wait_for"` by default, so written chunks are searchable when `add` returns).
+    `mode="keyword"` searches the text with BM25 instead, under the same permission filter, for
+    hybrid search with `RankFusion`; `embed` may then be None.
     """
 
     def _search_request(self, vector: list[float], k: int, query: dict[str, Any] | None) -> dict[str, Any]:
@@ -79,6 +82,10 @@ class ElasticsearchBackend(EngineBackend):
         if query is not None:
             knn["filter"] = query
         return {"knn": knn, "size": k, "source_excludes": [self.vector_field]}
+
+    def _keyword_request(self, text: str, k: int, query: dict[str, Any] | None) -> dict[str, Any]:
+        match = {"bool": {"must": [{"match": {self.content_field: text}}], "filter": [query] if query else []}}
+        return {"query": match, "size": k, "source_excludes": [self.vector_field]}
 
     def _bulk(self, client: Any, operations: list[dict[str, Any]]) -> Any:
         return client.bulk(operations=operations, refresh=self.refresh)

@@ -8,10 +8,10 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Subject
+from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import TERMS_FIELD, tag, terms
 from needtoknow.backends.milvus import MilvusBackend, create_collection, filter_to_expression, permission_terms
-from needtoknow.testing import HashingEmbedder, check_backend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 MILVUS_URL = os.environ.get("NEEDTOKNOW_TEST_MILVUS_URL")
@@ -176,6 +176,24 @@ def test_server_passes_the_conformance_kit():
 
     try:
         check_backend(make)
+    finally:
+        for name in previous:
+            client.drop_collection(name)
+
+
+def test_server_searches_with_query_vectors():
+    client, previous = _client(), []
+
+    def make(docs):
+        for name in previous:
+            client.drop_collection(name)
+        previous[:] = [_new_collection(client)]
+        backend = MilvusBackend(client, previous[0])
+        backend.add(docs, [EMBED(d.text) for d in docs])
+        return backend
+
+    try:
+        check_backend(make, examples=8, query=Query(vector=EMBED(QUERY)))
     finally:
         for name in previous:
             client.drop_collection(name)

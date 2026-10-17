@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from needtoknow.filters import And, Filter, In, Or, _is_value, _ordered
-from needtoknow.types import Document, Hit
+from needtoknow.types import Document, Hit, Query
 
 TERMS_FIELD = "needtoknow_terms"
 _SEP = "\x1f"  # the ASCII unit separator: field names may not contain it
@@ -64,6 +64,7 @@ def filter_to_query(f: Filter) -> dict[str, Any] | None:
 
 Embed = Callable[[str], Sequence[float]]
 _BATCH = 500
+_REPLACE_METADATA = f"ctx._source[params.field] = params.metadata; ctx._source['{TERMS_FIELD}'] = params.terms"
 
 
 class EngineBackend:
@@ -78,19 +79,22 @@ class EngineBackend:
         self,
         client: Any,
         index: str,
-        embed: Embed,
+        embed: Embed | None = None,
         *,
         vector_field: str = "embedding",
         content_field: str = "content",
         metadata_field: str = "metadata",
         num_candidates: int = 100,
         refresh: bool | str = "wait_for",
+        mode: str = "vector",
         async_client: Any = None,
     ) -> None:
         if not index:
             raise ValueError("index must be a non-empty name")
         if num_candidates < 1:
             raise ValueError("num_candidates must be positive")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
         self.client = client
         self.async_client = async_client
         self.index = index
@@ -100,10 +104,14 @@ class EngineBackend:
         self.metadata_field = metadata_field
         self.num_candidates = num_candidates
         self.refresh = refresh
+        self.mode = mode
 
     # Engine specifics -------------------------------------------------------------------------
 
     def _search_request(self, vector: list[float], k: int, query: dict[str, Any] | None) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def _keyword_request(self, text: str, k: int, query: dict[str, Any] | None) -> dict[str, Any]:
         raise NotImplementedError
 
     def _bulk(self, client: Any, operations: list[dict[str, Any]]) -> Any:
@@ -111,18 +119,28 @@ class EngineBackend:
 
     # Writing ----------------------------------------------------------------------------------
 
-    def _source(self, doc: Document, vector: Sequence[float]) -> dict[str, Any]:
-        return {
+    def _source(self, doc: Document, vector: Sequence[float] | None) -> dict[str, Any]:
+        source: dict[str, Any] = {
             self.content_field: doc.text,
             self.metadata_field: dict(doc.metadata),
             TERMS_FIELD: terms(doc.id, doc.metadata),
-            self.vector_field: [float(x) for x in vector],
         }
+        if vector is not None:  # a keyword-only backend without embed writes no vector
+            source[self.vector_field] = [float(x) for x in vector]
+        return source
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
-        vectors = list(embeddings) if embeddings is not None else [self.embed(d.text) for d in docs]
+        vectors: list[Sequence[float] | None]
+        if embeddings is not None:
+            vectors = list(embeddings)
+        elif self.embed is not None:
+            vectors = [self.embed(d.text) for d in docs]
+        elif self.mode == "keyword":
+            vectors = [None] * len(docs)  # a keyword-only index needs no vectors
+        else:
+            raise ValueError("pass embeddings, or give the backend an embed function")
         if len(vectors) != len(docs):
             raise ValueError("one embedding per document is required")
         sources = [self._source(d, v) for d, v in zip(docs, vectors, strict=True)]
@@ -132,6 +150,20 @@ class EngineBackend:
                 operations += [{"index": {"_index": self.index, "_id": doc.id}}, source]
             _raise_for_items(self._bulk(self.client, operations), allow_not_found=False)
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        items = list(metadata.items())
+        for start in range(0, len(items), _BATCH):
+            operations: list[dict[str, Any]] = []
+            for doc_id, new in items[start : start + _BATCH]:
+                params = {"field": self.metadata_field, "metadata": dict(new), "terms": terms(doc_id, new)}
+                operations += [
+                    {"update": {"_index": self.index, "_id": doc_id}},
+                    # A script, because a partial `doc` update would merge the old metadata's keys into the new.
+                    {"script": {"source": _REPLACE_METADATA, "params": params}},
+                ]
+            _raise_for_items(self._bulk(self.client, operations), allow_not_found=True)
+
     def delete(self, ids: Iterable[str]) -> None:
         operations = [{"delete": {"_index": self.index, "_id": i}} for i in ids]
         if operations:
@@ -139,13 +171,15 @@ class EngineBackend:
 
     # Searching --------------------------------------------------------------------------------
 
-    def _request(self, text: str, k: int, f: Filter | None) -> dict[str, Any] | None:
+    def _request(self, q: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         query = None
         if f is not None:
             query = filter_to_query(f)
             if query is None:
                 return None  # nothing can match
-        return self._search_request([float(x) for x in self.embed(text)], k, query)
+        if self.mode == "keyword":
+            return self._keyword_request(q.keywords(), k, query)
+        return self._search_request(q.embedded(self.embed), k, query)
 
     def _hits(self, response: Any) -> list[Hit]:
         hits = []
@@ -165,20 +199,20 @@ class EngineBackend:
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits
 
-    def search(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(query, min(k, _MAX_K), filter)
+        request = self._request(Query.of(query), min(k, _MAX_K), filter)
         if request is None:
             return []
         return self._hits(self.client.search(index=self.index, **request))
 
-    async def asearch(self, query: str, k: int, filter: Filter | None = None) -> list[Hit]:
+    async def asearch(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if self.async_client is None:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, query, min(k, _MAX_K), filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), min(k, _MAX_K), filter)
         if request is None:
             return []
         return self._hits(await self.async_client.search(index=self.index, **request))
