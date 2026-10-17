@@ -125,36 +125,36 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 ```{eval-rst}
 .. autoclass:: needtoknow.InMemoryBackend
-   :members: add, search
+   :members: add, set_metadata, search
 
 .. autoclass:: needtoknow.backends.pgvector.PgVectorBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.pgvector.create_schema
 
 .. autofunction:: needtoknow.backends.pgvector.filter_to_sql
 
 .. autoclass:: needtoknow.backends.chroma.ChromaBackend
-   :members: add, delete, search
+   :members: add, set_metadata, delete, search
 
 .. autofunction:: needtoknow.backends.chroma.filter_to_where
 
 .. autoclass:: needtoknow.backends.elasticsearch.ElasticsearchBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.elasticsearch.create_index
 
 .. autofunction:: needtoknow.backends.elasticsearch.permission_terms
 
 .. autoclass:: needtoknow.backends.opensearch.OpenSearchBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.opensearch.create_index
 
 .. autofunction:: needtoknow.backends.opensearch.permission_terms
 
 .. autoclass:: needtoknow.backends.qdrant.QdrantBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.qdrant.create_collection
 
@@ -163,7 +163,7 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.qdrant.point_id
 
 .. autoclass:: needtoknow.backends.milvus.MilvusBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.milvus.create_collection
 
@@ -172,7 +172,7 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.milvus.permission_terms
 
 .. autoclass:: needtoknow.backends.mongodb.MongoDBBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.mongodb.create_search_index
 
@@ -181,7 +181,7 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.mongodb.permission_terms
 
 .. autoclass:: needtoknow.backends.weaviate.WeaviateBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.weaviate.create_collection
 
@@ -192,7 +192,7 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: needtoknow.backends.weaviate.point_id
 
 .. autoclass:: needtoknow.backends.redis.RedisBackend
-   :members: add, delete, search, asearch
+   :members: add, set_metadata, delete, search, asearch
 
 .. autofunction:: needtoknow.backends.redis.create_index
 

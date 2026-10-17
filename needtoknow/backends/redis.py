@@ -35,6 +35,9 @@ Embed = Callable[[str], Sequence[float]]
 ID_FIELD = "needtoknow_id"
 _SCORE = "__needtoknow_distance"
 _BATCH = 500
+_SET_IF_STORED = (
+    "if redis.call('EXISTS', KEYS[1]) == 1 then redis.call('HSET', KEYS[1], ARGV[1], ARGV[2], ARGV[3], ARGV[4]) end"
+)
 
 
 def _hex(term: str) -> str:
@@ -158,6 +161,18 @@ class RedisBackend:
                         self.vector_field: struct.pack(f"<{len(v)}f", *(float(x) for x in v)),
                     },
                 )
+            pipe.execute()
+
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        items = list(metadata.items())
+        for start in range(0, len(items), _BATCH):
+            pipe = self.client.pipeline(transaction=False)
+            for doc_id, new in items[start : start + _BATCH]:
+                encoded = json.dumps(dict(new), sort_keys=True)
+                hexed = ",".join(_hex(t) for t in terms(doc_id, new))
+                # One script per chunk, so a hash deleted meanwhile is not recreated without its vector.
+                pipe.eval(_SET_IF_STORED, 1, self.prefix + doc_id, self.metadata_field, encoded, TERMS_FIELD, hexed)
             pipe.execute()
 
     def delete(self, ids: Iterable[str]) -> None:

@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `set_metadata({chunk_id: metadata})` on every built-in backend: replaces stored chunks' metadata
+  without embedding them again, so a document's permission change reaches search without the cost
+  of re-embedding. The whole metadata is replaced (no old permission key survives, including where
+  the store's own partial updates would merge), ids that are not stored are ignored, and it returns
+  once searches see the change, waiting for MongoDB's search index. The conformance kit checks it
+  for any backend that has it, against each real store in CI. Guide: "Changing a document's
+  permissions" in Operations.
 - Reranking after the permission check: `PermissionedRetriever(..., reranker=..., rerank_depth=50)`
   finds the top `rerank_depth` chunks the subject may read, lets a cross-encoder or hosted rerank
   API order them, and returns the first k. The reranker never sees a chunk the subject may not
@@ -80,6 +87,11 @@ All notable changes are recorded here. The format follows
   the protocol and keep working with string queries.
 - `retrieve` and `aretrieve` raise `TypeError` for a query that is neither a string nor a `Query`,
   instead of passing it to the backend.
+
+### Fixed
+
+- Chroma: `add` deletes and re-adds a replaced chunk, so none of its old metadata keys can remain
+  and match a permission filter; it also checks that there is one embedding per document.
 
 ## [1.2.0] - 2026-10-17
 
