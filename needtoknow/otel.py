@@ -58,6 +58,9 @@ class OpenTelemetryObserver:
             "needtoknow.search.duration_ms": event.search_ms,
             "needtoknow.authorize.duration_ms": event.authorize_ms,
         }
+        if event.reranked:
+            attributes["needtoknow.reranked"] = event.reranked
+            attributes["needtoknow.rerank.duration_ms"] = event.rerank_ms
         if event.strategy:
             attributes["needtoknow.strategy"] = event.strategy
         if event.error:
@@ -86,6 +89,8 @@ class OpenTelemetryMetrics:
       `incomplete` or `error`.
     - `needtoknow.search.duration`, `needtoknow.authorize.duration` (histograms, s): time spent in
       the backend and in the authorizer during each retrieval.
+    - `needtoknow.rerank.duration` (histogram, s): time spent in the reranker, for retrievals that
+      reranked.
     - `needtoknow.chunks.returned`, `needtoknow.chunks.examined`, `needtoknow.chunks.denied`
       (counters): chunks returned, checked by the authorizer, and withheld.
     - `needtoknow.violations` (counter): pre-filtered chunks the re-check rejected. Alert on any
@@ -115,6 +120,12 @@ class OpenTelemetryMetrics:
             description="Time spent in the authorizer during one retrieval.",
             explicit_bucket_boundaries_advisory=list(STAGE_DURATION_BUCKETS),
         )
+        self._rerank = meter.create_histogram(
+            "needtoknow.rerank.duration",
+            unit="s",
+            description="Time spent in the reranker during one retrieval.",
+            explicit_bucket_boundaries_advisory=list(STAGE_DURATION_BUCKETS),
+        )
         self._returned = meter.create_counter(
             "needtoknow.chunks.returned", unit="{chunk}", description="Chunks returned to callers."
         )
@@ -140,6 +151,8 @@ class OpenTelemetryMetrics:
         self._retrievals.add(1, {**common, "needtoknow.outcome": outcome, **failed})
         self._search.record(event.search_ms / 1000, common)
         self._authorize.record(event.authorize_ms / 1000, common)
+        if event.reranked:
+            self._rerank.record(event.rerank_ms / 1000, common)
         self._returned.add(len(event.returned_ids), common)
         self._examined.add(event.examined, common)
         self._denied.add(event.denied, common)

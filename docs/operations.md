@@ -183,6 +183,7 @@ passes it to each observer. An observer is any callable taking the event.
 | `duration_ms`, `started_at` | Timing (`started_at` is Unix time) |
 | `search_ms`, `authorize_ms` | Time spent in the backend and in the authorizer |
 | `searches` | Backend searches: one when pre-filtering, more when post-filtering fetched again |
+| `reranked`, `rerank_ms` | Chunks given to the [reranker](reranking.md) (0 without one), and the time it took |
 | `error` | The exception type when the call failed, for example `AuthorizationError` |
 | `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set: of its text, or of its vector when a `Query` has no text |
 
@@ -195,7 +196,7 @@ without storing them. Rotating the key breaks that link, which can be what you w
 flushes after each event:
 
 ```json
-{"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
+{"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","rerank_ms":0.0,"reranked":0,"returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
 ```
 
 An observer that raises is logged on the `needtoknow` logger and never changes what retrieval
@@ -215,6 +216,7 @@ the call and parented to the span that was current when it ran.
 | `needtoknow.returned`, `needtoknow.examined`, `needtoknow.denied`, `needtoknow.violations` | Counts |
 | `needtoknow.complete` | As `RetrievalResult.complete` |
 | `needtoknow.searches`, `needtoknow.search.duration_ms`, `needtoknow.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
+| `needtoknow.reranked`, `needtoknow.rerank.duration_ms` | Chunks reranked and the reranker's time, on reranked retrievals only |
 | `error.type`, `needtoknow.error` | The exception type; the span status is then ERROR |
 | `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 
@@ -240,6 +242,7 @@ retriever = PermissionedRetriever(backend, authorizer, observers=observers)
 | `needtoknow.retrievals` | Counter | Retrievals by `needtoknow.outcome`: `complete`, `incomplete` or `error` |
 | `needtoknow.search.duration` | Histogram, s | Time spent in the backend during one retrieval |
 | `needtoknow.authorize.duration` | Histogram, s | Time spent in the authorizer during one retrieval |
+| `needtoknow.rerank.duration` | Histogram, s | Time spent in the reranker, on reranked retrievals only |
 | `needtoknow.chunks.returned`, `.examined`, `.denied` | Counters | Chunks returned, checked by the authorizer, and withheld |
 | `needtoknow.violations` | Counter | Pre-filtered chunks the re-check rejected |
 

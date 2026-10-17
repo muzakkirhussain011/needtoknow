@@ -15,6 +15,13 @@ All notable changes are recorded here. The format follows
   once searches see the change, waiting for MongoDB's search index. The conformance kit checks it
   for any backend that has it, against each real store in CI. Guide: "Changing a document's
   permissions" in Operations.
+- Reranking after the permission check: `PermissionedRetriever(..., reranker=..., rerank_depth=50)`
+  finds the top `rerank_depth` chunks the subject may read, lets a cross-encoder or hosted rerank
+  API order them, and returns the first k. The reranker never sees a chunk the subject may not
+  read, and can reorder, rescore or drop hits but not add one; returned hits keep their stored
+  text and metadata. Any function or object with `rerank` (and optionally `arerank`) works.
+  Events report `reranked` and `rerank_ms`, and OpenTelemetry records a
+  `needtoknow.rerank.duration` histogram. Guide: "Reranking".
 - `needtoknow.backends.lancedb`: LanceDB, the embedded vector database, with the permission filter
   applied before the vector search ranks (LanceDB's pre-filtering). Permission terms are stored
   hex-encoded in a list column and matched with `array_has_any`, and deletes match a hex-encoded id,

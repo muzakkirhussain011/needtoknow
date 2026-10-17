@@ -273,6 +273,7 @@ concepts
 combining
 hybrid
 vectors
+reranking
 security
 operations
 production
