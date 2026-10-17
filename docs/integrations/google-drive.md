@@ -131,6 +131,11 @@ for what changes take effect at once.
 
 ## Checking the mapping
 
+The tests run the reader against the response shapes Google documents for `permissions.list`,
+`files.get` and `drives.get`, not against a live Workspace domain. Before relying on it, compare
+its answer with Drive's sharing dialog for a few files of each kind you index: My Drive, shared
+drives, limited-access folders and files shared by link.
+
 `drive_access` is the mapping alone, from the permission resources Drive returns to an `Access`.
 Use it to test your own data, or with permissions you already fetched:
 
