@@ -40,7 +40,7 @@ Repository = "https://github.com/muzakkirhussain011/rampart-ai-gateway"
 
 # The build backend, so the image and CI build the package from uv.lock without build isolation.
 [dependency-groups]
-build = ["hatchling==1.32.4"]
+build = ["hatchling==1.32.4", "editables==0.6"]
 
 [tool.uv]
 default-groups = []
