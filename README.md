@@ -126,6 +126,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [SpiceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/spicedb.html) | Permission system | none | LookupResources pre-filter, bulk checks |
 | [Cerbos](https://muzakkirhussain011.github.io/needtoknow/integrations/cerbos.html) | Permission system | none | Pre-filter from query plans |
 | [Open Policy Agent](https://muzakkirhussain011.github.io/needtoknow/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
+| [Google Drive](https://muzakkirhussain011.github.io/needtoknow/integrations/google-drive.html) | Permission sync | none (bring Google's client) | Copies Drive sharing onto the chunks |
 | [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
 | [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
 | [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
@@ -269,6 +270,10 @@ create_index(client, "chunks", dim=768)
 backend = RedisBackend(client, "chunks", embed=my_embedding_model)
 ```
 
+`create_index(..., content_field="content")` also indexes the text, and
+`RedisBackend(client, "chunks", mode="keyword")` then runs BM25 under the same filter, for hybrid
+search with `RankFusion`.
+
 </details>
 
 <details>
@@ -376,6 +381,25 @@ chunk. An example policy is in
 from needtoknow.authorizers.cerbos import CerbosAuthorizer
 
 authorizer = CerbosAuthorizer("http://localhost:3592")
+```
+
+</details>
+
+<details>
+<summary><b>Google Drive</b></summary>
+
+**Google Drive** (bring `google-api-python-client`). `GoogleDriveACL` reads who may read a Drive
+file, in My Drive or a shared drive, and `with_access` writes it onto the file's chunks for
+`MetadataACLAuthorizer`. Grants that do not open the content fail closed: link-only sharing,
+deleted accounts, expired grants, limited-access folders' metadata views and grants a shared drive
+shuts out grant nothing.
+
+```python
+from needtoknow.sync import with_access
+from needtoknow.sync.google_drive import GoogleDriveACL
+
+access = GoogleDriveACL(drive_service, domains=["example.com"]).access(file_id)
+backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in chunks.items()})
 ```
 
 </details>

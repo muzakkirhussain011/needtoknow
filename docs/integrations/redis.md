@@ -58,3 +58,29 @@ from needtoknow.backends.redis import permission_terms
 
 client.hset(key, mapping={"needtoknow_terms": permission_terms(metadata)})
 ```
+
+## Keyword search and hybrid search
+
+`mode="keyword"` searches the chunks' text with BM25 under the same permission filter. The index
+must hold the text: create it with `content_field=`, which keeps every word (the index has no
+stop words). One index then serves both halves of [hybrid search](../hybrid.md):
+
+```python
+from needtoknow import RankFusion
+
+create_index(client, "chunks", dim=768, content_field="content")
+vector = RedisBackend(client, "chunks", embed=embed)
+keyword = RedisBackend(client, "chunks", mode="keyword")  # needs no embed
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+The query is split into words (letters, digits and underscores), and each word is sent as a query
+parameter rather than written into the query, so no query text can add syntax: the permission
+condition always applies. A query keeps its first 64 distinct words, and any of them may match.
+Scores are Redis's BM25 (`BM25STD`), higher for better matches. A keyword backend without `embed`
+writes chunks with no vector, which keyword search finds and vector search does not.
+
+An existing index can gain the text field with `FT.ALTER chunks SCHEMA ADD content TEXT`, and Redis
+indexes the stored hashes in the background. An index created by an earlier needtoknow keeps Redis's
+default stop words, so common English words in a query match nothing there. CI runs the conformance
+kit against Redis 8.10.2 in keyword mode and fused with vector search.

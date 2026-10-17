@@ -99,6 +99,8 @@ backend.set_metadata({chunk_id: {"allowed_groups": ["hr"]} for chunk_id in chunk
   `"handbook#12"`) so you can find them when its permissions change.
 - With [hybrid search](hybrid.md) over several indexes, update each of them; until they agree,
   `RankFusion` leaves the chunk out.
+- To copy sharing from Google Drive, `GoogleDriveACL` reads who may read a file and `with_access`
+  writes it into the chunks' metadata ([Google Drive](integrations/google-drive.md)).
 
 A change on the other side, such as a user leaving a group, needs no update to the chunks: the
 subject's groups are read at query time. `CachingAuthorizer` keys each decision by the chunk's
