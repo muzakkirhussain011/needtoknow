@@ -211,6 +211,10 @@ create_collection(client, "docs", dim=768)
 backend = MilvusBackend(client, "docs", embed=my_embedding_model)
 ```
 
+`create_collection(..., text_search=True)` also derives a BM25 sparse vector from the text, and
+`MilvusBackend(client, "docs", mode="keyword")` then searches it under the same filter, for hybrid
+search with `RankFusion`.
+
 </details>
 
 <details>

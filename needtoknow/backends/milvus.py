@@ -15,11 +15,15 @@ returned as written, for the retriever's re-check.
 text, the metadata, and the terms with an inverted index. Searches use strong consistency by
 default, so a chunk is found as soon as `add` returns. Scores are Milvus's similarity, so use the
 `COSINE` (default) or `IP` metric, where higher means closer.
+
+With `create_collection(..., text_search=True)` Milvus also derives a BM25 sparse vector from the
+text, and `MilvusBackend(..., mode="keyword")` searches it under the same permission filter.
 """
 
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
@@ -28,12 +32,23 @@ from needtoknow.backends._vectors import document_vectors
 from needtoknow.filters import And, Filter, In, Or, _ordered
 from needtoknow.types import Document, Hit, Query
 
-__all__ = ["TERMS_FIELD", "MilvusBackend", "create_collection", "filter_to_expression", "permission_terms"]
+__all__ = [
+    "SPARSE_FIELD",
+    "TERMS_FIELD",
+    "MilvusBackend",
+    "create_collection",
+    "filter_to_expression",
+    "permission_terms",
+]
 
 Embed = Callable[[str], Sequence[float]]
 
 ID_FIELD = "id"
+SPARSE_FIELD = "needtoknow_sparse"
+"""The BM25 sparse vector Milvus derives from the text, for `mode="keyword"`."""
+
 _BATCH = 256
+_WORD = re.compile(r"\w")
 
 
 def permission_terms(metadata: Mapping[str, Any]) -> list[str]:
@@ -97,6 +112,7 @@ def create_collection(
     max_terms: int = 4096,
     max_term_length: int = 1024,
     hnsw: dict[str, int] | None = None,
+    text_search: bool = False,
 ) -> None:
     """Create a collection `MilvusBackend` can use, with an HNSW index on the vector and an inverted
     index on the permission terms.
@@ -104,13 +120,18 @@ def create_collection(
     `max_terms` caps the tagged terms per chunk: one per string or integer in its metadata, so a
     chunk shared with many groups needs more. `max_term_length` caps one term, which is the field
     name, two characters and the value.
+
+    `text_search=True` analyzes the text with Milvus's standard analyzer, which keeps every word,
+    and adds a BM25 function that fills a sparse vector, `needtoknow_sparse`, with an inverted index,
+    for `mode="keyword"`. Milvus can only add it when the collection is created.
     """
     from pymilvus import DataType, MilvusClient
 
     schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=False)
     schema.add_field(ID_FIELD, DataType.VARCHAR, is_primary=True, max_length=max_id_length)
     schema.add_field(vector_field, DataType.FLOAT_VECTOR, dim=dim)
-    schema.add_field(content_field, DataType.VARCHAR, max_length=max_content_length)
+    analyzed = {"enable_analyzer": True} if text_search else {}
+    schema.add_field(content_field, DataType.VARCHAR, max_length=max_content_length, **analyzed)
     schema.add_field(metadata_field, DataType.JSON)
     schema.add_field(
         TERMS_FIELD, DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=max_terms, max_length=max_term_length
@@ -123,6 +144,19 @@ def create_collection(
         params=hnsw or {"M": 16, "efConstruction": 200},
     )
     indexes.add_index(field_name=TERMS_FIELD, index_type="INVERTED")
+    if text_search:
+        from pymilvus import Function, FunctionType
+
+        schema.add_field(SPARSE_FIELD, DataType.SPARSE_FLOAT_VECTOR)
+        schema.add_function(
+            Function(
+                name="needtoknow_bm25",
+                function_type=FunctionType.BM25,
+                input_field_names=[content_field],
+                output_field_names=[SPARSE_FIELD],
+            )
+        )
+        indexes.add_index(field_name=SPARSE_FIELD, index_type="SPARSE_INVERTED_INDEX", metric_type="BM25")
     client.create_collection(collection_name=name, schema=schema, index_params=indexes, consistency_level="Strong")
 
 
@@ -136,6 +170,11 @@ class MilvusBackend:
     at once; "Bounded" is faster when a short delay is acceptable). Pass `async_client` (an
     `AsyncMilvusClient`) for a native `asearch`; otherwise async calls run `search` in a thread.
     Without `embed`, search with `Query(vector=...)` and pass `embeddings` to `add`.
+
+    `mode="keyword"` searches the BM25 sparse vector of a collection created with
+    `text_search=True` instead, under the same permission filter, with the query's text. Scores are
+    Milvus's BM25, higher for better matches; `search_params` is passed only when given. Milvus
+    requires every chunk's vector, so `add` still needs `embed` or `embeddings` in this mode.
     """
 
     supports_filters = True
@@ -146,6 +185,7 @@ class MilvusBackend:
         collection: str,
         embed: Embed | None = None,
         *,
+        mode: str = "vector",
         vector_field: str = "embedding",
         content_field: str = "content",
         metadata_field: str = "metadata",
@@ -156,8 +196,11 @@ class MilvusBackend:
     ) -> None:
         if not collection:
             raise ValueError("collection must be a non-empty name")
+        if mode not in ("vector", "keyword"):
+            raise ValueError(f"mode must be 'vector' or 'keyword', not {mode!r}")
         if ef < 1:
             raise ValueError("ef must be positive")
+        self.mode = mode
         self.client = client
         self.async_client = async_client
         self.collection = collection
@@ -216,13 +259,20 @@ class MilvusBackend:
     def _request(self, query: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         request: dict[str, Any] = {
             "collection_name": self.collection,
-            "data": [query.embedded(self.embed)],
-            "anns_field": self.vector_field,
             "limit": k,
             "output_fields": [self.content_field, self.metadata_field],
-            "search_params": self.search_params or {"params": {"ef": max(self.ef, k)}},
             "consistency_level": self.consistency_level,
         }
+        if self.mode == "keyword":
+            text = query.keywords()
+            if not _WORD.search(text):
+                return None  # no word to match
+            request.update(data=[text], anns_field=SPARSE_FIELD)
+            if self.search_params is not None:
+                request["search_params"] = self.search_params
+        else:
+            request.update(data=[query.embedded(self.embed)], anns_field=self.vector_field)
+            request["search_params"] = self.search_params or {"params": {"ef": max(self.ef, k)}}
         if f is not None:
             compiled = filter_to_expression(f)
             if compiled is None:

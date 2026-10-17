@@ -20,6 +20,9 @@ needs no embedding function and runs under the same permission filter as the vec
 - **Elasticsearch and OpenSearch:** a BM25 `match` query on the text.
 - **Weaviate:** Weaviate's own BM25 on the text property, with the same permission filter as its
   vector search, so one collection serves both.
+- **Milvus:** BM25 on a sparse vector Milvus derives from the text, in a collection created with
+  `create_collection(..., text_search=True)`, so one collection serves both
+  ([Milvus](integrations/milvus.md#keyword-search-and-hybrid-search)).
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python

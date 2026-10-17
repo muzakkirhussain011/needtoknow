@@ -12,6 +12,10 @@ All notable changes are recorded here. The format follows
   filter as its vector search, with no embedding function needed, so one collection serves both
   halves of hybrid search with `RankFusion`. Tested with the conformance kit, alone and fused with
   vector search, against Weaviate 1.39.12.
+- `mode="keyword"` on the Milvus backend: BM25 on a sparse vector Milvus derives from the text,
+  under the same permission filter and parameters, in a collection created with
+  `create_collection(..., text_search=True)`, so one collection serves both halves of hybrid
+  search. Tested with the conformance kit, alone and fused with vector search, against Milvus 3.0.2.
 
 ### Fixed
 
