@@ -161,6 +161,27 @@ class LanceDBBackend:
             rows = [self._row(d, v) for d, v in latest[start : start + _BATCH]]
             self.table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(rows)
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        keys = [_hex(i) for i in metadata]
+        for start in range(0, len(keys), _BATCH):
+            batch = keys[start : start + _BATCH]
+            listed = ", ".join(f"'{k}'" for k in batch)
+            stored = (
+                self.table.search()
+                .where(f"{KEY_FIELD} IN ({listed})")
+                .select(["id", self.content_field, self.vector_field])
+                .limit(len(batch))
+                .to_list()
+            )
+            # Whole rows written back: no metadata value is ever part of the SQL.
+            rows = [
+                self._row(Document(r["id"], r[self.content_field], metadata[r["id"]]), r[self.vector_field])
+                for r in stored
+            ]
+            if rows:
+                self.table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(rows)
+
     def delete(self, ids: Iterable[str]) -> None:
         keys = [_hex(i) for i in dict.fromkeys(ids)]
         for start in range(0, len(keys), _BATCH):

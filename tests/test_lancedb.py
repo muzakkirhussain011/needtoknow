@@ -172,3 +172,13 @@ def test_arguments_are_checked(db):
         backend.add([Document("a", "t")], embeddings=[])
     assert backend.search("anything", 0) == []
     assert backend.search("anything", 3, In("team", [])) == []
+
+
+def test_set_metadata_replaces_permissions_and_ignores_unknown_ids(db):
+    backend = LanceDBBackend(_new_table(db), EMBED)
+    backend.add([Document("plan", "leave plan", {"allowed_groups": ["eng"], "level": 1})])
+    backend.set_metadata({"plan": {"allowed_groups": ["O'Brien's team"]}, "not-stored": {"allowed_groups": ["*"]}})
+    assert backend.search("leave", 5, In("allowed_groups", ["eng"])) == []
+    assert backend.search("leave", 5, In("level", [1])) == []
+    (hit,) = backend.search("leave", 5)
+    assert hit.id == "plan" and hit.text == "leave plan" and hit.metadata == {"allowed_groups": ["O'Brien's team"]}
