@@ -4,12 +4,13 @@
 # release build, in a session of its own so that it outlives the notebook cell, and the script
 # returns once the store answers. `stop` ends the running store and deletes its data, so the next
 # one starts on a free port with free memory. Milvus is not here: it needs Docker or Kubernetes.
-# LanceDB is embedded, so `lancedb` only makes the directory its table goes in.
+# LanceDB is embedded, so `lancedb` only makes the directory its table goes in. Redis comes from
+# the packages.redis.io APT repository, as Redis Open Source 8 with its Query Engine.
 #
-#   bash kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|stop
+#   bash kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|redis|stop
 set -euo pipefail
 
-store="${1:?usage: kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|stop}"
+store="${1:?usage: kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|redis|stop}"
 # The stores' files stay out of /kaggle/working, which Kaggle saves as the notebook's output;
 # only their logs are kept there.
 root=/tmp/needtoknow-stores
@@ -28,8 +29,10 @@ if [ "$store" = stop ]; then
   pkill -f "$root/" 2> /dev/null || true
   pkill -x qdrant 2> /dev/null || true
   pkill -x weaviate 2> /dev/null || true
+  pkill -x redis-server 2> /dev/null || true
   for _ in $(seq 1 60); do
-    pgrep -f "$root" > /dev/null || pgrep -x qdrant > /dev/null || pgrep -x weaviate > /dev/null || break
+    pgrep -f "$root" > /dev/null || pgrep -x qdrant > /dev/null || pgrep -x weaviate > /dev/null \
+      || pgrep -x redis-server > /dev/null || break
     sleep 1
   done
   rm -rf "$root"/*-data "$root"/elasticsearch-*/data "$root"/opensearch-*/data
@@ -87,6 +90,41 @@ case "$store" in
   lancedb)
     mkdir -p "$root/lancedb-data"
     echo "lancedb is embedded; its table goes in $root/lancedb-data"
+    exit 0
+    ;;
+  redis)
+    if ! command -v redis-server > /dev/null || ! redis-server --version | grep -q "v=8"; then
+      . /etc/os-release
+      curl -fsSL https://packages.redis.io/gpg | gpg --dearmor --yes -o /usr/share/keyrings/redis-archive-keyring.gpg
+      echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $VERSION_CODENAME main" \
+        > /etc/apt/sources.list.d/redis.list
+      apt-get update -qq > /dev/null
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq redis > /dev/null
+    fi
+    redis-server --version
+    mkdir -p "$root/redis-data"
+    config=/etc/redis/redis.conf
+    [ -e "$config" ] || config=
+    # Load the bundled modules if the package's config does not load them itself.
+    modules=()
+    if ! grep -qs "^loadmodule" "$config"; then
+      for so in /usr/lib/redis/modules/*.so; do
+        if [ -e "$so" ]; then modules+=(--loadmodule "$so"); fi
+      done
+    fi
+    start redis-server $config "${modules[@]}" --daemonize no --supervised no --bind 127.0.0.1 --port 6379 \
+      --protected-mode no --dir "$root/redis-data" --save "" --appendonly no --logfile ""
+    for _ in $(seq 1 60); do
+      redis-cli ping 2> /dev/null | grep -q PONG && break
+      sleep 1
+    done
+    # The benchmark needs the Query Engine: fail here, with the log, if this build lacks it.
+    if ! redis-cli FT._LIST > /dev/null 2>&1 || redis-cli FT._LIST 2>&1 | grep -qi "unknown command"; then
+      echo "redis started without its Query Engine; the end of $log:" >&2
+      tail -n 40 "$log" >&2
+      exit 1
+    fi
+    echo "redis is up"
     exit 0
     ;;
   *)
