@@ -116,10 +116,14 @@ def random_documents(rng: random.Random, n: int) -> list[Document]:
     differ from the reference."""
     docs = []
     for i in range(n):
-        metadata = {name: _value(rng) for name in rng.sample(_FIELDS, rng.randint(0, 4))}
+        metadata = _metadata(rng)
         words = rng.choices(_WORDS, k=rng.randint(0, 4))
         docs.append(Document(f"doc-{i:03d}", " ".join([QUERY, *words]), metadata))
     return docs
+
+
+def _metadata(rng: random.Random) -> dict[str, Any]:
+    return {name: _value(rng) for name in rng.sample(_FIELDS, rng.randint(0, 4))}
 
 
 def random_filter(rng: random.Random, depth: int = 2) -> Filter:
@@ -245,7 +249,10 @@ def check_backend(
       `asearch`, if the backend has one, returns the same ids in the same order;
     * retrieval through `PermissionedRetriever` with `MetadataACLAuthorizer` never returns a
       document the subject may not read, reports no violations, and returns as many readable
-      documents as were asked for (with `"prefilter"` and `"postfilter"` where available).
+      documents as were asked for (with `"prefilter"` and `"postfilter"` where available);
+    * if the backend has `set_metadata`, replacing the metadata of some documents (and of an id
+      that is not stored) leaves their text as it was, changes what filters select as `matches`
+      says it should, keeps no key of the old metadata, and stores nothing new.
 
     `exact=False` suits approximate indexes, which may miss matching documents: results must
     still never include a document that does not match, but may contain fewer than expected.
@@ -299,7 +306,50 @@ def check_backend(
                             asearch=[h.id for h in async_hits],
                         )
 
+        set_metadata = getattr(backend, "set_metadata", None)
+        if set_metadata is not None and docs:
+            _check_set_metadata(backend, set_metadata, rng, example, docs, filters_per_example, exact, query)
+
         _check_retrieval(factory, rng, seed, number, max_documents, exact, query)
+
+
+def _check_set_metadata(
+    backend: SearchBackend,
+    set_metadata: Callable[[Mapping[str, Mapping[str, Any]]], None],
+    rng: random.Random,
+    example: _Example,
+    docs: Sequence[Document],
+    filters: int,
+    exact: bool,
+    query: str | Query,
+) -> None:
+    changed = rng.sample(list(docs), rng.randint(1, len(docs)))
+    replacements = {d.id: _metadata(rng) for d in changed}
+    set_metadata({**replacements, "not-stored": {"team": "a", "allowed_groups": ["*"]}})
+    updated = [Document(d.id, d.text, replacements.get(d.id, d.metadata)) for d in docs]
+    by_id = {d.id: d for d in updated}
+    details = {"replaced": _json(replacements)}
+
+    hits = backend.search(query, len(updated))
+    problems = _problems(hits, len(updated), set(by_id), by_id, exact)
+    if problems:
+        raise example.failure("search after set_metadata", problems, **details, returned=[h.id for h in hits])
+    if not backend.supports_filters:
+        return
+    for _ in range(max(1, filters)):
+        f = random_filter(rng)
+        expected = {d.id for d in updated if matches(f, d.metadata)}
+        hits = backend.search(query, len(updated), f)
+        problems = _problems(hits, len(updated), expected, by_id, exact)
+        if problems:
+            raise example.failure(
+                "search with a filter after set_metadata",
+                problems,
+                **details,
+                filter=_json(filter_to_dict(f)),
+                expected=sorted(expected),
+                returned=[h.id for h in hits],
+            )
 
 
 def _check_retrieval(

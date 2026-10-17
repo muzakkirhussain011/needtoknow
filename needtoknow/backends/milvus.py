@@ -188,6 +188,24 @@ class MilvusBackend:
         for start in range(0, len(rows), _BATCH):
             self.client.upsert(collection_name=self.collection, data=rows[start : start + _BATCH])
 
+    def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        ids = list(metadata)
+        for start in range(0, len(ids), _BATCH):
+            stored = self.client.get(
+                collection_name=self.collection,
+                ids=ids[start : start + _BATCH],
+                output_fields=[self.vector_field, self.content_field],
+                consistency_level="Strong",  # rows written just before must be found
+            )
+            # Whole rows, read and written back: the result does not depend on how a partial update merges.
+            rows = [
+                self._row(Document(r[ID_FIELD], r[self.content_field], metadata[r[ID_FIELD]]), r[self.vector_field])
+                for r in stored
+            ]
+            if rows:
+                self.client.upsert(collection_name=self.collection, data=rows)
+
     def delete(self, ids: Iterable[str]) -> None:
         selected = list(ids)
         if selected:

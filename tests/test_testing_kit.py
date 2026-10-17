@@ -7,7 +7,16 @@ import dataclasses
 import pytest
 from helpers import FilterIgnoringBackend
 
-from needtoknow import CachingAuthorizer, FunctionAuthorizer, Hit, In, InMemoryBackend, MetadataACLAuthorizer, Subject
+from needtoknow import (
+    CachingAuthorizer,
+    Document,
+    FunctionAuthorizer,
+    Hit,
+    In,
+    InMemoryBackend,
+    MetadataACLAuthorizer,
+    Subject,
+)
 from needtoknow.testing import ConformanceError, HashingEmbedder, check_authorizer, check_backend
 
 
@@ -122,3 +131,28 @@ def test_hashing_embedder_is_deterministic_and_normalised():
     assert abs(sum(v * v for v in a) - 1.0) < 1e-9
     with pytest.raises(ValueError):
         HashingEmbedder(dim=1)
+
+
+class _MergingBackend(InMemoryBackend):
+    """Merges new metadata into the old, as a partial update would: old permission keys survive."""
+
+    def set_metadata(self, metadata):
+        super().set_metadata({i: {**self._docs[i].metadata, **m} for i, m in metadata.items() if i in self._docs})
+
+
+def test_set_metadata_that_keeps_old_keys_is_caught():
+    with pytest.raises(ConformanceError, match="after set_metadata"):
+        check_backend(_MergingBackend)
+
+
+class _CreatingBackend(InMemoryBackend):
+    """Stores ids it was never given, from metadata alone."""
+
+    def set_metadata(self, metadata):
+        for doc_id, m in metadata.items():
+            self._docs[doc_id] = Document(doc_id, self._docs[doc_id].text if doc_id in self._docs else "doc", m)
+
+
+def test_set_metadata_that_stores_unknown_ids_is_caught():
+    with pytest.raises(ConformanceError, match="should not match"):
+        check_backend(_CreatingBackend)

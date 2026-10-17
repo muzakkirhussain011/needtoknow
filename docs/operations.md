@@ -80,6 +80,31 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
 Another store works too: pass any object with `get_many`, `set_many` and `delete_prefix`
 (`needtoknow.caching.SharedCache`).
 
+## Changing a document's permissions
+
+When a document is shared with someone new, or access to it is taken away, its chunks' metadata
+has to change before searches can see it. `set_metadata` replaces the metadata of stored chunks
+without embedding them again:
+
+```python
+backend.set_metadata({chunk_id: {"allowed_groups": ["hr"]} for chunk_id in chunk_ids})
+```
+
+- The whole metadata is replaced: no key of the old permissions survives. Ids that are not stored
+  are ignored, so nothing is created from metadata alone.
+- It returns once searches see the change, as `add` does for that store
+  ([Choosing a store](integrations/index.md#choosing-a-store)); MongoDB waits for its search index.
+- Every built-in backend has it, and the [conformance kit](extending.md#test-it-with-the-conformance-kit)
+  checks it against each real store. Keep each source document's chunk ids (for example
+  `"handbook#12"`) so you can find them when its permissions change.
+- With [hybrid search](hybrid.md) over several indexes, update each of them; until they agree,
+  `RankFusion` leaves the chunk out.
+
+A change on the other side, such as a user leaving a group, needs no update to the chunks: the
+subject's groups are read at query time. `CachingAuthorizer` keys each decision by the chunk's
+metadata, so a chunk whose metadata changed is decided again at once, and cached filters expire
+after `ttl`.
+
 ## Resilience of remote permission services
 
 `OPAAuthorizer` and `OpenFGAAuthorizer` share an HTTP client built for permission checks on every
