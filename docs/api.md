@@ -225,6 +225,8 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 .. autoclass:: needtoknow.haystack.NeedToKnowRetriever
    :members: run, run_async
+
+.. autofunction:: needtoknow.mcp.add_search_tool
 ```
 
 ## Conformance testing
