@@ -36,8 +36,11 @@ authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 - **Never cached:** exceptions and malformed answers (non-booleans, the wrong number of
   decisions). Every failure reaches the retriever, which fails closed.
 - **Size:** at most `maxsize` entries; the least recently used go first.
-- **Invalidation:** `invalidate(subject)` drops one subject's entries, for example after a role
-  change you handled yourself; `invalidate()` drops everything.
+- **Invalidation:** `invalidate(subject)` drops the entries of every subject with that id, whatever
+  groups and attributes they came with (pass the `Subject` or just its id), for example after a
+  role change you handled yourself; `invalidate()` drops everything. An answer the permission
+  service gave before the call, to a retrieval still in progress, is not cached after it: once
+  `invalidate()` returns, no retrieval that starts in this process uses an answer from before it.
 
 It works for `retrieve` and `aretrieve`, using the wrapped authorizer's async methods when it has
 them.
@@ -60,7 +63,7 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
 - **Two tiers:** each process looks in its own cache first, then in Redis, and only then asks the
   permission service; answers go to both. A process keeps its own copy for at most `local_ttl`
   seconds (1 by default), then reads Redis again. Redis, Valkey, Dragonfly and Redis Cluster work
-  (one subject's keys share a hash slot).
+  (the keys for one subject id share a hash slot).
 - **The revocation bound still holds.** Each shared entry carries its expiry time, and a replica
   that copies it keeps it only for the time it has left, never a fresh `ttl`. This relies on
   replicas' clocks agreeing, as NTP keeps them.
@@ -68,6 +71,20 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
   Redis at once; every other replica stops using its own copy within `local_ttl` seconds. Lower
   `local_ttl` for faster revocation at the cost of more Redis reads. It raises if Redis cannot be
   cleared, since the caller asked for the revocation now.
+- **A late answer from another replica is never read.** A replica may have asked the permission
+  service just before the revocation and write its answer to Redis just after. `invalidate()`
+  therefore also stores a new random epoch (one per subject id, and one for `invalidate()` of
+  everything), and an entry is used only under the epoch it was written in. Epochs stay in Redis
+  for `ttl` plus an hour. An attacker who can write to your Redis and copies back a signed entry
+  together with its old epoch can extend a decision only until that entry's own expiry, at most
+  `ttl` after the permission service gave it.
+- **One namespace per policy.** Every `CachingAuthorizer` with the same Redis and `namespace` uses
+  the same answers, whatever authorizer it wraps. Give each differently configured authorizer
+  (another policy, OpenFGA store, tenant model or action mapping) its own `namespace`.
+- **Upgrading from 1.2.0 or earlier.** Entries written by those versions are not read (their keys and
+  format differ), so the first requests after an upgrade ask the permission service. During a rolling
+  upgrade, an `invalidate(subject)` made by a replica of one version does not clear the other
+  version's entries: call `invalidate()` once the upgrade is done, or allow for `ttl`.
 - **A failing or slow Redis never decides anything.** A read or write that fails is logged and
   treated as a miss: the permission service is asked.
 - **Nothing identifying in key names.** Keys are digests of the subject and the chunk, so Redis

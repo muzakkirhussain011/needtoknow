@@ -106,8 +106,18 @@ def filter_to_dict(f: Filter) -> dict[str, Any]:
     raise TypeError(f"not a filter: {f!r}")
 
 
+_MAX_DEPTH = 100  # far deeper than any policy writes, far shallower than Python's recursion limit
+
+
 def filter_from_dict(data: Any) -> Filter:
-    """Parse the form produced by `filter_to_dict`. Anything unexpected raises ValueError."""
+    """Parse the form produced by `filter_to_dict`. Anything unexpected raises ValueError,
+    including filters nested more than 100 levels deep."""
+    return _from_dict(data, 1)
+
+
+def _from_dict(data: Any, depth: int) -> Filter:
+    if depth > _MAX_DEPTH:
+        raise ValueError(f"filters may nest at most {_MAX_DEPTH} levels deep")
     if not isinstance(data, Mapping) or len(data) != 1:
         raise ValueError(f"a filter must be an object with exactly one key, got {data!r}")
     ((op, body),) = data.items()
@@ -123,6 +133,6 @@ def filter_from_dict(data: Any) -> Filter:
     if op in ("and", "or"):
         if not isinstance(body, list) or not body:
             raise ValueError(f"'{op}' needs a non-empty list of filters")
-        clauses = [filter_from_dict(c) for c in body]
+        clauses = [_from_dict(c, depth + 1) for c in body]
         return And(*clauses) if op == "and" else Or(*clauses)
     raise ValueError(f"unknown filter operator {op!r}")
