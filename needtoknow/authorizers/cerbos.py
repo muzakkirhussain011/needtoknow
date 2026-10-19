@@ -25,7 +25,8 @@ library.
   compared with `==` scalar; use `hasIntersection` or `in` for list fields such as
   `allowed_groups`. Example policy: `examples/cerbos/policies/document.yaml`.
 
-The principal is `{"id": subject.id, "roles": roles, "attr": {"groups": [...], **attributes}}`.
+The principal is `{"id": subject.id, "roles": roles, "attr": {"groups": [...], **attributes}}`; a
+subject attribute named `groups`, which would replace the subject's groups, is refused.
 Every failure raises `AuthorizationError`. Connections are reused, transient failures are retried
 once, and a `CircuitBreaker` can pause requests to a failing PDP; see `needtoknow.authorizers`.
 """
@@ -176,7 +177,12 @@ class CerbosAuthorizer:
             raise AuthorizationError(f"roles failed: {exc}") from exc
         if not roles or not all(isinstance(r, str) and r for r in roles):
             raise AuthorizationError("a Cerbos principal needs at least one role")
-        attr = {"groups": sorted(subject.groups), **dict(subject.attributes)}
+        attributes = dict(subject.attributes)
+        if "groups" in attributes:
+            # The principal's groups attribute is the subject's groups; an attribute of the same
+            # name would silently replace them, so neither is sent.
+            raise AuthorizationError("a subject attribute named 'groups' would replace its groups in Cerbos")
+        attr = {"groups": sorted(subject.groups), **attributes}
         return self._versioned({"id": subject.id, "roles": roles, "attr": attr})
 
     def _resource_id(self, hit: Hit) -> str:

@@ -24,8 +24,10 @@ subject is the principal:
 ```
 
 `roles=` is a list of roles for every principal, or a function of the subject; `attr` holds the
-subject's groups and its `attributes`. Pass `policy_version=` and `scope=` to select a policy
-version and scope, and `actions={"read": "view"}` to map needtoknow's action to yours.
+subject's groups and its `attributes`. A subject attribute named `groups` is refused with
+`AuthorizationError`, since it would replace the subject's groups. Pass `policy_version=` and
+`scope=` to select a policy version and scope, and `actions={"read": "view"}` to map needtoknow's
+action to yours.
 
 A policy for permissions stored on the chunks
 ([`examples/cerbos/policies/document.yaml`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/cerbos/policies/document.yaml)):
