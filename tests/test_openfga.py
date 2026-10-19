@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import urllib.request
 import uuid
 from http.server import ThreadingHTTPServer
@@ -83,6 +84,35 @@ def test_list_objects_becomes_a_filter_unless_it_may_be_truncated(fga):
     assert OpenFGAAuthorizer(fga.url, "s", resource_field=None).filter_for(BOB) is None
 
 
+def test_a_list_that_ran_into_the_servers_deadline_may_be_partial_so_gives_no_filter(fga):
+    def slow(path, payload):
+        time.sleep(0.2)  # as a server that stopped at its deadline and sent what it had
+        return 200, {"objects": ["document:a"]}
+
+    fga.responder = slow
+    assert OpenFGAAuthorizer(fga.url, "s", list_objects_deadline=0.1).filter_for(BOB) is None
+    assert OpenFGAAuthorizer(fga.url, "s", list_objects_deadline=None).filter_for(BOB) == In("doc_id", {"a"})
+
+
+def test_consistency_is_sent_with_every_check_and_list(fga):
+    def answer(path, payload):
+        return _all_allowed(path, payload) if path.endswith("/batch-check") else (200, {"objects": []})
+
+    fga.responder = answer
+    authz = OpenFGAAuthorizer(fga.url, "s", consistency="HIGHER_CONSISTENCY")
+    authz.check(BOB, [Hit("c1", "t", 1.0, {"doc_id": "a"})])
+    authz.filter_for(BOB)
+    assert [payload.get("consistency") for _, payload in fga.requests] == ["HIGHER_CONSISTENCY"] * 2
+    OpenFGAAuthorizer(fga.url, "s").filter_for(BOB)
+    assert "consistency" not in fga.requests[-1][1]  # the server's own default
+
+
+@pytest.mark.parametrize("options", [{"consistency": "STRONG"}, {"list_objects_deadline": 0}])
+def test_unknown_consistency_and_a_zero_deadline_are_refused(options):
+    with pytest.raises(ValueError):
+        OpenFGAAuthorizer("http://127.0.0.1:1", "s", **options)
+
+
 # ---- against a real OpenFGA ------------------------------------------------------------------
 
 FGA_URL = os.environ.get("NEEDTOKNOW_TEST_OPENFGA_URL")
@@ -148,11 +178,12 @@ def _store_for(docs):
     query=queries,
     k=st.integers(min_value=1, max_value=6),
     strategy=st.sampled_from(["auto", "prefilter", "postfilter"]),
+    consistency=st.sampled_from([None, "MINIMIZE_LATENCY", "HIGHER_CONSISTENCY"]),
 )
-def test_openfga_gives_exactly_the_reference_answer(docs, subject, query, k, strategy):
+def test_openfga_gives_exactly_the_reference_answer(docs, subject, query, k, strategy, consistency):
     store, model = _store_for(docs)
     stored = [Document(d.id, d.text, {**d.metadata, "doc_id": d.id}) for d in docs]
-    authz = OpenFGAAuthorizer(FGA_URL, store, authorization_model_id=model)
+    authz = OpenFGAAuthorizer(FGA_URL, store, authorization_model_id=model, consistency=consistency)
     retriever = PermissionedRetriever(InMemoryBackend(stored), authz, strategy=strategy, max_candidates=len(docs) + 1)
     result = retriever.retrieve(query, subject, k)
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)

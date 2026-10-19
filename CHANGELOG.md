@@ -8,6 +8,9 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `OpenFGAAuthorizer(consistency=...)`: `"HIGHER_CONSISTENCY"` makes OpenFGA skip its cache for every
+  check and list, so a tuple just written counts at once; `"MINIMIZE_LATENCY"` is OpenFGA's default.
+  Tested against OpenFGA 1.22 in each mode.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
   enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
   chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
@@ -53,6 +56,12 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- `OpenFGAAuthorizer.filter_for` no longer treats a ListObjects answer that may have been cut short
+  by the server's deadline as complete. OpenFGA stops at `OPENFGA_LIST_OBJECTS_DEADLINE` (3 s by
+  default) and sends what it found without saying so; a call that took `list_objects_deadline`
+  seconds or more (new, default 3) now gives no filter, so the retriever post-filters. Such a list
+  never let anyone read more, but it could hide documents they may read while the result reported
+  `complete=True`.
 - `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
   a deep enough document from a policy engine or a shared cache recursed until Python raised
   `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
@@ -60,6 +69,15 @@ All notable changes are recorded here. The format follows
 
 ### Security
 
+- With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
+  up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
+  entry from the shared cache after the process dropped its own entries and before the new epoch
+  was written. The process now drops its entries again once the new epoch is in place. Found by the
+  revocation test under concurrent traffic; a test now forces a retrieval into that moment.
+- The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
+  random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
+  one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
+  file with a new salt, and SHA-256 entries are refused rather than accepted as a fallback.
 - `recheck=False` no longer trusts the backend completely. The authorizer is still not asked a second
   time, but each pre-filtered hit is matched against the filter in the process (no network call),
   so a backend that ignores or mistranslates the filter cannot leak; such hits are dropped and
