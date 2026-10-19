@@ -21,7 +21,7 @@ from needtoknow.fusion import RankFusion
 from needtoknow.retriever import PermissionedRetriever, Reranker, RetrievalResult, SearchBackend, Strategy
 from needtoknow.types import Document, Hit, Query, Subject
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 
 __all__ = [
     "AllOf",

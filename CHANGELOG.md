@@ -6,6 +6,18 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-19
+
+Completes the 1.3.1 fix for `CachingAuthorizer.invalidate()`. Upgrade if you use a shared cache.
+
+### Security
+
+- With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
+  up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
+  entry from the shared cache after the process dropped its own entries and before the new epoch
+  was written. The process now drops its entries again once the new epoch is in place. Found by the
+  1.3.1 revocation test under concurrent traffic; a test now forces a retrieval into that moment.
+
 ## [1.3.1] - 2026-10-19
 
 A security fix for permission caching. Upgrade if you use `CachingAuthorizer`, and above all if
@@ -395,7 +407,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
