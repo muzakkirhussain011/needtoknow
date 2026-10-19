@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  attestations: read # to check the source distribution's provenance
 
 jobs:
   verify:
@@ -36,6 +37,10 @@ jobs:
           TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
           version="${INPUT_VERSION:-${TAG#v}}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+            echo "::error::not a release version: ${version}"
+            exit 1
+          fi
           echo "VERSION=${version}" >> "$GITHUB_ENV"
           wheel="needtoknow-${version}-py3-none-any.whl"
           gh release download "v${version}" --repo "$GITHUB_REPOSITORY" --pattern "$wheel" --dir "$RUNNER_TEMP"
@@ -68,3 +73,65 @@ jobs:
           assert [h.id for h in result.hits] == ["handbook"], result
           print(f"needtoknow {needtoknow.__version__} from PyPI works")
           EOF
+      # The security suites of the released version, run against the installed package rather than
+      # the source. The tests come from the release's source distribution, not from a git checkout of
+      # the tag: the file attached to the GitHub release, which must carry the Release workflow's
+      # provenance attestation for that tag and be the file PyPI serves. So the job runs no code a
+      # moved tag or a branch could supply. The test tools are pinned by hash in this workflow's own
+      # uv.lock (the default branch's, after a release).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { path: workflow, persist-credentials: false }
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: { version: "0.12.23", enable-cache: false }
+      - name: Fetch the release's source distribution and check where it came from
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sdist="needtoknow-${VERSION}.tar.gz"
+          if ! gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
+            grep -qx "needtoknow-${VERSION}.intoto.jsonl"; then
+            echo "::notice::v${VERSION} has no build provenance; the security tests run from 1.4.0 on"
+            exit 0
+          fi
+          gh release download "v${VERSION}" --repo "$GITHUB_REPOSITORY" --pattern "$sdist" --dir "$RUNNER_TEMP/sdist"
+          gh attestation verify "$RUNNER_TEMP/sdist/$sdist" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref "refs/tags/v${VERSION}"
+          python - "$(sha256sum "$RUNNER_TEMP/sdist/$sdist" | cut -d' ' -f1)" <<'EOF'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.request
+
+          url = f"https://pypi.org/pypi/needtoknow/{os.environ['VERSION']}/json"
+          for attempt in range(6):
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as response:
+                      files = json.load(response)["urls"]
+                  break
+              except OSError:
+                  time.sleep(20)
+          else:
+              sys.exit(f"PyPI did not answer for {url}")
+          served = [f["digests"]["sha256"] for f in files if f["packagetype"] == "sdist"]
+          assert served == [sys.argv[1]], f"PyPI serves {served}, the GitHub release has {sys.argv[1]}"
+          EOF
+          mkdir "$RUNNER_TEMP/src"
+          tar -xzf "$RUNNER_TEMP/sdist/$sdist" -C "$RUNNER_TEMP/src"
+      - name: Run the security tests against the installed package
+        run: |
+          tests="$RUNNER_TEMP/src/needtoknow-${VERSION}/tests"
+          if [ ! -d "$tests" ]; then
+            echo "::notice::no released tests to run for v${VERSION}"
+            exit 0
+          fi
+          (cd workflow && uv export --frozen --no-emit-project --extra dev -o "$RUNNER_TEMP/test-requirements.txt")
+          pip install --require-hashes --no-deps -r "$RUNNER_TEMP/test-requirements.txt"
+          cp -r "$tests" "$RUNNER_TEMP/release-tests"
+          cd "$RUNNER_TEMP"
+          python -c "import needtoknow; assert 'site-packages' in needtoknow.__file__, needtoknow.__file__"
+          suites=""
+          for name in test_properties test_invariants test_core test_composition test_caching_events test_shared_cache test_revocation; do
+            if [ -f "release-tests/$name.py" ]; then suites="$suites release-tests/$name.py"; fi
+          done
+          python -m pytest -q -p no:cacheprovider $suites
