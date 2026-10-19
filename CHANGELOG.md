@@ -8,6 +8,9 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `OpenFGAAuthorizer(consistency=...)`: `"HIGHER_CONSISTENCY"` makes OpenFGA skip its cache for every
+  check and list, so a tuple just written counts at once; `"MINIMIZE_LATENCY"` is OpenFGA's default.
+  Tested against OpenFGA 1.22 in each mode.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
   enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
   chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
@@ -53,6 +56,12 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- `OpenFGAAuthorizer.filter_for` no longer treats a ListObjects answer that may have been cut short
+  by the server's deadline as complete. OpenFGA stops at `OPENFGA_LIST_OBJECTS_DEADLINE` (3 s by
+  default) and sends what it found without saying so; a call that took `list_objects_deadline`
+  seconds or more (new, default 3) now gives no filter, so the retriever post-filters. Such a list
+  never let anyone read more, but it could hide documents they may read while the result reported
+  `complete=True`.
 - `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
   a deep enough document from a policy engine or a shared cache recursed until Python raised
   `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
