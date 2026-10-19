@@ -47,6 +47,15 @@ All notable changes are recorded here. The format follows
   organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
   connectors return too.
 
+### Changed
+
+- `CachingAuthorizer.invalidate(subject)` takes a `Subject` or a subject id, and drops the answers
+  for every subject with that id, whatever groups and attributes they came with. Before, it dropped
+  only those of a subject equal in every field, so a revocation hook that knew only the user id
+  (`invalidate(Subject("bob"))`) cleared nothing for `Subject("bob", ["eng"], {"tenant": "acme"})`.
+- Shared cache entries have new keys and carry an epoch; entries written by earlier versions are
+  not read. See *Upgrading from 1.3 or earlier* in the operations guide.
+
 ### Fixed
 
 - `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
@@ -56,6 +65,14 @@ All notable changes are recorded here. The format follows
 
 ### Security
 
+- `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
+  permission service gave just before the revocation, to a call that finished just after it, was
+  cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
+  a shared cache, in every replica. Now each process discards answers obtained by calls that began
+  before an `invalidate()`, and `invalidate()` stores a new epoch in the shared cache, under which
+  entries written before it are refused. Tests revoke a permission under concurrent retrievals,
+  with one and three replicas, and check that no retrieval starting after `invalidate()` returns
+  sees the document (other replicas within `local_ttl`).
 - Filter parsing, and the pgvector, LanceDB and Redis translations that write query text, are
   fuzzed with ClusterFuzzLite (Atheris) on pull requests and every week. The fuzz target checks
   that parsing either round-trips or raises `ValueError`, that pgvector binds every field name and
