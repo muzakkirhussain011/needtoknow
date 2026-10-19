@@ -166,6 +166,9 @@ jobs:
           pytest -q -ra --cov --cov-report=
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
           coverage report --fail-under=90
+          # The code that decides who reads what is held to a higher bar: the retriever, the filter
+          # language, composition, caching and the permission-service clients, together.
+          coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
       - name: Runnable examples
         run: |
           python examples/langchain_quickstart.py
@@ -190,7 +193,7 @@ jobs:
         run: |
           run() {
             python benchmarks/load_bench.py --backend "$1" --url "$2" --docs 2000 --queries 10 --selectivity 0.01,1 \
-              --users 1,2 --seconds 1 --check --out "load-$1.json" --markdown "load-$1.md"
+              --users 1,2 --seconds 1 --check --out "load-$1.json" --markdown "load-$1.md" "${@:3}"
             cat "load-$1.md" >> "$GITHUB_STEP_SUMMARY"
           }
           run qdrant http://127.0.0.1:6333
@@ -198,7 +201,7 @@ jobs:
           run elasticsearch http://127.0.0.1:9200
           run opensearch http://127.0.0.1:9201
           run weaviate http://127.0.0.1:8079
-          run lancedb "$RUNNER_TEMP/lancedb"  # embedded: the URL is a directory
+          run lancedb "$RUNNER_TEMP/lancedb" --refine-factor 5  # embedded: the URL is a directory
 
   library:
     name: library (Python ${{ matrix.python }})

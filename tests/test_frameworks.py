@@ -76,6 +76,48 @@ def test_any_langchain_vector_store_can_be_post_filtered(lc):
     assert {h.id for h in result.hits} == {"handbook", "runbook", "bob-review"}
 
 
+READS = {"bob": {"handbook", "bob-review"}, "alice": {"handbook", "salaries"}, "carol": {"handbook"}}
+PEOPLE = [BOB, ALICE, Subject("carol", ["sales"])]
+
+
+def test_one_langchain_retriever_serves_concurrent_users_without_mixing_them(lc):
+    shared = lc.NeedToKnowRetriever(retriever=permissioned(), k=5)  # one instance, as an app would hold
+    bound = [shared.for_subject(s) for s in PEOPLE] * 10
+
+    async def run():
+        return await asyncio.gather(*(r.ainvoke("leave") for r in bound))
+
+    for retriever, docs in zip(bound, asyncio.run(run()), strict=True):
+        assert {d.id for d in docs} == READS[retriever.subject.id]
+    assert shared.subject is None  # binding returned copies; the shared instance names nobody
+
+
+def test_a_langchain_retriever_tool_lets_the_model_choose_the_query_only(lc):
+    from langchain_core.tools import create_retriever_tool
+
+    tool = create_retriever_tool(lc.NeedToKnowRetriever(retriever=permissioned()).for_subject(BOB), "search", "docs")
+    assert set(tool.args) == {"query"}
+    # A model that adds someone else's identity to the call changes nothing.
+    answer = tool.invoke({"query": "leave", "subject": "alice", "groups": ["hr"]})
+    assert "salary" not in answer and "leave policy" in answer
+
+
+def test_langchain_callbacks_see_only_the_permitted_documents(lc):
+    from langchain_core.callbacks import BaseCallbackHandler
+
+    class Recorder(BaseCallbackHandler):
+        def __init__(self):
+            self.seen = []
+
+        def on_retriever_end(self, documents, **kwargs):
+            self.seen += [d.id for d in documents]
+
+    recorder = Recorder()
+    retriever = lc.NeedToKnowRetriever(retriever=permissioned(), k=5).for_subject(BOB)
+    retriever.invoke("leave salary", config={"callbacks": [recorder]})
+    assert set(recorder.seen) == READS["bob"]  # traces and callbacks get what the user got, nothing more
+
+
 # ---- LlamaIndex ------------------------------------------------------------------------------
 
 
@@ -91,6 +133,17 @@ def test_llamaindex_retriever_returns_only_permitted_nodes(li):
     retriever = li.NeedToKnowRetriever(permissioned(), BOB, k=5)
     assert {n.node.node_id for n in retriever.retrieve("leave")} == {"handbook", "bob-review"}
     assert {n.node.node_id for n in asyncio.run(retriever.aretrieve("leave"))} == {"handbook", "bob-review"}
+
+
+def test_llamaindex_retrievers_sharing_one_permissioned_retriever_never_mix_users(li):
+    shared = permissioned()  # one instance behind every user's LlamaIndex retriever
+    per_user = [li.NeedToKnowRetriever(shared, s, k=5) for s in PEOPLE] * 10
+
+    async def run():
+        return await asyncio.gather(*(r.aretrieve("leave") for r in per_user))
+
+    for subject, nodes in zip(PEOPLE * 10, asyncio.run(run()), strict=True):
+        assert {n.node.node_id for n in nodes} == READS[subject.id]
 
 
 def test_llamaindex_postprocessor_drops_nodes_and_fails_closed(li):

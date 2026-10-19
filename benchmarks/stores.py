@@ -275,11 +275,11 @@ class LanceDB:
 
     name = "lancedb"
 
-    def __init__(self, url: str, ef_search: int | None) -> None:
+    def __init__(self, url: str, ef_search: int | None, refine_factor: int | None = None) -> None:
         import lancedb
 
         self.db = lancedb.connect(url)
-        self.ef_search = ef_search
+        self.ef_search, self.refine_factor = ef_search, refine_factor
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
         """Bulk-load the backend's row layout with `table.add`, as a first load would, then index.
@@ -323,17 +323,24 @@ class LanceDB:
     def backend(self, embed: Any, users: int) -> Any:
         from needtoknow.backends.lancedb import LanceDBBackend
 
-        return LanceDBBackend(self.db.open_table(NAME), embed, nprobes=self.ef_search)
+        return LanceDBBackend(self.db.open_table(NAME), embed, nprobes=self.ef_search, refine_factor=self.refine_factor)
 
 
 STORES = ("pgvector", "qdrant", "milvus", "elasticsearch", "opensearch", "weaviate", "lancedb")
 
 
 def make_store(
-    name: str, url: str, ef_search: int | None, grpc_port: int = 50051, index_type: str | None = None
+    name: str,
+    url: str,
+    ef_search: int | None,
+    grpc_port: int = 50051,
+    index_type: str | None = None,
+    refine_factor: int | None = None,
 ) -> Any:
     if index_type is not None and name != "elasticsearch":
         raise ValueError("--index-type applies to Elasticsearch only")
+    if refine_factor is not None and name != "lancedb":
+        raise ValueError("--refine-factor applies to LanceDB only")
     if name == "pgvector":
         return PgVector(url, ef_search)
     if name == "qdrant":
@@ -345,5 +352,5 @@ def make_store(
     if name == "weaviate":
         return Weaviate(url, ef_search, grpc_port)
     if name == "lancedb":
-        return LanceDB(url, ef_search)
+        return LanceDB(url, ef_search, refine_factor)
     raise ValueError(f"unknown store {name!r}")

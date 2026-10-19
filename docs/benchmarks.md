@@ -172,8 +172,9 @@ Run on 2026-10-16. Every number, with p95 and p99 latencies, is in the
 metadata took 6 s and the HNSW index 4 min 25 s; table and indexes take 4.1 GB.
 
 **No leaks.** None of the 2,400 retrievals checked one at a time returned a forbidden chunk, and
-none of about 19,000 retrievals under concurrent load failed. (The concurrent runs count errors;
-they do not check results.)
+none of about 19,000 retrievals under concurrent load failed. (These concurrent runs counted errors
+only. The harness now checks every chunk returned under load against the permissions of the
+subject it went to, and fails on any leak; the next runs will report it.)
 
 ### Recall@10 and latency
 
@@ -321,7 +322,8 @@ settings; a single 4-CPU machine, which in the load benchmark ran the store, OPA
 together, so no network sat between them; local Chroma, not Chroma's distributed or cloud service;
 Milvus, MongoDB Atlas and Redis not yet measured at a million chunks, and LanceDB only at its
 defaults; OpenFGA not
-measured; and under concurrent load, errors counted but results not checked. Index tuning (pgvector
+measured; and under concurrent load, errors counted but results not checked in the runs published
+here (the harness checks them now). Index tuning (pgvector
 `ef_search`, Elasticsearch's index type and `num_candidates`, Chroma's HNSW parameters) moves both
 recall and latency, and is worth measuring on your own data with the same harnesses; only
 Elasticsearch's has been measured here.

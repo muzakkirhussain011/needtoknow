@@ -108,7 +108,8 @@ docker compose exec gateway rampart ingest samples
 ### Try it as different people
 
 The demo users in [`config/principals.yaml`](config/principals.yaml) have keys `demo-key-<name>`.
-Only SHA-256 hashes are stored.
+Only scrypt hashes of the keys are stored. For a real deployment, start a new file with
+`rampart key-hashing` (a fresh salt) and give each user a key from `rampart new-key`.
 
 | User | Team / department | Clearance | Can read |
 |---|---|---|---|
@@ -180,7 +181,8 @@ print(reply.model_extra["rampart"]["citations"])
 | `GET /dashboard` | `auditor`, `admin` | HTML overview (HTTP Basic) |
 | `GET /metrics` | scraper | Prometheus metrics (`rampart_requests_total`, `rampart_policy_denials_total`, `rampart_pii_masked_total`, `rampart_chunks_quarantined_total`, `rampart_acl_violations_total`, `rampart_tokens_total`, `rampart_stage_seconds`) |
 
-CLI: `rampart serve`, `rampart ingest <dir>`, `rampart hash-key <key>`, `rampart verify-audit`.
+CLI: `rampart serve`, `rampart ingest <dir>`, `rampart new-key`, `rampart hash-key <key>`, `rampart key-hashing`,
+`rampart verify-audit`.
 
 ## Configuration
 

@@ -45,10 +45,27 @@ not decide every resource, raises `AuthorizationError`.
 ## Pre-filtering with ListObjects
 
 `filter_for` calls ListObjects for every document the user may view and returns
-`In(resource_field, ids)`, so the vector store pre-filters. OpenFGA caps how many objects ListObjects
-returns, so when the answer reaches `list_objects_limit` (default 1000) it may be incomplete. The
-authorizer then returns no filter, and the retriever post-filters with BatchCheck instead of trusting
-a truncated list. Set `list_objects_limit` to your server's limit.
+`In(resource_field, ids)`, so the vector store pre-filters.
+
+OpenFGA stops a ListObjects call when it has found `OPENFGA_LIST_OBJECTS_MAX_RESULTS` objects (1000
+by default) or when it reaches `OPENFGA_LIST_OBJECTS_DEADLINE` (3 seconds by default), and answers
+with what it found so far, without marking the answer as partial. A partial list would never let
+anyone read more than they may, but it would hide documents they may read while the result still
+looked complete. So when the answer reaches `list_objects_limit` (default 1000), or the call took
+`list_objects_deadline` seconds or more (default 3), the authorizer returns no filter and the
+retriever post-filters with BatchCheck instead. Set both to your server's values;
+`list_objects_deadline=None` suits a server configured without a deadline. With the default
+`timeout` of 2 seconds, a call slow enough to meet the default deadline fails first and raises.
+
+## Consistency
+
+`consistency="HIGHER_CONSISTENCY"` asks OpenFGA to skip its cache for every check and list, so a
+tuple written a moment ago counts at once, at a cost in latency. `"MINIMIZE_LATENCY"`, OpenFGA's
+default, may answer from its cache when one is configured (caching is off by default), so a revoked
+tuple can keep granting access until that cache entry expires. Leaving `consistency` unset sends
+nothing and lets the server decide. Choose it together with a
+[`CachingAuthorizer`](../operations.md#permission-caching)'s `ttl`: an answer the cache keeps may
+itself have come from OpenFGA's cache, so the revocation delay can reach the two added together.
 
 ## Groups from your identity provider
 

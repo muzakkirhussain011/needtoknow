@@ -16,7 +16,8 @@ Given an authorizer that answers correctly:
    behaves the same way.
 3. **A backend's filtering bugs cannot leak.** With `recheck=True` (the default), pre-filtered hits
    are checked again, and anything the backend returned outside the filter is dropped and counted
-   in `violations`.
+   in `violations`. With `recheck=False`, hits are still matched against the filter locally, at no
+   cost, so a backend that ignores it cannot leak either.
 4. **Incomplete results are reported.** When post-filtering stops at `max_candidates` before
    finding k permitted hits, the result says `complete=False`.
 5. **Audit events contain no content.** `RetrievalEvent`, `JsonLinesAudit` and the OpenTelemetry
