@@ -7,6 +7,8 @@ name: Scorecard
 on:
   push:
     branches: [main]
+  # A change to classic branch protection is scored at once rather than at the next push.
+  branch_protection_rule:
   schedule:
     - cron: "17 5 * * 1"
 

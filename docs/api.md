@@ -82,7 +82,10 @@ modules and need their extra.
    :members: scope_for
 
 .. autoclass:: needtoknow.CachingAuthorizer
-   :members: invalidate
+   :members: invalidate, stats
+
+.. autoclass:: needtoknow.caching.CacheStats
+   :members:
 
 .. autoclass:: needtoknow.caching.SharedCache
    :members: get_many, set_many, delete_prefix

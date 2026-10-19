@@ -1,22 +1,30 @@
 version: 2
+# Version updates wait a week after a release, so a broken or malicious release is usually
+# caught and pulled before it reaches the lock. Security updates are never delayed.
 updates:
   # pyproject.toml and uv.lock, from which CI and the release install everything by hash.
   - package-ecosystem: uv
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: uv
     directory: /examples/gateway
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directory: /examples/gateway
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directory: /.clusterfuzzlite
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   # The release build tools, pinned by hash in .github/requirements/build.txt.
   - package-ecosystem: pip
     directory: /.github/requirements
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }

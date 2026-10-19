@@ -57,6 +57,10 @@ class RetrievalEvent:
     """Time spent in the reranker."""
     reranked: int = 0
     """Permitted chunks given to the reranker; 0 when there is none."""
+    cause: str | None = None
+    """The type of the exception behind `error`, when there is one: for an `AuthorizationError`,
+    what the call to the permission service raised, such as "TimeoutError" or
+    "ConnectionRefusedError". None when the error has no cause, as for a malformed answer."""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

@@ -142,3 +142,55 @@ def test_arguments_are_checked():
         add_search_tool(MCPServer("x"), retriever, from_claims, limit=0)
     with pytest.raises(TypeError):
         add_search_tool(MCPServer("x"), retriever, "bob")
+
+
+class BrokenStore:
+    """A vector store whose driver error names its host and credentials, as real drivers' do."""
+
+    supports_filters = True
+
+    def search(self, query, k, filter=None):
+        raise RuntimeError("could not connect to postgresql://admin:hunter2@db.internal:5432/rag")
+
+
+SECRETS = ("hunter2", "db.internal", "postgresql://", "groups claim")
+
+
+def _server_with(retriever, subject) -> MCPServer:
+    server = MCPServer("knowledge")
+    add_search_tool(server, retriever, subject)
+    return server
+
+
+def test_a_failing_store_reveals_nothing_to_the_model():
+    retriever = PermissionedRetriever(BrokenStore(), MetadataACLAuthorizer())
+    with pytest.raises(UnexpectedToolError) as failure:
+        call(_server_with(retriever, from_claims), {"query": "leave"}, token("bob", ["eng"]))
+    assert not any(s in str(failure.value) for s in SECRETS)
+    assert "hunter2" in str(failure.value.__cause__)  # the server's own log keeps the details
+
+    async def over_the_protocol():
+        async with Client(_server_with(retriever, Subject("bob", ["eng"]))) as client:
+            return await client.call_tool("search", {"query": "leave"})
+
+    result = asyncio.run(over_the_protocol())
+    text = " ".join(getattr(part, "text", "") for part in result.content)
+    assert result.is_error and not result.structured_content
+    assert not any(s in text for s in SECRETS)
+
+
+def test_a_failing_subject_function_reveals_nothing_and_searches_nothing():
+    searched = []
+
+    class Watched(InMemoryBackend):
+        def search(self, query, k, filter=None):
+            searched.append(query)
+            return super().search(query, k, filter)
+
+    def broken(access: AccessToken) -> Subject:
+        raise KeyError("groups claim is missing from the token of bob")
+
+    retriever = PermissionedRetriever(Watched(DOCS), MetadataACLAuthorizer())
+    with pytest.raises(UnexpectedToolError) as failure:
+        call(_server_with(retriever, broken), {"query": "leave"}, token("bob", ["eng"]))
+    assert not any(s in str(failure.value) for s in SECRETS) and searched == []

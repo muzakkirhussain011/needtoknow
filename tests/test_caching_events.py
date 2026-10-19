@@ -22,6 +22,7 @@ from needtoknow import (
     PermissionedRetriever,
     Subject,
 )
+from needtoknow.caching import CacheStats
 from needtoknow.events import query_fingerprint
 
 BOB = Subject("bob", ["eng"])
@@ -289,3 +290,55 @@ def test_opentelemetry_metrics_count_outcomes_and_never_identify_anyone():
     for metric in points.values():
         for point in metric:
             assert not {"bob", "ann", "leave", "salary"} & {str(v) for v in point.attributes.values()}
+
+
+def test_a_failed_retrieval_reports_what_the_permission_service_raised():
+    events = []
+
+    def refused(subject, hits, action):
+        raise ConnectionRefusedError("opa.internal:8181")
+
+    down = PermissionedRetriever(InMemoryBackend(DOCS), FunctionAuthorizer(refused), observers=[events.append])
+    garbled = FunctionAuthorizer(lambda subject, hits, action: ["yes"] * len(hits))
+    malformed = PermissionedRetriever(InMemoryBackend(DOCS), garbled, observers=[events.append])
+    for retriever in (down, malformed):
+        with pytest.raises(AuthorizationError):
+            retriever.retrieve("leave", BOB)
+    assert [(e.error, e.cause) for e in events] == [
+        ("AuthorizationError", "ConnectionRefusedError"),  # the service could not be reached
+        ("AuthorizationError", None),  # it answered, but not with booleans
+    ]
+    assert all("opa.internal" not in json.dumps(e.to_dict()) for e in events)
+
+
+def test_opentelemetry_spans_name_the_cause_of_a_failure():
+    pytest.importorskip("opentelemetry.sdk")
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from needtoknow.otel import OpenTelemetryObserver
+
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+
+    def slow(subject, hits, action):
+        raise TimeoutError("timed out")
+
+    observer = OpenTelemetryObserver(provider.get_tracer("test"))
+    retriever = PermissionedRetriever(InMemoryBackend(DOCS), FunctionAuthorizer(slow), observers=[observer])
+    with pytest.raises(AuthorizationError):
+        retriever.retrieve("leave", BOB)
+    (span,) = exporter.get_finished_spans()
+    assert span.attributes["error.type"] == "AuthorizationError"
+    assert span.attributes["needtoknow.error.cause"] == "TimeoutError"
+
+
+def test_cache_stats_count_hits_and_the_answers_the_authorizer_was_asked_for():
+    authz = CachingAuthorizer(Counting())
+    hits = [Hit(d.id, d.text, 1.0, d.metadata) for d in DOCS]
+    authz.check(BOB, hits)  # two answers asked for
+    authz.check(BOB, hits)  # both from the cache
+    authz.filter_for(BOB)  # one more asked for
+    assert authz.stats() == CacheStats(hits=2, shared_hits=0, misses=3, shared_failures=0, entries=3)
