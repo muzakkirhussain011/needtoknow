@@ -14,7 +14,7 @@ All notable changes are recorded here. The format follows
   staleness to strict revocation.
 - Tests of tenant and context isolation against an oracle written without the library's filter
   code: tenants that share user ids, group names and document ids (including look-alike tenant
-  values such as `"acme"`, `"Acme"`, a Cyrillic `"аcme"`, `1` and `"1"`) through one shared cache;
+  values such as `"acme"`, `"Acme"`, `"acme"` spelt with a Cyrillic a, `1` and `"1"`) through one shared cache;
   concurrent threads and asyncio tasks for different subjects, every returned chunk checked; and a
   cancelled retrieval.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
