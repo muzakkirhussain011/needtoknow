@@ -161,7 +161,9 @@ def test_invalid_options_are_refused(options):
         b'{"expires": "soon", "epoch": [null, null], "value": true}',
         b'{"expires": 1e12, "epoch": [null, null], "value": "yes"}',
         b'{"expires": 1e12, "value": true}',  # no epoch: written by an older version, or planted
-        b"[" * 100_000 + b"]" * 100_000,  # nested too deep for the JSON decoder
+        # Nested too deep for the JSON decoder. A short id: pytest puts the test id in an environment
+        # variable, and Windows refuses one longer than 32767 characters.
+        pytest.param(b"[" * 100_000 + b"]" * 100_000, id="nested-too-deep"),
     ],
 )
 def test_unreadable_entries_are_misses(blob):
