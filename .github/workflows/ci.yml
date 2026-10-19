@@ -129,7 +129,7 @@ jobs:
         with: { version: "0.12.23", enable-cache: false }
       - name: Install from uv.lock, by hash
         run: |
-          uv export --frozen --no-emit-project --all-extras --group integration -o "$RUNNER_TEMP/requirements.txt"
+          uv export --frozen --no-emit-project --all-extras --group integration --group examples -o "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r .github/requirements/build.txt
           pip install --no-deps --no-build-isolation -e .
@@ -170,6 +170,7 @@ jobs:
         run: |
           python examples/langchain_quickstart.py
           python examples/llamaindex_quickstart.py
+          python -m pytest -q examples/fastapi_rag
       - name: Benchmark harness (synthetic smoke run against real Chroma and PostgreSQL)
         env:
           NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
