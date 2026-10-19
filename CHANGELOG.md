@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `RetrievalEvent.cause`, and the span attribute `needtoknow.error.cause`: the type of the exception
+  behind a failure, such as `TimeoutError` or `ConnectionRefusedError` for a permission service that
+  is slow or unreachable, and `None` for an error status or a malformed answer. The HTTP authorizers
+  now keep the connection error as the cause of the `AuthorizationError` they raise after retrying.
+- `CachingAuthorizer.stats()`: a `CacheStats` with answers served from this process and from the
+  shared cache, answers the authorizer was asked for, shared cache failures, and entries held, for
+  watching the hit rate and the shared cache. The operations guide lists the new alerts.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
   enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
   chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
