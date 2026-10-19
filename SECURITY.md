@@ -89,7 +89,8 @@ python -m sigstore verify identity \
 A file from PyPI and the same file from the GitHub release are byte-identical: both come from one
 build. After each release, `verify-release.yml` installs it from PyPI pinned to the hash of the
 GitHub release's wheel, runs the quickstart, and, from 1.4.0, runs the security test suites of that
-version against the installed package.
+version against the installed package. Those tests come from the release's source distribution, after
+its provenance and its PyPI hash are checked, never from a git checkout of the tag.
 
 From 1.4.0, each release also carries SLSA build provenance (`needtoknow-<version>.intoto.jsonl`),
 also stored as a GitHub attestation. With the GitHub CLI:
