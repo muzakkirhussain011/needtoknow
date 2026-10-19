@@ -32,8 +32,9 @@ from needtoknow import (
     TenantAuthorizer,
 )
 
-# Tenants that must never be confused: case, a Cyrillic "а" in "аcme", and 1 against "1".
-TENANTS = ["acme", "Acme", "аcme", "globex", 1, "1"]
+# Tenants that must never be confused: case, "acme" spelt with a Cyrillic a (U+0430), and 1 against "1".
+LOOKALIKE = chr(0x0430) + "cme"  # looks like "acme"
+TENANTS = ["acme", "Acme", LOOKALIKE, "globex", 1, "1"]
 USERS = ["alice", "bob", "carol"]
 GROUPS = ["eng", "hr", "sales"]
 DOC_IDS = ["handbook", "payroll", "roadmap"]  # the same document ids in every tenant
