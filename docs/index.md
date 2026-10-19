@@ -276,6 +276,8 @@ hybrid
 vectors
 reranking
 security
+threat-model
+revocation
 operations
 production
 ```

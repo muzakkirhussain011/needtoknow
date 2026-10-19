@@ -8,6 +8,15 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Documentation for security review: a threat model of the library (assets, trust boundaries,
+  sixteen threats with their mitigations, remaining risks and tests), the security invariants S1 to
+  S10 with the tests that hold each one, and a guide to revocation and consistency, from bounded
+  staleness to strict revocation.
+- Tests of tenant and context isolation against an oracle written without the library's filter
+  code: tenants that share user ids, group names and document ids (including look-alike tenant
+  values such as `"acme"`, `"Acme"`, a Cyrillic `"аcme"`, `1` and `"1"`) through one shared cache;
+  concurrent threads and asyncio tasks for different subjects, every returned chunk checked; and a
+  cancelled retrieval.
 - `create_index(..., algorithm="FLAT")` on the Redis backend: an exact vector index, for indexes small
   enough to compare every vector. HNSW stays the default; the docs now say that Redis re-adds a
   chunk's vector to the graph when `set_metadata` changes it, so a small, often-changed HNSW graph
@@ -53,6 +62,10 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- A retrieval cancelled while it ran (an asyncio task cancelled, a `KeyboardInterrupt`) produced no
+  `RetrievalEvent`, though every call is meant to produce one. Observers now receive it, with
+  `error="CancelledError"` (or the exception's name) and nothing returned; the exception is raised
+  as before.
 - `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
   a deep enough document from a policy engine or a shared cache recursed until Python raised
   `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
