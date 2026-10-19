@@ -235,7 +235,7 @@ class PermissionedRetriever:
                     op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
-        except Exception as exc:
+        except BaseException as exc:  # a cancelled or interrupted call is reported too, then re-raised
             self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
         self._emit(query, subject, k, started, clock, timings, result, None)
@@ -258,7 +258,7 @@ class PermissionedRetriever:
                     op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
-        except Exception as exc:
+        except BaseException as exc:  # a cancelled or interrupted call is reported too, then re-raised
             self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
         self._emit(query, subject, k, started, clock, timings, result, None)
@@ -273,7 +273,7 @@ class PermissionedRetriever:
         clock: float,
         timings: _Timings,
         result: RetrievalResult | None,
-        error: Exception | None,
+        error: BaseException | None,
     ) -> None:
         if not self.observers:
             return

@@ -23,6 +23,30 @@ Given an authorizer that answers correctly:
    spans record ids, counts and outcomes, never query text or chunk text. The query appears only as
    an HMAC, and only when you supply a key. OpenTelemetry metrics record no ids at all.
 
+## The invariants and the tests that hold them
+
+These are the properties a change must never break. Each is checked by automated tests in CI,
+against the in-memory reference and, where it matters, against the real stores and permission
+services. The tests compare with an oracle written without the library's own filter code. The
+[threat model](threat-model.md) says which threat each one answers.
+
+| | Invariant | Held by |
+|---|---|---|
+| S1 | Every returned hit is permitted for the subject and action. | `test_properties.py` (every strategy, generated corpora and subjects), the conformance kit against each real store, and each authorizer's comparison with the reference against its real server (`test_opa.py`, `test_openfga.py`, `test_spicedb.py`, `test_cerbos.py`) |
+| S2 | No failure, timeout, malformed or partial answer returns data. | `test_core.py`, `test_http.py` (every fault, sync and async), `test_composition.py`, each authorizer's fail-closed tests; errors are never cached (`test_caching_events.py`) |
+| S3 | A subject of one tenant never receives another tenant's chunk, even with shared user ids, group names and document ids, and one cache for all. | `test_invariants.py` |
+| S4 | Decisions never carry over between requests, users, tenants, threads or tasks; a cancelled call returns nothing. | `test_invariants.py` (threads and asyncio tasks, every hit checked), `test_properties.py` (sync and async agree), `test_mcp.py` (each caller's own token) |
+| S5 | An optimization that fails keeps the guarantees or fails. | A backend that ignores the filter cannot leak, with or without `recheck` (`test_properties.py`); a failing shared cache only misses (`test_shared_cache.py`) |
+| S6 | Content the subject may not read never reaches a reranker, the model or a tool. | `test_rerank.py`, `test_frameworks.py`, `test_mcp.py` |
+| S7 | An incomplete candidate search is never reported as complete. | `test_core.py` (post-filtering capped), truncated or deadline-cut lists in `test_openfga.py` and `test_spicedb.py`. `complete` cannot see what an approximate index failed to return. |
+| S8 | The documented defaults keep every protection on. | `recheck=True`, `strategy="auto"`, empty `And`/`Or` and single-string groups refused (`test_core.py`) |
+| S9 | Cached decisions are used for at most `ttl`, and not at all after `invalidate()`. | `test_caching_events.py`, `test_shared_cache.py`, `test_revocation.py` (revocation under concurrent retrievals, one and three replicas) |
+| S10 | Errors and telemetry reveal no content, credentials or query text. | `test_caching_events.py` (events and OpenTelemetry), `test_mcp.py` (a failing permission service, store or subject function) |
+
+S1 to S10 assume the authorizer answers correctly, the backend returns the metadata it stored, and
+the subject comes from authentication; the next sections cover those assumptions. The test files
+are in [`tests/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/tests).
+
 ## What it relies on
 
 **The authorizer is the source of truth.** needtoknow enforces decisions; it does not make them.
