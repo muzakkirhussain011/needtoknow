@@ -127,6 +127,31 @@ def test_an_answer_another_replica_writes_after_invalidate_is_never_read(scope):
     assert fresh.checks == 2  # ...but no replica uses it
 
 
+@pytest.mark.parametrize("scope", ["subject", "everyone"])
+def test_an_answer_copied_from_the_shared_cache_while_invalidate_runs_is_not_kept(scope):
+    class Racing(Shared):
+        """Runs `during` once, just before the next epoch is written: in the middle of invalidate()."""
+
+        during = None
+
+        def set_many(self, entries, ttl):
+            if self.during is not None and any(k.endswith("!epoch") for k in entries):
+                during, self.during = self.during, None
+                during()
+            super().set_many(entries, ttl)
+
+    shared, held = Racing(), _released()
+    cache = CachingAuthorizer(held, shared=shared)
+    cache.check(BOB, HITS)  # cached in this process and in the shared cache
+    # A retrieval in this process after it dropped its own entries, before the new epoch exists:
+    # it finds the old entry in the shared cache, still valid, and copies it.
+    shared.during = lambda: cache.check(BOB, HITS)
+    cache.invalidate(BOB if scope == "subject" else None)
+    asked = held.checks
+    cache.check(BOB, HITS)
+    assert held.checks == asked + 2  # asked again: the copy made during invalidate() was dropped
+
+
 def test_a_shared_entry_put_back_after_invalidate_is_refused():
     shared = Shared()
     first = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared)

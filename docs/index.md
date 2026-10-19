@@ -311,6 +311,7 @@ integrations/mcp
 
 api
 extending
+support
 benchmarks
 changelog
 contributing
