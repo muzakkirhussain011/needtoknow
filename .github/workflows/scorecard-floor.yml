@@ -1,0 +1,25 @@
+name: Scorecard floor
+
+# After each Scorecard run, fails when a check fell below its floor in .github/scorecard-floor.json,
+# so a regression shows up as a failed run (and a notification) rather than a quietly lower badge.
+
+on:
+  workflow_run:
+    workflows: [Scorecard]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  floor:
+    runs-on: ubuntu-latest
+    steps:
+      # The default branch's floors and script; nothing from the triggering run is checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Compare the published checks with their floors
+        env:
+          SCORECARD_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: python3 .github/scripts/check_scorecard_floor.py

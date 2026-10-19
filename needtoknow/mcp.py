@@ -19,7 +19,9 @@ refused. For a server only one person can reach, such as a local stdio server, p
 The tool returns each permitted chunk's id, text and score, and `complete`. Metadata is left out
 unless its keys are named in `metadata`, because permission fields describe who may read what. A
 failure of the permission service reaches the model as a tool error without internal details, and
-nothing is returned.
+nothing is returned. Any other failure (the vector store, or `subject_for` itself) reaches it only
+as "Error executing tool search": the SDK keeps the exception, with whatever hosts or credentials
+its text names, in the server's log. Tests hold both to that.
 """
 
 # No `from __future__ import annotations`: the SDK reads the tool's annotations, which refer to

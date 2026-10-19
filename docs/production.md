@@ -29,7 +29,9 @@ fails. Each item links to the page with the details.
 
 **Retrieval settings**
 
-- [ ] `recheck=True` (the default) stays on, so a backend that ignores the filter cannot leak.
+- [ ] `recheck=True` (the default) stays on. It also catches a filter that is broader than the
+  authorizer's own check; with `recheck=False` only a backend that ignores or mistranslates the
+  filter is caught.
 - [ ] `strategy="auto"` (the default) or `"prefilter"` when the authorizer can return a filter.
   Post-filtering alone loses recall for users who may read little of the index.
   ([Benchmarks](benchmarks.md#what-the-load-results-show))

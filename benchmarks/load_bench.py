@@ -6,7 +6,8 @@ OpenSearch, Weaviate; see stores.py) it measures
 * how long loading and indexing the corpus takes, and how large it gets,
 * recall@k against brute force over the same vectors, and latency, by permission selectivity, one
   query at a time,
-* throughput and latency percentiles as the number of concurrent users grows,
+* throughput and latency percentiles as the number of concurrent users grows, with every chunk
+  returned under load checked against the permissions of the subject it was returned to,
 * what a remote permission service costs per retrieval: the in-process MetadataACLAuthorizer
   against Open Policy Agent over HTTP, with and without CachingAuthorizer (`--opa-url`).
 
@@ -69,28 +70,44 @@ def load_msmarco(n_docs: int, n_queries: int, rng: np.random.Generator) -> tuple
     return ids, texts, [unique[i] for i in picked]
 
 
-def throughput(retriever: PermissionedRetriever, cases: Sequence[Case], k: int, users: int, seconds: float) -> dict:
-    """`users` threads retrieve in a loop for `seconds`; each request is timed."""
+def throughput(
+    retriever: PermissionedRetriever,
+    cases: Sequence[Case],
+    k: int,
+    users: int,
+    seconds: float,
+    row_of: dict[str, int],
+) -> dict:
+    """`users` threads retrieve in a loop for `seconds`; each request is timed.
+
+    The threads take turns through the cases, so requests for different subjects run at the same
+    time, and every chunk each one returns is checked against that request's own subject, after the
+    request is timed. A chunk returned to the wrong subject under load counts as a leak.
+    """
     latencies: list[float] = []
-    errors = [0]
+    errors, leaks, checked = [0], [0], [0]
     lock = threading.Lock()
     stop = time.perf_counter() + seconds
 
     def user(first: int) -> None:
-        mine, failed, i = [], 0, first
+        mine, failed, bad, seen, i = [], 0, 0, 0, first
         while time.perf_counter() < stop:
             case = cases[i % len(cases)]
             i += users
             start = time.perf_counter()
             try:
-                retriever.retrieve(case.query, case.subject, k)
+                hits = retriever.retrieve(case.query, case.subject, k).hits
             except Exception:
                 failed += 1
                 continue
             mine.append((time.perf_counter() - start) * 1000)
+            seen += len(hits)
+            bad += sum(1 for h in hits if not case.permitted[row_of[h.id]])
         with lock:
             latencies.extend(mine)
             errors[0] += failed
+            leaks[0] += bad
+            checked[0] += seen
 
     began = time.perf_counter()
     threads = [threading.Thread(target=user, args=(n,)) for n in range(users)]
@@ -107,6 +124,8 @@ def throughput(retriever: PermissionedRetriever, cases: Sequence[Case], k: int, 
         "p95_ms": round(percentile(latencies, 95), 2),
         "p99_ms": round(percentile(latencies, 99), 2),
         "errors": errors[0],
+        "checked": checked[0],
+        "leaks": leaks[0],
     }
 
 
@@ -146,6 +165,8 @@ LOAD_COLUMNS = [
     ("p95 ms", "p95_ms"),
     ("p99 ms", "p99_ms"),
     ("Errors", "errors"),
+    ("Chunks checked", "checked"),
+    ("Leaks", "leaks"),
 ]
 # As in permissions_bench.py's tables; other values print as they are.
 FORMATS = {"recall": "{:.3f}", "complete_rate": "{:.0%}"}
@@ -155,7 +176,9 @@ def markdown(report: dict) -> str:
     def table(rows: list[dict], columns: list[tuple[str, str]]) -> list[str]:
         out = ["| " + " | ".join(title for title, _ in columns) + " |", "|---" * len(columns) + "|"]
         for r in rows:
-            out.append("| " + " | ".join(FORMATS.get(key, "{}").format(r[key]) for _, key in columns) + " |")
+            # Reports from before results were checked under load have no checked or leaks column.
+            cells = (FORMATS.get(key, "{}").format(r[key]) if key in r else "not checked" for _, key in columns)
+            out.append("| " + " | ".join(cells) + " |")
         return [*out, ""]
 
     load, store = report["load"], report["config"].get("backend", "pgvector")
@@ -171,6 +194,8 @@ def markdown(report: dict) -> str:
         )
         if report["config"].get("index_type"):
             summary += f" Index type: {report['config']['index_type']}."
+        if report["config"].get("refine_factor"):
+            summary += f" Refine factor: {report['config']['refine_factor']}."
     out = [
         f"### Load: {load['rows']} chunks" + ("" if store == "pgvector" else f" in {store}"),
         "",
@@ -207,6 +232,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--grpc-port", type=int, default=50051, help="Weaviate's gRPC port")
     p.add_argument("--ef-search", type=int, help="search breadth (pgvector hnsw.ef_search; see stores.py for the rest)")
     p.add_argument("--index-type", help="Elasticsearch's vector index type, such as int8_hnsw or hnsw")
+    p.add_argument("--refine-factor", type=int, help="LanceDB's refine_factor (re-ranks with the full vectors)")
     p.add_argument("--opa-url", help="an OPA running examples/opa, to measure a remote permission service")
     p.add_argument("--batch-size", type=int, default=256, help="embedding batch size")
     p.add_argument("--seed", type=int, default=7)
@@ -246,7 +272,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     teams = rng.integers(0, args.teams, len(ids))
     metadata = [{FIELD: tags("r", int(t))} for t in teams]
-    store = make_store(args.backend, url, args.ef_search, args.grpc_port, args.index_type)
+    store = make_store(args.backend, url, args.ef_search, args.grpc_port, args.index_type, args.refine_factor)
     load = store.load(ids, texts, doc_vecs, metadata)
     del texts
     embed: Callable[[str], Any] = dict(zip(queries, query_vecs, strict=True)).__getitem__
@@ -272,11 +298,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     for n in users:
         retriever = PermissionedRetriever(store.backend(embed, n), acl, strategy="prefilter")
         row = {"selectivity": f"{args.throughput_selectivity:.1%}"}
-        row |= throughput(retriever, busy, args.k, n, args.seconds)
+        row |= throughput(retriever, busy, args.k, n, args.seconds, row_of)
         rows.append(row)
         log(
             f"throughput {n:>3} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, p99 {row['p99_ms']} ms,"
-            f" errors {row['errors']}"
+            f" errors {row['errors']}, leaks {row['leaks']} in {row['checked']} chunks checked"
         )
 
     authorizers = []
@@ -294,9 +320,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, make in candidates:
             for n in sorted({1, max(users)}):
                 retriever = PermissionedRetriever(store.backend(embed, n), make(), strategy="prefilter")
-                row = {"authorizer": name} | throughput(retriever, busy, args.k, n, args.seconds)
+                row = {"authorizer": name} | throughput(retriever, busy, args.k, n, args.seconds, row_of)
                 authorizers.append(row)
-                log(f"{name}, {n} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, errors {row['errors']}")
+                log(
+                    f"{name}, {n} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, errors {row['errors']},"
+                    f" leaks {row['leaks']}"
+                )
 
     secret = ("database_url", "url")  # connection strings can hold credentials
     config = {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items() if k not in secret}
@@ -315,10 +344,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     log(f"wrote {args.out} ({report['seconds']} s)")
     if args.check:
         problems = [f"{r['selectivity']} {r['strategy']}: {r['leaks']} leaks" for r in scale if r["leaks"]]
+        problems += [f"{r['users']} concurrent users: {r['leaks']} leaks" for r in rows + authorizers if r["leaks"]]
         problems += [f"errors in {r}" for r in scale + rows + authorizers if r["errors"]]
         for problem in problems:
             log(f"PROBLEM {problem}")
-        if problems or not any(r["requests"] for r in rows):
+        # A run that returned nothing under load would check nothing, so it does not pass either.
+        if problems or not any(r["requests"] for r in rows) or not any(r["checked"] for r in rows):
             return 1
     return 0
 
