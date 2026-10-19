@@ -6,6 +6,39 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-19
+
+A security fix for permission caching. Upgrade if you use `CachingAuthorizer`, and above all if
+you call `invalidate()` to revoke access.
+
+### Security
+
+- `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
+  permission service gave just before the revocation, to a call that finished just after it, was
+  cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
+  a shared cache, in every replica. Now each process discards answers obtained by calls that began
+  before an `invalidate()`, and `invalidate()` stores a new epoch in the shared cache, under which
+  entries written before it are refused. Tests revoke a permission under concurrent retrievals,
+  with one and three replicas, and check that no retrieval starting after `invalidate()` returns
+  sees the document (other replicas within `local_ttl`).
+
+### Changed
+
+- `CachingAuthorizer.invalidate(subject)` takes a `Subject` or a subject id, and drops the answers
+  for every subject with that id, whatever groups and attributes they came with. Before, it dropped
+  only those of a subject equal in every field, so a revocation hook that knew only the user id
+  (`invalidate(Subject("bob"))`) cleared nothing for `Subject("bob", ["eng"], {"tenant": "acme"})`.
+- Shared cache entries have new keys and carry an epoch; entries written by earlier versions are
+  not read, so the first requests after the upgrade ask the permission service. During a rolling
+  upgrade, call `invalidate()` once every replica runs 1.3.1, or allow for `ttl`.
+
+### Fixed
+
+- `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
+  a deep enough document from a policy engine or a shared cache recursed until Python raised
+  `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
+  miss.
+
 ## [1.3.0] - 2026-10-17
 
 Retrieval as production RAG is built now, with permissions applied at every step. Hybrid search
@@ -362,7 +395,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
