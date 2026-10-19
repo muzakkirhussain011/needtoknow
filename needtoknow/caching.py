@@ -299,13 +299,7 @@ class CachingAuthorizer:
         subject_id = subject.id if isinstance(subject, Subject) else subject
         if subject_id == "":
             raise ValueError("a subject id is non-empty; pass None to drop every decision")
-        with self._lock:
-            self._generation += 1
-            if subject_id is None:
-                self._entries.clear()
-            else:
-                for key in [k for k in self._entries if k[1].id == subject_id]:
-                    del self._entries[key]
+        self._drop_local(subject_id)  # first, so this process stops at once even if Redis fails below
         if self.shared is None:
             return
         # A new epoch first, so that entries written under the old one are refused from now on;
@@ -320,6 +314,20 @@ class CachingAuthorizer:
         else:
             self.shared.set_many({self._epoch_name(subject_id): epoch}, lifetime)
             self.shared.delete_prefix(f"{self._tag(subject_id)}:")
+        # Again: a retrieval here may have copied an old shared entry into this process after the
+        # first drop and before the new epoch, under the generation that drop started.
+        self._drop_local(subject_id)
+
+    def _drop_local(self, subject_id: Any) -> None:
+        """Drop this process's answers for `subject_id` (all of them for None), and refuse answers
+        obtained by calls that began before now."""
+        with self._lock:
+            self._generation += 1
+            if subject_id is None:
+                self._entries.clear()
+            else:
+                for key in [k for k in self._entries if k[1].id == subject_id]:
+                    del self._entries[key]
 
     # ---- Authorizer ------------------------------------------------------------------------
 
