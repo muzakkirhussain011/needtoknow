@@ -15,10 +15,48 @@ are released as soon as they are ready, with credit to the reporter unless you p
 
 ## Supported versions
 
-| Version | Supported |
-|---|---|
-| Latest minor release | Yes |
-| Older releases | Security fixes are backported to the previous minor release for 6 months after 1.0 |
+The latest minor release gets every fix. The minor release before it gets security fixes, as patch
+releases, for six months after its successor came out. Older releases get none.
+
+| Version | Security fixes | Until |
+|---|---|---|
+| 1.3.x | Yes (latest) | |
+| 1.2.x | Yes | 2027-04-17, six months after 1.3.0 |
+| 1.1.x and earlier | No | |
+
+## How reports are handled
+
+1. **Acknowledge** within 3 working days, and confirm or rule out the problem, with a status
+   update, within 10.
+2. **Assess severity** with CVSS 4.0 in the GitHub advisory, read against the
+   [threat model](https://muzakkirhussain011.github.io/needtoknow/threat-model.html): anything that
+   lets a subject receive a chunk they may not read, crosses tenants, or makes a failure return
+   results is high or critical.
+3. **Fix** in a private fork of the advisory, with a regression test, and release patch versions
+   for every supported line at the same time.
+4. **Publish** the GitHub Security Advisory, with a CVE assigned through GitHub, when the fixed
+   versions are on PyPI. The advisory, the release notes and the changelog's *Security* section say
+   what was affected, which versions, how to upgrade, and any workaround. Dependabot alerts reach
+   projects that depend on needtoknow from the advisory. The aim is to publish within 90 days of the
+   report, sooner for anything actively exploited.
+
+Problems found by the maintainers themselves go through the same steps.
+
+## If a release is compromised
+
+Releases come only from `release.yml` in GitHub Actions, through PyPI trusted publishing, so no
+upload token exists to steal. If a published file is found altered, or a release turns out to have
+been built from code that should not have been in it, the maintainer:
+
+1. yanks the version on PyPI, so new installs stop resolving to it (installs pinned to it keep
+   working, which is what yanking is for);
+2. publishes an advisory naming the version, the affected files and their SHA-256 hashes;
+3. removes the trusted publisher on PyPI until the cause is understood and the workflow or the
+   repository is secured again;
+4. releases a fixed version from a clean build, and explains in its notes what happened.
+
+Users can tell genuine files from altered ones with the signatures, attestations and provenance
+below.
 
 ## Scope
 
@@ -49,4 +87,13 @@ python -m sigstore verify identity \
 ```
 
 A file from PyPI and the same file from the GitHub release are byte-identical: both come from one
-build.
+build. After each release, `verify-release.yml` installs it from PyPI pinned to the hash of the
+GitHub release's wheel, runs the quickstart, and, from 1.4.0, runs the security test suites of that
+version against the installed package.
+
+From 1.4.0, each release also carries SLSA build provenance (`needtoknow-<version>.intoto.jsonl`),
+also stored as a GitHub attestation. With the GitHub CLI:
+
+```bash
+gh attestation verify needtoknow-1.4.0-py3-none-any.whl --repo muzakkirhussain011/needtoknow
+```

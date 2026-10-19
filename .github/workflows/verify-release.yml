@@ -68,3 +68,25 @@ jobs:
           assert [h.id for h in result.hits] == ["handbook"], result
           print(f"needtoknow {needtoknow.__version__} from PyPI works")
           EOF
+      # The security suites of the released version, run against the installed package rather than
+      # the source, with the test tools pinned by hash in that version's uv.lock (from 1.4.0 on).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { ref: "v${{ env.VERSION }}", path: source, persist-credentials: false }
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: { version: "0.12.23", enable-cache: false }
+      - name: Run the security tests against the installed package
+        run: |
+          if [ ! -f source/uv.lock ]; then
+            echo "::notice::v${VERSION} has no uv.lock to pin the test tools; the security tests run from 1.4.0 on"
+            exit 0
+          fi
+          (cd source && uv export --frozen --no-emit-project --extra dev -o "$RUNNER_TEMP/test-requirements.txt")
+          pip install --require-hashes --no-deps -r "$RUNNER_TEMP/test-requirements.txt"
+          cp -r source/tests "$RUNNER_TEMP/release-tests"
+          cd "$RUNNER_TEMP"
+          python -c "import needtoknow; assert 'site-packages' in needtoknow.__file__, needtoknow.__file__"
+          suites=""
+          for name in test_properties test_invariants test_core test_composition test_caching_events test_shared_cache test_revocation; do
+            if [ -f "release-tests/$name.py" ]; then suites="$suites release-tests/$name.py"; fi
+          done
+          python -m pytest -q -p no:cacheprovider $suites
