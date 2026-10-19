@@ -238,3 +238,14 @@ def test_the_example_policy_gives_exactly_the_reference_answer(docs, subject, qu
 @needs_cerbos
 def test_the_example_policy_passes_the_conformance_kit():
     check_authorizer(CerbosAuthorizer(CERBOS_URL))
+
+
+def test_an_attribute_named_groups_cannot_replace_the_subjects_groups(server):
+    # Cerbos policies read the subject's groups from the principal's "groups" attribute; a subject
+    # attribute of that name would otherwise overwrite them, with whatever it holds.
+    claimed = Subject("ann", ["sales"], {"groups": ["hr", "finance"]})
+    with pytest.raises(AuthorizationError, match="groups"):
+        CerbosAuthorizer(server.url).check(claimed, HITS[:1])
+    with pytest.raises(AuthorizationError, match="groups"):
+        CerbosAuthorizer(server.url).filter_for(claimed)
+    assert server.requests == []  # refused before anything was sent

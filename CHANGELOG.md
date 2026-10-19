@@ -60,6 +60,13 @@ All notable changes are recorded here. The format follows
 
 ### Security
 
+- `recheck=False` no longer trusts the backend completely. The authorizer is still not asked a second
+  time, but each pre-filtered hit is matched against the filter in the process (no network call),
+  so a backend that ignores or mistranslates the filter cannot leak; such hits are dropped and
+  counted in `violations`, as with `recheck=True`. A custom backend with `recheck=False` must now
+  return each chunk's metadata as stored, as the conformance kit already requires.
+- `CerbosAuthorizer` refuses a subject with an attribute named `groups`. It was merged into the
+  principal's attributes after the subject's own groups, so it replaced them in every decision.
 - `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
   permission service gave just before the revocation, to a call that finished just after it, was
   cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
