@@ -121,7 +121,7 @@ def test_invalidate_reaches_every_replica():
     b.check(Subject("ann", ["hr"]), HITS)
     assert two.checks == 2  # bob was asked again, ann still came from the shared cache
     a.invalidate()
-    assert shared.data == {}
+    assert list(shared.data) == ["needtoknow!epoch"]  # every entry is gone; the new epoch refuses late writes
 
 
 def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
@@ -155,7 +155,14 @@ def test_invalid_options_are_refused(options):
 
 @pytest.mark.parametrize(
     "blob",
-    [b"not json", b"{}", b'{"expires": "soon", "value": true}', b'{"expires": 1e12, "value": "yes"}'],
+    [
+        b"not json",
+        b"{}",
+        b'{"expires": "soon", "epoch": [null, null], "value": true}',
+        b'{"expires": 1e12, "epoch": [null, null], "value": "yes"}',
+        b'{"expires": 1e12, "value": true}',  # no epoch: written by an older version, or planted
+        b"[" * 100_000 + b"]" * 100_000,  # nested too deep for the JSON decoder
+    ],
 )
 def test_unreadable_entries_are_misses(blob):
     shared = FakeShared()
@@ -169,7 +176,8 @@ def test_a_malformed_shared_filter_is_a_miss():
     shared = FakeShared()
     _, (_one, two), (a, b) = _replicas(shared)
     a.filter_for(BOB)
-    shared.data = dict.fromkeys(shared.data, b'{"expires": 1e12, "value": {"filter": {"in": "nonsense"}}}')
+    blob = b'{"expires": 1e12, "epoch": [null, null], "value": {"filter": {"in": "nonsense"}}}'
+    shared.data = dict.fromkeys(shared.data, blob)
     assert b.filter_for(BOB) is not None and two.filters == 1
 
 
@@ -262,3 +270,15 @@ def test_replicas_share_decisions_through_redis():
     b.check(BOB, HITS)
     assert two.checks == 2
     a.invalidate()
+
+
+def test_a_shared_filter_nested_too_deep_is_a_miss():
+    shared = FakeShared()
+    _, (_one, two), (a, b) = _replicas(shared)
+    a.filter_for(BOB)
+    deep = '{"in": {"field": "team", "values": ["a"]}}'
+    for _ in range(150):
+        deep = '{"and": [' + deep + "]}"
+    entry = '{"expires": 1e12, "epoch": [null, null], "value": {"filter": ' + deep + "}}"
+    shared.data = dict.fromkeys(shared.data, entry.encode())
+    assert b.filter_for(BOB) is not None and two.filters == 1

@@ -53,6 +53,20 @@ def test_malformed_filter_documents_are_rejected(bad):
         filter_from_dict(bad)
 
 
+def _nested(depth):
+    document = {"in": {"field": "team", "values": ["a"]}}
+    for _ in range(depth - 1):
+        document = {"and": [document]}
+    return document
+
+
+def test_filters_nested_deeper_than_a_hundred_levels_are_rejected_not_recursed_into():
+    assert matches(filter_from_dict(_nested(100)), {"team": "a"})
+    for depth in (101, 5_000):  # 5,000 would exceed Python's recursion limit if parsed
+        with pytest.raises(ValueError, match="at most 100 levels"):
+            filter_from_dict(_nested(depth))
+
+
 def test_filter_to_dict_is_stable():
     f = Or(In("allowed_groups", {"hr", "*", 2}), And(In("tenant", {"acme"})))
     assert filter_to_dict(f) == {
