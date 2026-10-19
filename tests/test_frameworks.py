@@ -135,6 +135,17 @@ def test_llamaindex_retriever_returns_only_permitted_nodes(li):
     assert {n.node.node_id for n in asyncio.run(retriever.aretrieve("leave"))} == {"handbook", "bob-review"}
 
 
+def test_llamaindex_retrievers_sharing_one_permissioned_retriever_never_mix_users(li):
+    shared = permissioned()  # one instance behind every user's LlamaIndex retriever
+    per_user = [li.NeedToKnowRetriever(shared, s, k=5) for s in PEOPLE] * 10
+
+    async def run():
+        return await asyncio.gather(*(r.aretrieve("leave") for r in per_user))
+
+    for subject, nodes in zip(PEOPLE * 10, asyncio.run(run()), strict=True):
+        assert {n.node.node_id for n in nodes} == READS[subject.id]
+
+
 def test_llamaindex_postprocessor_drops_nodes_and_fails_closed(li):
     from llama_index.core.schema import NodeWithScore, TextNode
 
