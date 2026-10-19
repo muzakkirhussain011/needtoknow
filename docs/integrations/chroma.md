@@ -66,3 +66,14 @@ number of groups in the filter. So:
   (20 ms instead of 876 ms when everything was readable).
 - Grant access through a few broad groups (team, department, division) rather than hundreds of
   individual groups, which keeps the `where` document small.
+
+## Chroma's own tenants and access control
+
+needtoknow applies permissions itself, as a filter inside each query and a check of each result, so
+it never relies on Chroma's tenants, databases or authorization providers. Do not rely on them to
+separate your tenants either: as of October 2026, Chroma 1.5.9 (the latest release) has unfixed
+advisories in which an authenticated user can reach any tenant's collections
+([CVE-2026-45830](https://osv.dev/PYSEC-2026-3813), [CVE-2026-45831](https://osv.dev/PYSEC-2026-3815)),
+and two that let a request run code on a Chroma server
+([CVE-2026-45829](https://osv.dev/PYSEC-2026-311), [CVE-2026-45833](https://osv.dev/PYSEC-2026-3814)).
+If you run a Chroma server, keep it on a private network, reachable only by your application.
