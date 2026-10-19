@@ -276,6 +276,8 @@ hybrid
 vectors
 reranking
 security
+threat-model
+revocation
 operations
 production
 ```
@@ -303,6 +305,7 @@ integrations/langchain
 integrations/llamaindex
 integrations/haystack
 integrations/mcp
+integrations/fastapi
 ```
 
 ```{toctree}
@@ -311,6 +314,7 @@ integrations/mcp
 
 api
 extending
+support
 benchmarks
 changelog
 contributing

@@ -36,6 +36,10 @@ authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 - **Never cached:** exceptions and malformed answers (non-booleans, the wrong number of
   decisions). Every failure reaches the retriever, which fails closed.
 - **Size:** at most `maxsize` entries; the least recently used go first.
+- **Monitoring:** `stats()` returns a `CacheStats` with the answers served from this process (`hits`)
+  and from the shared cache (`shared_hits`), those the authorizer was asked for (`misses`), the shared
+  cache reads and writes that failed (`shared_failures`), and the answers held now (`entries`). Export
+  them as gauges to watch the hit rate.
 - **Invalidation:** `invalidate(subject)` drops the entries of every subject with that id, whatever
   groups and attributes they came with (pass the `Subject` or just its id), for example after a
   role change you handled yourself; `invalidate()` drops everything. An answer the permission
@@ -204,6 +208,7 @@ passes it to each observer. An observer is any callable taking the event.
 | `searches` | Backend searches: one when pre-filtering, more when post-filtering fetched again |
 | `reranked`, `rerank_ms` | Chunks given to the [reranker](reranking.md) (0 without one), and the time it took |
 | `error` | The exception type when the call failed, for example `AuthorizationError` |
+| `cause` | The type of the exception behind `error`: for an `AuthorizationError`, what the call to the permission service raised (`TimeoutError`, `ConnectionRefusedError`), or `None` for a malformed answer |
 | `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set: of its text, or of its vector when a `Query` has no text |
 
 Events never contain query or chunk text, nor a query's vector. A plain hash of a short query could be reversed by
@@ -237,6 +242,7 @@ the call and parented to the span that was current when it ran.
 | `needtoknow.searches`, `needtoknow.search.duration_ms`, `needtoknow.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
 | `needtoknow.reranked`, `needtoknow.rerank.duration_ms` | Chunks reranked and the reranker's time, on reranked retrievals only |
 | `error.type`, `needtoknow.error` | The exception type; the span status is then ERROR |
+| `needtoknow.error.cause` | The type of the exception behind it, as `RetrievalEvent.cause` |
 | `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 
 The `gen_ai.*` and `error.type` attributes are the ones OpenTelemetry's GenAI semantic conventions
@@ -282,3 +288,7 @@ either.
 | Incomplete results | Share of `needtoknow.outcome = incomplete` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
 | Slow permission checks | `needtoknow.authorize.duration` p99 | The permission service, or the network to it, is slowing retrieval down. `CachingAuthorizer` helps. |
 | Probing | `denied` per call, by subject, in the audit log | Unusually high values can mean a user is probing for documents they may not read. |
+| Which part is failing | `error.type = AuthorizationError` by `RetrievalEvent.cause` (or the span's `needtoknow.error.cause`) | `TimeoutError` points at a slow permission service, `ConnectionRefusedError` and other `OSError`s at one that cannot be reached, and no cause at an error status (HTTP 503) or an answer in the wrong shape. |
+| Shared cache failing | `CachingAuthorizer.stats().shared_failures` rising, or `needtoknow shared cache` warnings in the log | Every replica is asking the permission service directly; answers stay correct, but load and latency rise. |
+| Cache not helping | Hit rate, `(hits + shared_hits) / (hits + shared_hits + misses)`, falling | `ttl` too short for the traffic, `maxsize` too small, or subjects whose groups or attributes change on every request (each change is a new cache key). |
+| Paused permission service | `CircuitBreaker.is_open` | Requests are being refused without calling the service, for `reset_after` seconds. |

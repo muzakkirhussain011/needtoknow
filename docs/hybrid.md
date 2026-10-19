@@ -32,6 +32,9 @@ needs no embedding function and runs under the same permission filter as the vec
 - **LanceDB:** LanceDB's full-text index (BM25) on the text, built by
   `create_indexes(table, content_field="content")`, so one table serves both
   ([LanceDB](integrations/lancedb.md#keyword-search-and-hybrid-search)).
+- **MongoDB:** Atlas Search's BM25 on the text, in an index `create_text_index` creates beside
+  the vector index, so one collection serves both
+  ([MongoDB](integrations/mongodb.md#keyword-search-and-hybrid-search)).
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python

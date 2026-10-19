@@ -132,7 +132,10 @@ returns anything that is not a real `bool` (`"no"`, `1`, `None`), the call raise
 
 **Defence in depth.** With `recheck=True` (the default), pre-filtered hits are checked again with
 `authorizer.check`. A backend that ignores or mistranslates the filter cannot leak; the rejected
-hits are dropped and counted in `violations`.
+hits are dropped and counted in `violations`. With `recheck=False` the authorizer is not asked
+again, but each pre-filtered hit is still matched against the filter in the process: a backend
+that ignores or mistranslates the filter still cannot leak, though a filter broader than the
+authorizer's own check would go unnoticed.
 
 **One algorithm, two drivers.** `retrieve` and `aretrieve` run the same plan, written once, so the
 async path cannot drift from the sync one. Backends and authorizers may provide `asearch`,

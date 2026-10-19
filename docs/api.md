@@ -82,7 +82,10 @@ modules and need their extra.
    :members: scope_for
 
 .. autoclass:: needtoknow.CachingAuthorizer
-   :members: invalidate
+   :members: invalidate, stats
+
+.. autoclass:: needtoknow.caching.CacheStats
+   :members:
 
 .. autoclass:: needtoknow.caching.SharedCache
    :members: get_many, set_many, delete_prefix
@@ -198,7 +201,11 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 .. autofunction:: needtoknow.backends.mongodb.create_search_index
 
+.. autofunction:: needtoknow.backends.mongodb.create_text_index
+
 .. autofunction:: needtoknow.backends.mongodb.filter_to_mongo
+
+.. autofunction:: needtoknow.backends.mongodb.filter_to_search
 
 .. autofunction:: needtoknow.backends.mongodb.permission_terms
 

@@ -36,13 +36,14 @@ import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.filters import Filter, filter_from_dict, filter_to_dict
 from needtoknow.types import Hit, Subject
 
-__all__ = ["CachingAuthorizer", "RedisCache", "SharedCache"]
+__all__ = ["CacheStats", "CachingAuthorizer", "RedisCache", "SharedCache"]
 
 _NONE = object()  # cached "this authorizer returns no filter"
 _MISS = object()  # a shared entry that is absent, expired, unreadable, or from an earlier epoch
@@ -84,6 +85,22 @@ def _epoch_id(blob: Any) -> str | None:
     if not isinstance(blob, (bytes, bytearray)):
         raise TypeError(f"a shared cache returned {type(blob).__name__}, not bytes")
     return bytes(blob).hex()
+
+
+@dataclass(frozen=True)
+class CacheStats:
+    """What a `CachingAuthorizer` has done since it was created, from `stats()`, for monitoring."""
+
+    hits: int
+    """Answers served from this process's own cache."""
+    shared_hits: int
+    """Answers served from the shared cache."""
+    misses: int
+    """Answers the wrapped authorizer was asked for."""
+    shared_failures: int
+    """Reads and writes of the shared cache that failed; each failed read was treated as a miss."""
+    entries: int
+    """Answers this process holds now."""
 
 
 @runtime_checkable
@@ -151,6 +168,7 @@ class CachingAuthorizer:
         self._generation = 0
         # The shared cache's global epoch and when this process read it; read again after local_ttl.
         self._global_epoch: tuple[float, str | None] | None = None
+        self._stats = {"hits": 0, "shared_hits": 0, "misses": 0, "shared_failures": 0}
 
     # ---- this process's cache --------------------------------------------------------------
 
@@ -164,7 +182,17 @@ class CachingAuthorizer:
                 del self._entries[key]
                 return None
             self._entries.move_to_end(key)
+            self._stats["hits"] += 1
             return value
+
+    def _count(self, name: str, n: int = 1) -> None:
+        with self._lock:
+            self._stats[name] += n
+
+    def stats(self) -> CacheStats:
+        """What this cache has done since it was created, and how many answers it holds now."""
+        with self._lock:
+            return CacheStats(**self._stats, entries=len(self._entries))
 
     def _put(self, key: Any, value: Any, generation: int, ttl: float | None = None) -> None:
         lifetime = self.local_ttl if ttl is None else min(ttl, self.local_ttl)
@@ -259,6 +287,7 @@ class CachingAuthorizer:
             epoch[1] = _epoch_id(blobs[-1])
         except Exception:
             _log.warning("needtoknow shared cache read failed; asking the authorizer", exc_info=True)
+            self._count("shared_failures")
             return [None] * len(keys), _UNKNOWN
         now = self._wall()
         found: list[Any] = []
@@ -269,6 +298,7 @@ class CachingAuthorizer:
             else:
                 self._put(key, value, generation, remaining)
                 found.append(value)
+        self._count("shared_hits", sum(value is not None for value in found))
         return found, epoch
 
     def _shared_put(self, entries: Iterable[tuple[tuple[Any, ...], Any]], epoch: Any) -> None:
@@ -286,6 +316,7 @@ class CachingAuthorizer:
             self.shared.set_many(blobs, self.ttl)
         except Exception:
             _log.warning("needtoknow shared cache write failed", exc_info=True)
+            self._count("shared_failures")
 
     def invalidate(self, subject: Subject | str | None = None) -> None:
         """Drop every cached decision, or those for one subject id, here and in the shared cache.
@@ -299,13 +330,7 @@ class CachingAuthorizer:
         subject_id = subject.id if isinstance(subject, Subject) else subject
         if subject_id == "":
             raise ValueError("a subject id is non-empty; pass None to drop every decision")
-        with self._lock:
-            self._generation += 1
-            if subject_id is None:
-                self._entries.clear()
-            else:
-                for key in [k for k in self._entries if k[1].id == subject_id]:
-                    del self._entries[key]
+        self._drop_local(subject_id)  # first, so this process stops at once even if Redis fails below
         if self.shared is None:
             return
         # A new epoch first, so that entries written under the old one are refused from now on;
@@ -320,6 +345,20 @@ class CachingAuthorizer:
         else:
             self.shared.set_many({self._epoch_name(subject_id): epoch}, lifetime)
             self.shared.delete_prefix(f"{self._tag(subject_id)}:")
+        # Again: a retrieval here may have copied an old shared entry into this process after the
+        # first drop and before the new epoch, under the generation that drop started.
+        self._drop_local(subject_id)
+
+    def _drop_local(self, subject_id: Any) -> None:
+        """Drop this process's answers for `subject_id` (all of them for None), and refuse answers
+        obtained by calls that began before now."""
+        with self._lock:
+            self._generation += 1
+            if subject_id is None:
+                self._entries.clear()
+            else:
+                for key in [k for k in self._entries if k[1].id == subject_id]:
+                    del self._entries[key]
 
     # ---- Authorizer ------------------------------------------------------------------------
 
@@ -342,6 +381,7 @@ class CachingAuthorizer:
         cached, epoch = self._lookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
+        self._count("misses")
         return self._remember(key, self.authorizer.filter_for(subject, action), generation, epoch)
 
     def scope_for(self, subject: Subject, action: str = "read") -> Filter | None:
@@ -353,6 +393,7 @@ class CachingAuthorizer:
         cached, epoch = self._lookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
+        self._count("misses")
         return self._remember(key, inner(subject, action), generation, epoch)
 
     async def _alookup(self, key: tuple[Any, ...], generation: int) -> tuple[Any, Any]:
@@ -376,6 +417,7 @@ class CachingAuthorizer:
         cached, epoch = await self._alookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
+        self._count("misses")
         native = getattr(self.authorizer, "ascope_for", None)
         result: Filter | None
         if native is not None:
@@ -424,6 +466,7 @@ class CachingAuthorizer:
             found, epoch = self._shared_get(missing, generation)
             self._fill(cached, found)
         todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
+        self._count("misses", len(todo))
         fresh = self.authorizer.check(subject, todo, action) if todo else []
         decisions, learned = self._merge(keys, cached, fresh, generation)
         self._shared_put(learned, epoch)
@@ -434,6 +477,7 @@ class CachingAuthorizer:
         cached, epoch = await self._alookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
+        self._count("misses")
         inner = getattr(self.authorizer, "afilter_for", None)
         result: Filter | None
         if inner is not None:
@@ -453,6 +497,7 @@ class CachingAuthorizer:
         todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
         fresh: Sequence[bool] = []
         if todo:
+            self._count("misses", len(todo))
             inner = getattr(self.authorizer, "acheck", None)
             if inner is not None:
                 fresh = await inner(subject, todo, action)

@@ -1,7 +1,15 @@
 # Demo principals for the fictional company "Najm Logistics".
-# Only SHA-256 hashes of API keys are stored. The demo keys are listed in the README so anyone
-# can try the gateway locally; replace this file (or point RAMPART_PRINCIPALS_FILE elsewhere) in a
-# real deployment. Generate a hash with:  rampart hash-key <your-key>
+# API keys are never stored, only their scrypt hashes: a stolen copy of this file costs an attacker
+# one scrypt per guess. The demo keys are listed in the README so anyone can try the gateway
+# locally; replace this file (or point RAMPART_PRINCIPALS_FILE elsewhere) in a real deployment,
+# with a new salt and random keys:  rampart new-key  (or  rampart hash-key <key>  for a key you have).
+key_hashing:
+  scheme: scrypt
+  n: 16384
+  r: 8
+  p: 1
+  salt: 643fe817fe3d6a294768499076ad48a3
+
 principals:
   - user_id: alice
     name: Alice (HR business partner)
@@ -9,7 +17,7 @@ principals:
     department: hr
     clearance: confidential
     roles: [employee, pii_reader]
-    key_sha256: f80024220afd493b4d9592af870de7afe98061992d28fdb75480c9b717783fa2  # demo-key-alice
+    key_scrypt: efa929e8c6711b60468e4d4f02919ef5ae4a8763ba73235374b9a633b39819c9  # demo-key-alice
 
   - user_id: bob
     name: Bob (platform engineer)
@@ -17,7 +25,7 @@ principals:
     department: engineering
     clearance: internal
     roles: [employee]
-    key_sha256: 586e2671e66b0c67ca4a057786411bcdd3d1c2904f041f6b78a754835a5bbcfe  # demo-key-bob
+    key_scrypt: b1dbea7418fcbb7bd5350be77f71a3af6ab9c361433a6ccebc766eaed72ed743  # demo-key-bob
 
   - user_id: carol
     name: Carol (treasury lead)
@@ -25,7 +33,7 @@ principals:
     department: finance
     clearance: restricted
     roles: [employee]
-    key_sha256: 0e4c745d19d7e6ffd0d8520c90a9bd4fe3d51ddaec1a624fd3ed8dd9059251c9  # demo-key-carol
+    key_scrypt: bffaba3e366d53114de4fec96018ffede41fd0962c4437c22a36bbee946c8d93  # demo-key-carol
 
   - user_id: dave
     name: Dave (security auditor)
@@ -33,7 +41,7 @@ principals:
     department: security
     clearance: internal
     roles: [auditor]
-    key_sha256: e0baa5ef144c66356c3c4796fb63dcb01fd6f4637feed2df4dddc89e573baf8d  # demo-key-dave
+    key_scrypt: 928ce7e24bafa6a3c0a5ab33dea889552f7f0321581ed2bd5454caf68e64a3f2  # demo-key-dave
 
   - user_id: admin
     name: Platform admin
@@ -41,7 +49,7 @@ principals:
     department: it
     clearance: restricted
     roles: [admin]
-    key_sha256: 0de55245c225238646d6fdb99a60b6971bf5eb0b0280237830d66e0a8b54b4ac  # demo-key-admin
+    key_scrypt: 00b5e09c3453c0648b02ae2648edee0bfeae010aa3159b69672bab0f5b469a70  # demo-key-admin
 
   - user_id: intern
     name: Summer intern
@@ -49,4 +57,4 @@ principals:
     department: engineering
     clearance: public
     roles: [employee]
-    key_sha256: f6210baff4bf7ef48d254604db59779a1b607db0622cc3611f90e5a94924ca89  # demo-key-intern
+    key_scrypt: 200655c1db4ec62a198dea266b1489dc4861392c43b0208e733d8b40b3a744e5  # demo-key-intern

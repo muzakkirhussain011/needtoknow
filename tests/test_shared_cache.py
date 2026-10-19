@@ -282,3 +282,15 @@ def test_a_shared_filter_nested_too_deep_is_a_miss():
     entry = '{"expires": 1e12, "epoch": [null, null], "value": {"filter": ' + deep + "}}"
     shared.data = dict.fromkeys(shared.data, entry.encode())
     assert b.filter_for(BOB) is not None and two.filters == 1
+
+
+def test_stats_count_shared_hits_and_failures():
+    shared = FakeShared()
+    _, (_one, _two), (a, b) = _replicas(shared)
+    a.check(BOB, HITS)
+    b.check(BOB, HITS)  # both answers from the shared cache
+    assert (b.stats().shared_hits, b.stats().misses) == (2, 0)
+    shared.fail = True
+    c = CachingAuthorizer(Counting(), shared=shared)
+    c.check(BOB, HITS)  # the read fails, so the authorizer is asked, and nothing is written
+    assert (c.stats().shared_failures, c.stats().misses) == (1, 2)

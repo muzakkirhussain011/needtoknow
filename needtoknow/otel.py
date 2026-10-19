@@ -66,6 +66,8 @@ class OpenTelemetryObserver:
         if event.error:
             attributes["needtoknow.error"] = event.error
             attributes["error.type"] = event.error
+        if event.cause:
+            attributes["needtoknow.error.cause"] = event.cause
         if self.record_subject:
             attributes["needtoknow.subject.id"] = event.subject_id
         start = int(event.started_at * 1_000_000_000)

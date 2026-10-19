@@ -24,6 +24,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
 | [Haystack](haystack.md) | Framework | `needtoknow[haystack]` | Through any needtoknow backend |
 | [MCP](mcp.md) | Agent tool server | `needtoknow[mcp]` | Through any needtoknow backend |
+| [FastAPI](fastapi.md) | Reference RAG service: verified tokens, tenants, safe errors | none (your app's FastAPI) | Through any needtoknow backend |
 | [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
 
 ## Choosing a store
@@ -40,7 +41,7 @@ and keeps permission values out of query text. They differ in what is worth know
 | [OpenSearch](elasticsearch.md#opensearch) | When `add` returns (`refresh="wait_for"`) | `AsyncOpenSearch` | A `terms` query on type-tagged terms | BM25, `mode="keyword"` | 3.9.0 |
 | [Qdrant](qdrant.md) | When `add` returns (`wait=True`) | `AsyncQdrantClient` | Filter objects (`MatchAny`) | BM25 (IDF modifier), `mode="keyword"` | 1.19.2 |
 | [Milvus](milvus.md) | At once (strong consistency, the default) | `AsyncMilvusClient` | `filter_params`, never in the expression | BM25, `mode="keyword"` | 3.0.2 |
-| [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | No | Atlas Local 8.0.30 |
+| [MongoDB Atlas Vector Search](mongodb.md) | When `add` returns: it waits for the search index | `AsyncMongoClient` | A BSON filter (`$in`) | BM25 (Atlas Search), `mode="keyword"` | Atlas Local 8.0.30 |
 | [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | BM25, `mode="keyword"` | 1.39.12 |
 | [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | BM25, `mode="keyword"` | 8.10.2 |
 | [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | BM25, `mode="keyword"` | LanceDB 0.40, embedded |
