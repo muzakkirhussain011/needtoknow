@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from functools import partial
 
 import pytest
 
@@ -338,7 +339,7 @@ def test_documents_written_by_another_tool_need_their_permission_terms():
     metadata = {"allowed_groups": ["hr"]}
     raw = {"_id": "raw-1", "content": "leave policy", "metadata": metadata, "embedding": EMBED("leave policy")}
     collection.insert_one(raw | {WRITE_FIELD: "first"})
-    backend._wait({WRITE_FIELD: "first"}, 1, EMBED("leave"))
+    backend._wait(partial(backend._count, {WRITE_FIELD: "first"}, EMBED("leave")), 1)
     hr = Subject("ann", ["hr"])
     prefilter = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
     postfilter = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="postfilter")
@@ -346,7 +347,7 @@ def test_documents_written_by_another_tool_need_their_permission_terms():
     assert prefilter.retrieve("leave", hr, k=5).hits == []
     assert [h.id for h in postfilter.retrieve("leave", hr, k=5).hits] == ["raw-1"]
     collection.replace_one({"_id": "raw-1"}, raw | {TERMS_FIELD: permission_terms(metadata), WRITE_FIELD: "second"})
-    backend._wait({WRITE_FIELD: "second"}, 1, EMBED("leave"))
+    backend._wait(partial(backend._count, {WRITE_FIELD: "second"}, EMBED("leave")), 1)
     assert [h.id for h in prefilter.retrieve("leave", hr, k=5).hits] == ["raw-1"]
     collection.drop()
 
