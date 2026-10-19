@@ -60,6 +60,10 @@ All notable changes are recorded here. The format follows
 
 ### Security
 
+- The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
+  random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
+  one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
+  file with a new salt, and SHA-256 entries are refused rather than accepted as a fallback.
 - `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
   permission service gave just before the revocation, to a call that finished just after it, was
   cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
