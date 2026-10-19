@@ -1,7 +1,9 @@
 name: Verify release
 
-# Installs a published version from PyPI, as a user would, and runs the quickstart against it.
-# Runs after every successful Release, and on demand for any version already on PyPI.
+# Installs a published version from PyPI, as a user would, and runs the quickstart against it. The
+# install is pinned to the hash of the wheel attached to the signed GitHub release, so it also checks
+# that PyPI serves exactly the file the release workflow built.
+# Runs after every successful Release, and on demand for any version released on GitHub and PyPI.
 
 on:
   workflow_run:
@@ -10,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version on PyPI, for example 1.0.0rc1
+        description: A version released on GitHub and PyPI, for example 1.3.0
         required: true
 
 permissions:
@@ -27,15 +29,20 @@ jobs:
     steps:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "${{ matrix.python }}" }
-      - name: Install from PyPI (retrying while a new release propagates)
+      - name: Install from PyPI, pinned to the release's wheel (retrying while a new release propagates)
         env:
+          GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version }}
           TAG: ${{ github.event.workflow_run.head_branch }}
         run: |
           version="${INPUT_VERSION:-${TAG#v}}"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
+          wheel="needtoknow-${version}-py3-none-any.whl"
+          gh release download "v${version}" --repo "$GITHUB_REPOSITORY" --pattern "$wheel" --dir "$RUNNER_TEMP"
+          digest="$(sha256sum "$RUNNER_TEMP/$wheel" | cut -d' ' -f1)"
+          echo "needtoknow==${version} --hash=sha256:${digest}" > "$RUNNER_TEMP/requirements.txt"
           for attempt in 1 2 3 4 5 6; do
-            pip install --no-cache-dir "needtoknow==${version}" && exit 0
+            pip install --no-cache-dir --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt" && exit 0
             sleep 20
           done
           exit 1
