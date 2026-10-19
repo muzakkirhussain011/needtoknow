@@ -60,6 +60,11 @@ All notable changes are recorded here. The format follows
 
 ### Security
 
+- With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
+  up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
+  entry from the shared cache after the process dropped its own entries and before the new epoch
+  was written. The process now drops its entries again once the new epoch is in place. Found by the
+  revocation test under concurrent traffic; a test now forces a retrieval into that moment.
 - The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
   random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
   one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
