@@ -17,8 +17,11 @@ auto (default)
 Guarantees
 ----------
 * Fail closed: if the authorizer errors, `AuthorizationError` is raised and nothing is returned.
-* Defence in depth: pre-filtered results are checked again (`recheck=True`). A backend that
-  ignored the filter cannot leak; the rejected hits are counted in `violations`.
+* Defence in depth: pre-filtered results are checked again with the authorizer (`recheck=True`).
+  A backend that ignored the filter cannot leak; the rejected hits are counted in `violations`.
+  With `recheck=False` there is no second call to the authorizer, but each pre-filtered hit is
+  still matched against the filter locally, so a backend that ignores the filter cannot leak
+  either; only a filter that is itself broader than the authorizer's check goes unnoticed.
 * A `reranker` sees only hits that passed the check, and can only reorder, score or drop them.
 
 The algorithm is written once, as a generator of operations; `retrieve` runs it synchronously and
@@ -39,7 +42,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.events import Observer, RetrievalEvent, query_fingerprint
-from needtoknow.filters import And, Filter, In, Or
+from needtoknow.filters import And, Filter, In, Or, matches
 from needtoknow.types import Hit, Query, Subject
 
 __all__ = ["PermissionedRetriever", "Reranker", "RetrievalResult", "SearchBackend", "Strategy"]
@@ -168,8 +171,10 @@ class PermissionedRetriever:
     Post-filtering fetches `k * overfetch` candidates and multiplies the fetch by `overfetch`
     until k permitted hits are found, the backend has no more, or `max_candidates` is reached.
     `recheck` checks pre-filtered hits again with the authorizer, so a backend that ignores the
-    filter cannot leak. `observers` receive a `RetrievalEvent` for every call, and `audit_key`
-    adds an HMAC of the query to those events.
+    filter cannot leak; with `recheck=False` they are matched against the filter locally instead,
+    which needs the backend to return each chunk's metadata as stored (the conformance kit checks
+    that). `observers` receive a `RetrievalEvent` for every call, and `audit_key` adds an HMAC of
+    the query to those events.
 
     `reranker` reorders the result after the permission check: the retriever finds the top
     `rerank_depth` hits the subject may read (or k, if larger), the reranker orders them, and the
@@ -235,7 +240,7 @@ class PermissionedRetriever:
                     op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
-        except Exception as exc:
+        except BaseException as exc:  # a cancelled or interrupted call is reported too, then re-raised
             self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
         self._emit(query, subject, k, started, clock, timings, result, None)
@@ -258,7 +263,7 @@ class PermissionedRetriever:
                     op = plan.send(value)
             except StopIteration as done:
                 result: RetrievalResult = done.value
-        except Exception as exc:
+        except BaseException as exc:  # a cancelled or interrupted call is reported too, then re-raised
             self._emit(query, subject, k, started, clock, timings, None, exc)
             raise
         self._emit(query, subject, k, started, clock, timings, result, None)
@@ -273,7 +278,7 @@ class PermissionedRetriever:
         clock: float,
         timings: _Timings,
         result: RetrievalResult | None,
-        error: Exception | None,
+        error: BaseException | None,
     ) -> None:
         if not self.observers:
             return
@@ -342,13 +347,19 @@ class PermissionedRetriever:
     def _prefilter(self, query: str | Query, k: int, f: Filter) -> _Plan:
         hits: list[Hit] = yield _Search(query, k, f)
         hits = list(hits)[:k]
-        if not self.recheck or not hits:
+        if not hits:
             return RetrievalResult(hits, "prefilter", examined=0, denied=0, violations=0, complete=True)
-        decisions: list[bool] = yield _Check(hits)
-        kept = [h for h, ok in zip(hits, decisions, strict=True) if ok]
+        if self.recheck:
+            decisions: list[bool] = yield _Check(hits)
+            kept = [h for h, ok in zip(hits, decisions, strict=True) if ok]
+        else:
+            # No call to the authorizer, but each hit must still match the filter the backend was
+            # given: one that does not means the backend ignored it, and is dropped and counted.
+            kept = [h for h in hits if matches(f, h.metadata)]
         violations = len(hits) - len(kept)
+        examined = len(hits) if self.recheck else 0
         return RetrievalResult(
-            kept, "prefilter", examined=len(hits), denied=0, violations=violations, complete=violations == 0
+            kept, "prefilter", examined=examined, denied=0, violations=violations, complete=violations == 0
         )
 
     def _postfilter(self, query: str | Query, k: int, scope: Filter | None = None) -> _Plan:

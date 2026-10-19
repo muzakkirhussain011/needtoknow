@@ -129,7 +129,7 @@ jobs:
         with: { version: "0.12.23", enable-cache: false }
       - name: Install from uv.lock, by hash
         run: |
-          uv export --frozen --no-emit-project --all-extras --group integration -o "$RUNNER_TEMP/requirements.txt"
+          uv export --frozen --no-emit-project --all-extras --group integration --group examples -o "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r .github/requirements/build.txt
           pip install --no-deps --no-build-isolation -e .
@@ -166,10 +166,14 @@ jobs:
           pytest -q -ra --cov --cov-report=
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
           coverage report --fail-under=90
+          # The code that decides who reads what is held to a higher bar: the retriever, the filter
+          # language, composition, caching and the permission-service clients, together.
+          coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
       - name: Runnable examples
         run: |
           python examples/langchain_quickstart.py
           python examples/llamaindex_quickstart.py
+          python -m pytest -q examples/fastapi_rag
       - name: Benchmark harness (synthetic smoke run against real Chroma and PostgreSQL)
         env:
           NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
