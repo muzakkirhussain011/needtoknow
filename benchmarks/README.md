@@ -61,9 +61,10 @@ load time includes waiting until the store's index is built. `--ef-search` sets 
 breadth (see [`stores.py`](stores.py)), and `--index-type` sets Elasticsearch's vector index type
 (`int8_hnsw`, `hnsw`; its default for 384 dimensions is `bbq_hnsw`). On Kaggle, which has no Docker,
 [`kaggle_stores.ipynb`](kaggle_stores.ipynb) runs a plan of runs in turn, each store started from its
-release build by [`kaggle_stores.sh`](kaggle_stores.sh) and stopped before the next: `every-store`
-measures each store at its defaults, `elasticsearch-index-types` Elasticsearch with other index
-types. Milvus needs Docker or Kubernetes, so it is measured elsewhere.
+release build by [`kaggle_stores.sh`](kaggle_stores.sh) and stopped before the next: `all-stores`
+(the default) measures Qdrant, Elasticsearch, OpenSearch, Weaviate, LanceDB and Redis at their
+defaults with `--repeat 3`, `every-store` the first four once each, `elasticsearch-index-types`
+Elasticsearch with other index types. Milvus needs Docker or Kubernetes, so it is measured elsewhere.
 
 Throughput on a shared machine varies from run to run. `--repeat 5` runs each throughput setting five
 times: the tables then give the median, with the slowest and fastest request rates, and the JSON keeps
