@@ -8,6 +8,15 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- Documentation for security review: a threat model of the library (assets, trust boundaries,
+  sixteen threats with their mitigations, remaining risks and tests), the security invariants S1 to
+  S10 with the tests that hold each one, and a guide to revocation and consistency, from bounded
+  staleness to strict revocation.
+- Tests of tenant and context isolation against an oracle written without the library's filter
+  code: tenants that share user ids, group names and document ids (including look-alike tenant
+  values such as `"acme"`, `"Acme"`, `"acme"` spelt with a Cyrillic a, `1` and `"1"`) through one shared cache;
+  concurrent threads and asyncio tasks for different subjects, every returned chunk checked; and a
+  cancelled retrieval.
 - `OpenFGAAuthorizer(consistency=...)`: `"HIGHER_CONSISTENCY"` makes OpenFGA skip its cache for every
   check and list, so a tuple just written counts at once; `"MINIMIZE_LATENCY"` is OpenFGA's default.
   Tested against OpenFGA 1.22 in each mode.
@@ -56,6 +65,10 @@ All notable changes are recorded here. The format follows
 
 ### Fixed
 
+- A retrieval cancelled while it ran (an asyncio task cancelled, a `KeyboardInterrupt`) produced no
+  `RetrievalEvent`, though every call is meant to produce one. Observers now receive it, with
+  `error="CancelledError"` (or the exception's name) and nothing returned; the exception is raised
+  as before.
 - `OpenFGAAuthorizer.filter_for` no longer treats a ListObjects answer that may have been cut short
   by the server's deadline as complete. OpenFGA stops at `OPENFGA_LIST_OBJECTS_DEADLINE` (3 s by
   default) and sends what it found without saying so; a call that took `list_objects_deadline`
