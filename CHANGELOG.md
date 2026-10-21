@@ -28,7 +28,7 @@ All notable changes are recorded here. The format follows
   shared cache, answers the authorizer was asked for, shared cache failures, and entries held, for
   watching the hit rate and the shared cache. The operations guide lists the new alerts.
 - Documentation for security review: a threat model of the library (assets, trust boundaries,
-  sixteen threats with their mitigations, remaining risks and tests), the security invariants S1 to
+  seventeen threats with their mitigations, remaining risks and tests), the security invariants S1 to
   S10 with the tests that hold each one, and a guide to revocation and consistency, from bounded
   staleness to strict revocation.
 - Tests of tenant and context isolation against an oracle written without the library's filter
@@ -72,12 +72,19 @@ All notable changes are recorded here. The format follows
   settings shut out (members only, domain users only). `domains=` leaves out grants outside your
   organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
   connectors return too.
-
-### Changed
-
-- An id's epoch has a new key in the shared cache, outside the keys that invalidation deletes.
-  During a rolling upgrade, an `invalidate()` of an id made by one version does not reach the other
-  version's entries: call `invalidate()` once every replica runs this version, or allow for `ttl`.
+- Documentation for operators and reviewers: an incident runbook (a document seen by the wrong
+  person, rising `violations`, `AuthorizationError`, a failing or untrusted shared cache, an
+  advisory affecting your version), a starting point for security reviewers, the configurations CI
+  tests and what it does not, and a FastAPI service in `examples/fastapi_rag` that binds the caller
+  from authentication. The threat model adds T17: in keyword search, BM25 statistics count chunks
+  the subject may not read, so scores and order can hint at what they contain.
+- CI runs the library tests on macOS and Windows as well as Linux, and fails when branch coverage
+  drops below 90% for the package or 95% for the code that decides access. The release check
+  installs each release from PyPI and runs the tests taken from its attested sdist.
+- Benchmarks: the load benchmark checks every chunk returned under concurrent load, `--repeat`
+  reports the median and range of several throughput runs, and the permissions benchmark adds a
+  baseline that enforces the same permissions with PostgreSQL row-level security, as a role that
+  does not bypass it.
 
 ### Fixed
 
@@ -91,27 +98,9 @@ All notable changes are recorded here. The format follows
   seconds or more (new, default 3) now gives no filter, so the retriever post-filters. Such a list
   never let anyone read more, but it could hide documents they may read while the result reported
   `complete=True`.
-- Shared-cache epochs are stored as hex text. Random bytes broke shared caches whose Redis client
-  decodes responses (`decode_responses=True`): reads raised `UnicodeDecodeError`, so every lookup
-  asked the permission service and logged a warning.
-- `CachingAuthorizer.invalidate()` raises `TypeError` for an id that is not a string:
-  `invalidate(42)` for the id `"42"` deleted the shared entries but missed this process's own.
-- A retrieval event that cannot be built is logged and dropped, instead of replacing the
-  retrieval's own result or error (a cancellation included), and query fingerprints accept a lone
-  surrogate.
 
 ### Security
 
-- Three gaps remained in `CachingAuthorizer.invalidate()` after the 1.3.1 and 1.3.2 fixes, found
-  by a review of the code; they are also fixed in 1.3.3 and 1.2.2. In rare interleavings, a
-  decision revoked with `invalidate()` could still be used afterwards, for up to `ttl`: an
-  `invalidate()` of everyone deleted every id's epoch, including one a concurrent `invalidate()` of
-  that id had just written, so a retrieval in flight could store its earlier answer where every
-  replica accepted it; and in the process calling `invalidate()`, a read of the global epoch already
-  in flight could put back the epoch it replaced, for up to `local_ttl`. Epochs now live outside the
-  keys that invalidation deletes, and a read never replaces a newer epoch. Also, an `invalidate()` of
-  everyone reached other replicas within twice `local_ttl`, not `local_ttl`; copies of shared
-  entries now expire with the global epoch they were accepted against.
 - The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
   random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
   one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
@@ -128,6 +117,42 @@ All notable changes are recorded here. The format follows
   that parsing either round-trips or raises `ValueError`, that pgvector binds every field name and
   value as a parameter, and that LanceDB and Redis queries carry only hex-encoded terms. The test
   suite runs the same checks on generated filters.
+
+## [1.3.3] - 2026-10-22
+
+Closes three gaps that remained in `CachingAuthorizer.invalidate()` after 1.3.2, found by a
+review of the code. Upgrade if you use a shared cache and call `invalidate()`.
+
+### Security
+
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+
+- In rare interleavings, a decision revoked with `invalidate()` could still be used afterwards, for
+  up to `ttl`. An `invalidate()` of everyone deleted every id's epoch, including one that a
+  concurrent `invalidate()` of that id had just written, so a retrieval in flight could store its
+  earlier answer where every replica accepted it. And in the process calling `invalidate()`, a read
+  of the global epoch already in flight could put back the epoch it replaced, for up to
+  `local_ttl`. Epochs now live outside the keys that invalidation deletes, and a read never replaces
+  a newer epoch.
+- An `invalidate()` of everyone reached other replicas within twice `local_ttl`, not within
+  `local_ttl` as documented: an entry accepted against a copy of the global epoch was kept for
+  another `local_ttl`. Copies now expire with that epoch.
+
+### Fixed
+
+- Epochs are stored as hex text. Random bytes broke shared caches whose Redis client decodes
+  responses (`decode_responses=True`): reads raised `UnicodeDecodeError`, so every lookup asked the
+  permission service and logged a warning.
+- `invalidate()` raises `TypeError` for an id that is not a string: `invalidate(42)` for the id
+  `"42"` missed this process's own entries.
+- A retrieval event that cannot be built is logged and dropped, instead of replacing the
+  retrieval's result or error, and query fingerprints accept a lone surrogate.
+
+### Changed
+
+- An id's epoch has a new key in the shared cache. During a rolling upgrade, an `invalidate()` of an
+  id made by one version does not reach the other version's entries: call `invalidate()` once every
+  replica runs 1.3.3, or allow for `ttl`.
 
 ## [1.3.2] - 2026-10-19
 
@@ -287,6 +312,40 @@ under the support policy the first minor release after that date, 1.4, drops it,
 
 - Chroma: `add` deletes and re-adds a replaced chunk, so none of its old metadata keys can remain
   and match a permission filter; it also checks that there is one embedding per document.
+
+## [1.2.2] - 2026-10-22
+
+Closes three gaps that remained in `CachingAuthorizer.invalidate()` after 1.2.1, found by a
+review of the code. Upgrade if you use a shared cache and call `invalidate()`.
+
+### Security
+
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+
+- In rare interleavings, a decision revoked with `invalidate()` could still be used afterwards, for
+  up to `ttl`. An `invalidate()` of everyone deleted every id's epoch, including one that a
+  concurrent `invalidate()` of that id had just written, so a retrieval in flight could store its
+  earlier answer where every replica accepted it. And in the process calling `invalidate()`, a read
+  of the global epoch already in flight could put back the epoch it replaced, for up to
+  `local_ttl`. Epochs now live outside the keys that invalidation deletes, and a read never replaces
+  a newer epoch.
+- An `invalidate()` of everyone reached other replicas within twice `local_ttl`, not within
+  `local_ttl` as documented: an entry accepted against a copy of the global epoch was kept for
+  another `local_ttl`. Copies now expire with that epoch.
+
+### Fixed
+
+- Epochs are stored as hex text. Random bytes broke shared caches whose Redis client decodes
+  responses (`decode_responses=True`): reads raised `UnicodeDecodeError`, so every lookup asked the
+  permission service and logged a warning.
+- `invalidate()` raises `TypeError` for an id that is not a string: `invalidate(42)` for the id
+  `"42"` missed this process's own entries.
+
+### Changed
+
+- An id's epoch has a new key in the shared cache. During a rolling upgrade, an `invalidate()` of an
+  id made by one version does not reach the other version's entries: call `invalidate()` once every
+  replica runs 1.2.2, or allow for `ttl`.
 
 ## [1.2.1] - 2026-10-19
 
@@ -565,10 +624,12 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
+[1.2.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
