@@ -297,6 +297,7 @@ class PermissionedRetriever:
             complete=result.complete if result else False,
             duration_ms=round((time.perf_counter() - clock) * 1000, 3),
             error=type(error).__name__ if error else None,
+            cause=type(error.__cause__).__name__ if error is not None and error.__cause__ is not None else None,
             query_hmac=fingerprint,
             started_at=started,
             search_ms=round(timings.search * 1000, 3),

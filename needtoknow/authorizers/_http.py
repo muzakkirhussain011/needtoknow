@@ -144,6 +144,7 @@ class JsonClient:
         try:
             attempt = 0
             while True:
+                last: BaseException | None = None  # the exception behind the failure, kept as its cause
                 try:
                     status, raw = self._send(path, body)
                 except TimeoutError as exc:
@@ -151,14 +152,14 @@ class JsonClient:
                 except ssl.SSLCertVerificationError as exc:
                     raise AuthorizationError(f"{what}: TLS certificate verification failed: {exc}") from exc
                 except (OSError, http.client.HTTPException) as exc:
-                    failure = f"{type(exc).__name__}: {exc}"
+                    failure, last = f"{type(exc).__name__}: {exc}", exc
                 else:
                     if status not in _RETRY_STATUS:
                         reachable = status < 500
                         return self._decode(status, raw, what, lines)
                     failure = f"HTTP {status}"
                 if attempt >= self.retries:
-                    raise AuthorizationError(f"{what} failed: {failure}")
+                    raise AuthorizationError(f"{what} failed: {failure}") from last
                 attempt += 1
                 time.sleep(min(0.05 * 2 ** (attempt - 1), 1.0))
         finally:

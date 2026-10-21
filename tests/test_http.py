@@ -204,3 +204,10 @@ def test_under_any_faults_retrieval_is_exact_or_fails_closed(server, docs, subje
     except AuthorizationError:
         return
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)
+
+
+def test_a_refused_connection_is_kept_as_the_cause_of_the_failure():
+    # Monitoring reads the cause (RetrievalEvent.cause) to tell an unreachable service from a bad answer.
+    with pytest.raises(AuthorizationError) as failure:
+        OPAAuthorizer("http://127.0.0.1:9", retries=0, timeout=2).check(BOB, HITS)
+    assert isinstance(failure.value.__cause__, OSError)
