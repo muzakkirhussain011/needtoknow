@@ -75,7 +75,7 @@ def query_fingerprint(query: str | Query, key: bytes) -> str:
     """
     q = Query.of(query)
     if q.text is not None:
-        message = q.text.encode("utf-8")
+        message = q.text.encode("utf-8", "surrogatepass")  # a lone surrogate must not raise here
     else:
         assert q.vector is not None
         # 0xFF never occurs in UTF-8, so no text query has the same message as a vector.

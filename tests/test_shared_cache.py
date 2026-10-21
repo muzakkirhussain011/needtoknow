@@ -121,7 +121,8 @@ def test_invalidate_reaches_every_replica():
     b.check(Subject("ann", ["hr"]), HITS)
     assert two.checks == 2  # bob was asked again, ann still came from the shared cache
     a.invalidate()
-    assert list(shared.data) == ["needtoknow!epoch"]  # every entry is gone; the new epoch refuses late writes
+    # Every entry is gone; the epochs stay (everyone's and bob's), and refuse late writes.
+    assert len(shared.data) == 2 and all(key.startswith("needtoknow!epoch") for key in shared.data)
 
 
 def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
@@ -136,6 +137,74 @@ def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
     clock.now += 0.6
     b.check(BOB, HITS)
     assert two.checks == 2  # its copy expired and the shared entry is gone, so b asked
+
+
+def test_invalidating_everyone_reaches_a_replica_within_local_ttl_even_before_the_entries_are_deleted():
+    class Lagging(FakeShared):
+        """Deletes nothing: Redis's SCAN has not reached the entries yet."""
+
+        def delete_prefix(self, prefix):
+            pass
+
+    shared = Lagging()
+    clock, (_one, two), (a, b) = _replicas(shared)
+    a.check(BOB, HITS)
+    b.check(Subject("ann", ["hr"]), HITS)  # b reads the global epoch now, at t=1000
+    asked = two.checks
+    clock.now += 0.9
+    a.invalidate()
+    b.check(BOB, HITS)  # b's epoch is 0.9 s old, so it still accepts bob's entry, and copies it
+    assert two.checks == asked
+    clock.now += 0.6
+    b.check(BOB, HITS)
+    assert two.checks == asked + 2  # its copy expired with its epoch, 1 s after reading it, not 1.9 s
+
+
+def test_a_global_epoch_read_in_flight_cannot_put_back_the_epoch_invalidate_replaced():
+    class Racing(FakeShared):
+        during = None
+
+        def get_many(self, keys):
+            values = super().get_many(keys)
+            if self.during is not None and keys == ["needtoknow!epoch"]:
+                during, self.during = self.during, None
+                during()  # invalidate() runs after the old epoch was read, before it is kept
+            return values
+
+    shared = Racing()
+    clock, (one, _two), (a, b) = _replicas(shared)
+    a.invalidate()
+    b.check(BOB, HITS)  # written under that epoch
+    old = {key: value for key, value in shared.data.items() if "!epoch" not in key}
+    clock.now += 2  # a's copy of the global epoch is old, so its next lookup reads it again
+    shared.during = a.invalidate
+    a.check(BOB, HITS)
+    shared.data.update(old)  # answers from before the second invalidate(), put back
+    asked = one.checks
+    a.check(BOB, HITS)
+    assert one.checks == asked + 2  # a kept the new epoch, so it refused the old answers
+
+
+def test_invalidating_everyone_never_deletes_the_epoch_of_an_id():
+    shared = FakeShared()
+    _, _, (a, _b) = _replicas(shared)
+    a.invalidate(BOB)
+    bobs = {key: value for key, value in shared.data.items() if key != "needtoknow!epoch"}
+    a.invalidate()  # while it deletes, an invalidate() of bob may have just written bob's epoch
+    assert bobs and bobs.items() <= shared.data.items()
+
+
+def test_epochs_are_text_that_a_redis_client_decoding_responses_can_read():
+    shared = FakeShared()
+    _, _, (a, _b) = _replicas(shared)
+    a.invalidate(BOB)
+    a.invalidate()
+    assert all(value.decode("ascii").isalnum() for value in shared.data.values())  # only epochs are left
+
+
+def test_invalidate_refuses_an_id_of_another_type():
+    with pytest.raises(TypeError):
+        CachingAuthorizer(Counting(), shared=FakeShared()).invalidate(42)  # the id "42" would be missed here
 
 
 def test_without_a_shared_cache_entries_live_for_ttl():
