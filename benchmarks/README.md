@@ -65,6 +65,10 @@ release build by [`kaggle_stores.sh`](kaggle_stores.sh) and stopped before the n
 measures each store at its defaults, `elasticsearch-index-types` Elasticsearch with other index
 types. Milvus needs Docker or Kubernetes, so it is measured elsewhere.
 
+Throughput on a shared machine varies from run to run. `--repeat 5` runs each throughput setting five
+times: the tables then give the median, with the slowest and fastest request rates, and the JSON keeps
+every run. Every chunk returned in every run is checked.
+
 CI runs a small synthetic version against real PostgreSQL and OPA, and against every other store,
 with `--check`, which fails on any leak or error. `--render load_results.json` prints the tables of
 a saved run again without running anything.
