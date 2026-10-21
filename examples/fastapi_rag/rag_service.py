@@ -25,7 +25,9 @@ use a real vector store and permission service, wrap the authorizer's cache to s
 needs (docs/revocation.md), and send the events to your audit pipeline.
 """
 
-from __future__ import annotations
+# No `from __future__ import annotations` here: FastAPI resolves string annotations against the module's
+# globals, so `Annotated[Subject, Depends(caller)]`, with `caller` defined inside `create_app`, would
+# silently become a required query parameter named `subject`.
 
 import json
 import logging
@@ -70,7 +72,7 @@ class Settings:
     audience: str = "rag-service"
 
     @classmethod
-    def from_env(cls) -> Settings:
+    def from_env(cls) -> "Settings":
         secret = os.environ.get("NEEDTOKNOW_DEMO_JWT_SECRET", "")
         if len(secret) < 32:
             raise RuntimeError("set NEEDTOKNOW_DEMO_JWT_SECRET to at least 32 random characters")
