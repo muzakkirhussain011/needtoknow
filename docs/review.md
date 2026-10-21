@@ -98,7 +98,7 @@ separate deployment with its
 
 ## Findings so far
 
-Found by the project's own review and tests, all fixed with regression tests. The first three are
+Found by the project's own review and tests, all fixed with regression tests. The first six are
 published as advisory
 [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2).
 
@@ -107,6 +107,11 @@ published as advisory
 | October 2026 | `invalidate()` could be undone by a retrieval in flight, for up to `ttl`, in every replica sharing the cache | 1.2.1, 1.3.1 |
 | October 2026 | With a shared cache, a retrieval running during `invalidate()` could copy the old entry back into the invalidating process, for up to `local_ttl` | 1.2.1, 1.3.2 |
 | October 2026 | `invalidate(subject)` cleared nothing unless given a subject equal in every field | 1.2.1, 1.3.1 |
+| October 2026 | An `invalidate()` of everyone deleted the epoch that a concurrent `invalidate()` of one id had just written, so a retrieval in flight could store its earlier answer for up to `ttl` | 1.2.2, 1.3.3 |
+| October 2026 | In the invalidating process, a read of the global epoch already in flight could put back the epoch it replaced, for up to `local_ttl` | 1.2.2, 1.3.3 |
+| October 2026 | An `invalidate()` of everyone reached other replicas within twice `local_ttl`, not `local_ttl` | 1.2.2, 1.3.3 |
+| October 2026 | Epochs stored as raw bytes broke shared caches whose Redis client decodes responses: every lookup went to the permission service | 1.2.2, 1.3.3 |
+| October 2026 | A retrieval event that could not be built replaced the retrieval's result or error | 1.3.3 |
 | October 2026 | A ListObjects answer cut short by OpenFGA's deadline was used as a complete pre-filter (results hidden, reported complete) | next release |
 | October 2026 | With `recheck=False`, a backend that ignored the filter could leak | next release |
 | October 2026 | A subject attribute named `groups` replaced the subject's groups in Cerbos decisions | next release |
