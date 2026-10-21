@@ -265,6 +265,7 @@ def pgvector_backends(
 
 
 RLS = "row-level security"
+READER = "needtoknow_bench_reader"
 
 
 def pgvector_rls_run(
@@ -278,6 +279,10 @@ def pgvector_rls_run(
     search sets that list for its own transaction, then asks for the k nearest rows with no filter
     of its own and the same iterative scan as needtoknow's backend, so the database alone decides
     what is visible. needtoknow plays no part in these results.
+
+    Superusers, and roles with BYPASSRLS, skip row-level security even on a table that forces it,
+    and the benchmark's database user is usually a superuser. So each search switches to a plain
+    role that may only read this table, and setup fails unless that role sees nothing without groups.
     """
     from psycopg import sql
     from psycopg_pool import ConnectionPool
@@ -285,7 +290,7 @@ def pgvector_rls_run(
     from needtoknow.backends.pgvector import PgVectorBackend, create_schema
 
     name = "needtoknow_bench_rls"
-    table = sql.Identifier(name)
+    table, reader = sql.Identifier(name), sql.Identifier(READER)
     pool = ConnectionPool(url, min_size=1, max_size=2, open=True)
     with pool.connection() as conn:
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(table))
@@ -309,8 +314,17 @@ def pgvector_rls_run(
                 " USING (metadata -> {} ?| string_to_array(current_setting('needtoknow.groups', true), ','))"
             ).format(table, field)
         )
+        if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", [READER]).fetchone():
+            conn.execute(sql.SQL("CREATE ROLE {} NOLOGIN NOSUPERUSER NOBYPASSRLS").format(reader))
+        conn.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(table, reader))
+        conn.execute(sql.SQL("GRANT {} TO CURRENT_USER").format(reader))  # so this user may SET ROLE to it
         server = conn.execute("SHOW server_version").fetchone()[0]
         extension = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()[0]
+    with pool.connection() as conn, conn.transaction():
+        conn.execute(sql.SQL("SET LOCAL ROLE {}").format(reader))
+        visible = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(table)).fetchone()[0]
+    if visible:
+        raise RuntimeError(f"row-level security is not enforced: {visible} rows visible with no groups set")
     statement = sql.SQL(
         "WITH candidates AS MATERIALIZED ("
         " SELECT id, embedding <=> %s::vector AS distance FROM {} ORDER BY distance LIMIT %s)"
@@ -322,6 +336,7 @@ def pgvector_rls_run(
             raise ValueError("a group name with a comma cannot be passed in needtoknow.groups")
         vector = "[" + ",".join(f"{v:.8g}" for v in embed(query)) + "]"
         with pool.connection() as conn, conn.transaction():
+            conn.execute(sql.SQL("SET LOCAL ROLE {}").format(reader))
             conn.execute("SELECT set_config('needtoknow.groups', %s, true)", [",".join(subject.groups)])
             conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
             ids = [row[0] for row in conn.execute(statement, [vector, k]).fetchall()]
