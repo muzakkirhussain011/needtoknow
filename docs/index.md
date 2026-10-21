@@ -305,6 +305,7 @@ integrations/langchain
 integrations/llamaindex
 integrations/haystack
 integrations/mcp
+integrations/fastapi
 ```
 
 ```{toctree}
