@@ -282,10 +282,32 @@ class PermissionedRetriever:
     ) -> None:
         if not self.observers:
             return
+        try:
+            event = self._event(query, subject, k, started, clock, timings, result, error)
+        except Exception:  # reporting must never replace what retrieval returns or raises
+            _log.exception("needtoknow could not build the retrieval event")
+            return
+        for observer in self.observers:
+            try:
+                observer(event)
+            except Exception:  # an observer must never change what retrieval returns or raises
+                _log.exception("needtoknow observer %r failed", observer)
+
+    def _event(
+        self,
+        query: str | Query,
+        subject: Subject,
+        k: int,
+        started: float,
+        clock: float,
+        timings: _Timings,
+        result: RetrievalResult | None,
+        error: BaseException | None,
+    ) -> RetrievalEvent:
         fingerprint = None
         if self.audit_key and isinstance(query, (str, Query)):  # a query of the wrong type is reported, not hashed
             fingerprint = query_fingerprint(query, self.audit_key)
-        event = RetrievalEvent(
+        return RetrievalEvent(
             subject_id=subject.id,
             action=self.action,
             k=k,
@@ -306,11 +328,6 @@ class PermissionedRetriever:
             rerank_ms=round(timings.rerank * 1000, 3),
             reranked=timings.reranked,
         )
-        for observer in self.observers:
-            try:
-                observer(event)
-            except Exception:  # an observer must never change what retrieval returns or raises
-                _log.exception("needtoknow observer %r failed", observer)
 
     # ---- the algorithm (shared by both drivers) --------------------------------------------
 
