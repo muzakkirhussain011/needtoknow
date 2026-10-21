@@ -338,10 +338,8 @@ class Redis:
 
     def _info(self) -> dict:
         reply = self.client.execute_command("FT.INFO", NAME)
-        if isinstance(reply, dict):  # RESP3
-            pairs = reply.items()
-        else:  # RESP2: name, value, name, value, ...
-            pairs = zip(reply[::2], reply[1::2], strict=True)
+        # RESP3 answers a map; RESP2 a flat list: name, value, name, value, ...
+        pairs = reply.items() if isinstance(reply, dict) else zip(reply[::2], reply[1::2], strict=True)
         return {(k.decode() if isinstance(k, bytes) else str(k)): v for k, v in pairs}
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
