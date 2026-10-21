@@ -558,10 +558,11 @@ nothing for selective permissions. Method, tables and caveats: [Benchmarks](http
 
 At a million chunks (MS MARCO in PostgreSQL + pgvector, on 4 CPUs), pre-filtering kept recall@10
 between 0.88 and 0.97 for users who may read 0.1% to 100% of the corpus, at a median of 3 to 21 ms
-one query at a time; the machine served up to 129 requests a second. Open Policy Agent as the
-permission service cost 8 to 10% of throughput, and `CachingAuthorizer` recovered all of it. No retrieval
-leaked, there or on Qdrant, Elasticsearch, OpenSearch and Weaviate measured the same way on the same
-million chunks ([benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html#every-store-on-the-same-million-chunks)).
+one query at a time; the machine served up to 126 requests a second. Open Policy Agent as the
+permission service cost 8 to 9% of throughput, and `CachingAuthorizer` recovered nearly all of it. No
+retrieval leaked: none of the 185,040 chunks returned under concurrent load, each checked against its
+user's permissions, and none one at a time, there or on Qdrant, Elasticsearch, OpenSearch and
+Weaviate measured the same way on the same million chunks ([benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html#every-store-on-the-same-million-chunks)).
 
 ## Stability and roadmap
 
