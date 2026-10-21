@@ -68,3 +68,28 @@ in CI against a real Qdrant server (v1.19.2) and against Qdrant's local mode.
 deeper for higher recall, `SearchParams(exact=True)` searches by brute force. Pass
 `async_client=AsyncQdrantClient(...)` for a native `aretrieve`; without it, async calls run the sync
 search in a thread.
+
+## Keyword search and hybrid search
+
+`mode="keyword"` ranks the chunks by BM25, under the same `query_filter`, with no model to run.
+`create_collection(..., text_search=True)` adds a sparse vector, `needtoknow_bm25`, with Qdrant's
+IDF modifier. The backend writes each chunk's BM25 term weights there, and Qdrant multiplies in the
+inverse document frequency of each word at search time, so the score is BM25 and it stays right as
+the collection grows. One collection then serves both halves of [hybrid search](../hybrid.md):
+
+```python
+from needtoknow import RankFusion
+
+create_collection(client, "docs", dim=768, text_search=True)
+vector = QdrantBackend(client, "docs", embed=embed, text_search=True)  # writes both vectors
+keyword = QdrantBackend(client, "docs", mode="keyword")
+retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
+```
+
+Words are runs of letters, digits and underscores, lowercased, and every word is kept: there is no
+stemming and no stop-word list. Each word's index in the sparse vector is its CRC-32, and its weight
+is BM25's term-frequency part with k1 = 1.2, b = 0.75 and Qdrant's average length of 256 words.
+`bm25_terms(text)` computes the same weights, for points written by other tools. Write chunks
+through a backend with `text_search=True` (or `mode="keyword"`), or keyword search will not find
+them. CI runs the conformance kit in keyword mode and fused with vector search, in Qdrant's local
+mode and against Qdrant 1.19.2.

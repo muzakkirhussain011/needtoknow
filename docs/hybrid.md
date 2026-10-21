@@ -23,6 +23,9 @@ needs no embedding function and runs under the same permission filter as the vec
 - **Redis:** the Query Engine's BM25 on the text, in an index created with
   `create_index(..., content_field="content")`, so one index serves both
   ([Redis](integrations/redis.md#keyword-search-and-hybrid-search)).
+- **Qdrant:** BM25 on a sparse vector of term weights the backend writes, with Qdrant's IDF
+  modifier, in a collection created with `create_collection(..., text_search=True)`, so one
+  collection serves both ([Qdrant](integrations/qdrant.md#keyword-search-and-hybrid-search)).
 - **Milvus:** BM25 on a sparse vector Milvus derives from the text, in a collection created with
   `create_collection(..., text_search=True)`, so one collection serves both
   ([Milvus](integrations/milvus.md#keyword-search-and-hybrid-search)).

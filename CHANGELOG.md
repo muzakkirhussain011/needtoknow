@@ -8,6 +8,13 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `mode="keyword"` on the Qdrant backend: BM25 under the same `query_filter`, with no model. A
+  collection created with `create_collection(..., text_search=True)` gets a sparse vector with
+  Qdrant's IDF modifier; the backend writes each chunk's BM25 term weights there (the new
+  `bm25_terms`), and Qdrant applies the inverse document frequency at search time. A vector
+  backend given `text_search=True` writes both vectors, so one collection serves both halves of
+  hybrid search. Tested with the conformance kit, alone and fused with vector search, in local
+  mode and against Qdrant 1.19.2.
 - `mode="keyword"` on the MongoDB backend: Atlas Search's BM25 (`$search`) on the text, under the
   same permission filter written with Atlas Search's own operators, in an index that the new
   `create_text_index` creates, so one collection serves both halves of hybrid search. A backend

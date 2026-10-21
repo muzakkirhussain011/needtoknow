@@ -192,6 +192,10 @@ create_collection(client, "docs", dim=768)
 backend = QdrantBackend(client, "docs", embed=my_embedding_model)
 ```
 
+`create_collection(..., text_search=True)` adds a BM25 sparse vector, and
+`QdrantBackend(client, "docs", mode="keyword")` then ranks by BM25 under the same filter, for hybrid
+search with `RankFusion`.
+
 </details>
 
 <details>
