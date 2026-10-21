@@ -151,6 +151,9 @@ class CachingAuthorizer:
         self._generation = 0
         # The shared cache's global epoch and when this process read it; read again after local_ttl.
         self._global_epoch: tuple[float, str | None] | None = None
+        # Bumped when invalidate() sets the global epoch, so a read already in flight cannot put
+        # back the epoch it replaced.
+        self._global_version = 0
 
     # ---- this process's cache --------------------------------------------------------------
 
@@ -189,23 +192,31 @@ class CachingAuthorizer:
         return f"{self._tag(subject.id)}:{_subject_digest(subject)}:{detail}"
 
     def _epoch_name(self, subject_id: Any) -> str:
-        # Never under the prefix that invalidating the same scope deletes ("namespace:" for the
-        # global epoch, "namespace:{id}:" for an id's), so deleting the entries keeps the epoch.
-        return f"{self.namespace}!epoch" if subject_id is None else f"{self._tag(subject_id)}!epoch"
+        # Never under "namespace:", the prefix that invalidate() deletes in every scope, so no
+        # invalidation removes an epoch, not even one an invalidate() of an id has just written
+        # while an invalidate() of everyone is still deleting. An id's epoch keeps the id's hash
+        # tag, so it shares a cluster slot with the id's entries and is read with them.
+        if subject_id is None:
+            return f"{self.namespace}!epoch"
+        return f"{self.namespace}!epoch:{{{_digest(str(subject_id))}}}"
 
-    def _global(self) -> str | None:
-        """The shared cache's global epoch, read again once this process's copy is `local_ttl` old."""
+    def _global(self) -> tuple[str | None, float]:
+        """The shared cache's global epoch and when this process read it (on its own clock), read
+        again once this process's copy is `local_ttl` old."""
         assert self.shared is not None
         now = self._clock()
         with self._lock:
-            known = self._global_epoch
+            known, version = self._global_epoch, self._global_version
         if known is not None and now - known[0] < self.local_ttl:
-            return known[1]
+            return known[1], known[0]
         (blob,) = self.shared.get_many([self._epoch_name(None)])
         epoch = _epoch_id(blob)
         with self._lock:
+            if self._global_version != version and self._global_epoch is not None:
+                # invalidate() set a new epoch while this read was in flight: it wins.
+                return self._global_epoch[1], self._global_epoch[0]
             self._global_epoch = (now, epoch)
-        return epoch
+        return epoch, now
 
     def _encode(self, value: Any, expires: float, epoch: list[str | None]) -> bytes | None:
         if value is _NONE:
@@ -251,7 +262,8 @@ class CachingAuthorizer:
         if self.shared is None or not keys:
             return [None] * len(keys), _UNKNOWN
         try:
-            epoch: list[str | None] = [self._global(), None]
+            global_epoch, read_at = self._global()
+            epoch: list[str | None] = [global_epoch, None]
             names = [self._name(k) for k in keys]
             blobs = self.shared.get_many([*names, self._epoch_name(keys[0][1].id)])
             if len(blobs) != len(names) + 1:
@@ -261,13 +273,17 @@ class CachingAuthorizer:
             _log.warning("needtoknow shared cache read failed; asking the authorizer", exc_info=True)
             return [None] * len(keys), _UNKNOWN
         now = self._wall()
+        # An entry is accepted against this process's copy of the global epoch, which is up to
+        # local_ttl old. Its copy here expires when that epoch would be read again, so an
+        # invalidate() of everyone made elsewhere reaches this process within local_ttl, not twice it.
+        fresh_for = read_at + self.local_ttl - self._clock()
         found: list[Any] = []
         for key, blob in zip(keys, blobs[:-1], strict=True):
             value, remaining = self._decode(key, blob, now, epoch)
             if value is _MISS:
                 found.append(None)
             else:
-                self._put(key, value, generation, remaining)
+                self._put(key, value, generation, min(remaining, fresh_for))
                 found.append(value)
         return found, epoch
 
@@ -296,6 +312,9 @@ class CachingAuthorizer:
         cache. Other processes stop using their own copies within `local_ttl` seconds. A failure
         to reach the shared cache is raised: the caller asked for the revocation now.
         """
+        if subject is not None and not isinstance(subject, (Subject, str)):
+            # An id of another type (42 for "42") would miss this process's entries, keyed by the id.
+            raise TypeError(f"invalidate() takes a Subject, a subject id or None, not {type(subject).__name__}")
         subject_id = subject.id if isinstance(subject, Subject) else subject
         if subject_id == "":
             raise ValueError("a subject id is non-empty; pass None to drop every decision")
@@ -303,13 +322,15 @@ class CachingAuthorizer:
         if self.shared is None:
             return
         # A new epoch first, so that entries written under the old one are refused from now on;
-        # then the entries themselves are deleted. The global epoch lies outside "namespace:".
-        epoch = secrets.token_bytes(16)
+        # then the entries themselves are deleted. Epochs lie outside "namespace:", so they stay.
+        # Hex, not raw random bytes: a Redis client made with decode_responses=True must read it.
+        epoch = secrets.token_hex(16).encode()
         lifetime = self.ttl + _EPOCH_MARGIN
         if subject_id is None:
             self.shared.set_many({self._epoch_name(None): epoch}, lifetime)
             with self._lock:
-                self._global_epoch = (self._clock(), epoch.hex())
+                self._global_version += 1
+                self._global_epoch = (self._clock(), _epoch_id(epoch))
             self.shared.delete_prefix(f"{self.namespace}:")
         else:
             self.shared.set_many({self._epoch_name(subject_id): epoch}, lifetime)
