@@ -109,7 +109,10 @@ That is a separate problem with separate controls.
 
 **Side channels.** `examined`, `denied` and post-filtering latency depend on how many forbidden
 chunks matched the query, so they can hint that relevant documents exist. Keep them in your logs
-and metrics; do not show them to end users.
+and metrics; do not show them to end users. In keyword search, the store's BM25 statistics also
+count chunks the subject may not read, so the order and scores of what they may read can reflect
+what forbidden chunks contain ([threat model](threat-model.md), T17): do not show keyword scores to
+end users, or give each tenant its own keyword index.
 
 **Query privacy.** Queries still go to your embedding model and vector store. Audit events omit
 them, but the rest of your stack sees them.
