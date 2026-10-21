@@ -8,6 +8,11 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `mode="keyword"` on the MongoDB backend: Atlas Search's BM25 (`$search`) on the text, under the
+  same permission filter written with Atlas Search's own operators, in an index that the new
+  `create_text_index` creates, so one collection serves both halves of hybrid search. A backend
+  given `text_index` also waits for that index after each write. Tested with the conformance kit,
+  alone and fused with vector search, against Atlas Local 8.0.30.
 - `RetrievalEvent.cause`, and the span attribute `needtoknow.error.cause`: the type of the exception
   behind a failure, such as `TimeoutError` or `ConnectionRefusedError` for a permission service that
   is slow or unreachable, and `None` for an error status or a malformed answer. The HTTP authorizers
