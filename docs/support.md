@@ -16,6 +16,15 @@ record.
 Python 3.10 reaches its end of life on 2026-10-31; the first minor release after that date (1.4.0)
 requires 3.11.
 
+## Operating systems
+
+| System | Tested |
+|---|---|
+| Linux (Ubuntu) | Everything on this page |
+| macOS, Windows | The library without external services, on Python 3.12 |
+
+The stores and permission services run as servers on Linux only, so their suites run there.
+
 ## Vector stores
 
 Each store runs as a real server (or embedded library) in CI, and its backend passes the
@@ -69,7 +78,6 @@ The authorizers use only the standard library to reach these services.
 - **Older clients.** The extras declare the minimum versions above, but CI resolves the newest and
   tests only those. Pin within the tested versions for production, or run the
   [conformance kit](extending.md#test-it-with-the-conformance-kit) against your own.
-- **macOS and Windows.** needtoknow is pure Python with no compiled parts, but CI runs on Linux only.
 - **Managed services**: Elastic Cloud, Amazon OpenSearch Service, Qdrant Cloud, Zilliz, MongoDB
   Atlas (the cloud service), Weaviate Cloud, Redis Cloud and the authorization vendors' hosted
   offerings use the same APIs as the servers above, but are not part of CI.

@@ -73,15 +73,6 @@ All notable changes are recorded here. The format follows
   organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
   connectors return too.
 
-### Changed
-
-- `CachingAuthorizer.invalidate(subject)` takes a `Subject` or a subject id, and drops the answers
-  for every subject with that id, whatever groups and attributes they came with. Before, it dropped
-  only those of a subject equal in every field, so a revocation hook that knew only the user id
-  (`invalidate(Subject("bob"))`) cleared nothing for `Subject("bob", ["eng"], {"tenant": "acme"})`.
-- Shared cache entries have new keys and carry an epoch; entries written by earlier versions are
-  not read. See *Upgrading from 1.3 or earlier* in the operations guide.
-
 ### Fixed
 
 - A retrieval cancelled while it ran (an asyncio task cancelled, a `KeyboardInterrupt`) produced no
@@ -94,18 +85,9 @@ All notable changes are recorded here. The format follows
   seconds or more (new, default 3) now gives no filter, so the retriever post-filters. Such a list
   never let anyone read more, but it could hide documents they may read while the result reported
   `complete=True`.
-- `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
-  a deep enough document from a policy engine or a shared cache recursed until Python raised
-  `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
-  miss.
 
 ### Security
 
-- With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
-  up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
-  entry from the shared cache after the process dropped its own entries and before the new epoch
-  was written. The process now drops its entries again once the new epoch is in place. Found by the
-  revocation test under concurrent traffic; a test now forces a retrieval into that moment.
 - The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
   random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
   one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
@@ -117,6 +99,35 @@ All notable changes are recorded here. The format follows
   return each chunk's metadata as stored, as the conformance kit already requires.
 - `CerbosAuthorizer` refuses a subject with an attribute named `groups`. It was merged into the
   principal's attributes after the subject's own groups, so it replaced them in every decision.
+- Filter parsing, and the pgvector, LanceDB and Redis translations that write query text, are
+  fuzzed with ClusterFuzzLite (Atheris) on pull requests and every week. The fuzz target checks
+  that parsing either round-trips or raises `ValueError`, that pgvector binds every field name and
+  value as a parameter, and that LanceDB and Redis queries carry only hex-encoded terms. The test
+  suite runs the same checks on generated filters.
+
+## [1.3.2] - 2026-10-19
+
+Completes the 1.3.1 fix for `CachingAuthorizer.invalidate()`. Upgrade if you use a shared cache.
+
+### Security
+
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+
+- With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
+  up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
+  entry from the shared cache after the process dropped its own entries and before the new epoch
+  was written. The process now drops its entries again once the new epoch is in place. Found by the
+  1.3.1 revocation test under concurrent traffic; a test now forces a retrieval into that moment.
+
+## [1.3.1] - 2026-10-19
+
+A security fix for permission caching. Upgrade if you use `CachingAuthorizer`, and above all if
+you call `invalidate()` to revoke access.
+
+### Security
+
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+
 - `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
   permission service gave just before the revocation, to a call that finished just after it, was
   cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
@@ -125,11 +136,23 @@ All notable changes are recorded here. The format follows
   entries written before it are refused. Tests revoke a permission under concurrent retrievals,
   with one and three replicas, and check that no retrieval starting after `invalidate()` returns
   sees the document (other replicas within `local_ttl`).
-- Filter parsing, and the pgvector, LanceDB and Redis translations that write query text, are
-  fuzzed with ClusterFuzzLite (Atheris) on pull requests and every week. The fuzz target checks
-  that parsing either round-trips or raises `ValueError`, that pgvector binds every field name and
-  value as a parameter, and that LanceDB and Redis queries carry only hex-encoded terms. The test
-  suite runs the same checks on generated filters.
+
+### Changed
+
+- `CachingAuthorizer.invalidate(subject)` takes a `Subject` or a subject id, and drops the answers
+  for every subject with that id, whatever groups and attributes they came with. Before, it dropped
+  only those of a subject equal in every field, so a revocation hook that knew only the user id
+  (`invalidate(Subject("bob"))`) cleared nothing for `Subject("bob", ["eng"], {"tenant": "acme"})`.
+- Shared cache entries have new keys and carry an epoch; entries written by earlier versions are
+  not read, so the first requests after the upgrade ask the permission service. During a rolling
+  upgrade, call `invalidate()` once every replica runs 1.3.1, or allow for `ttl`.
+
+### Fixed
+
+- `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError`. Before,
+  a deep enough document from a policy engine or a shared cache recursed until Python raised
+  `RecursionError`. The shared cache treats such an entry, and any entry too deep to decode, as a
+  miss.
 
 ## [1.3.0] - 2026-10-17
 
@@ -240,6 +263,37 @@ under the support policy the first minor release after that date, 1.4, drops it,
 
 - Chroma: `add` deletes and re-adds a replaced chunk, so none of its old metadata keys can remain
   and match a permission filter; it also checks that there is one embedding per document.
+
+## [1.2.1] - 2026-10-19
+
+The security fix of 1.3.1, backported to 1.2 as the security policy promises for the previous minor
+release. Upgrade if you use `CachingAuthorizer`, and above all if you call `invalidate()` to revoke
+access; or move to 1.3.1.
+
+### Security
+
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+
+- `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
+  permission service gave just before the revocation, to a call that finished just after it, was
+  cached afterwards and used for up to `ttl` (30 seconds by default), in this process and, through
+  a shared cache, in every replica. Now each process discards answers obtained by calls that began
+  before an `invalidate()`, and `invalidate()` stores a new epoch in the shared cache, under which
+  entries written before it are refused.
+
+### Changed
+
+- `CachingAuthorizer.invalidate(subject)` takes a `Subject` or a subject id, and drops the answers
+  for every subject with that id, whatever groups and attributes they came with. Before, it dropped
+  only those of a subject equal in every field.
+- Shared cache entries have new keys and carry an epoch; entries written by earlier versions are
+  not read, so the first requests after the upgrade ask the permission service. During a rolling
+  upgrade, call `invalidate()` once every replica runs 1.2.1, or allow for `ttl`.
+
+### Fixed
+
+- `filter_from_dict` refuses a filter nested more than 100 levels deep with `ValueError` instead of
+  recursing until `RecursionError`, and the shared cache treats such an entry as a miss.
 
 ## [1.2.0] - 2026-10-17
 
@@ -487,8 +541,11 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
+[1.2.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
