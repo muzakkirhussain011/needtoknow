@@ -185,7 +185,8 @@ jobs:
           NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: |
           python benchmarks/load_bench.py --docs 3000 --queries 20 --selectivity 0.01,1 --users 1,4 \
-            --seconds 2 --ef-search 100 --opa-url http://127.0.0.1:8181 --check --out load.json --markdown load.md
+            --seconds 1 --repeat 2 --ef-search 100 --opa-url http://127.0.0.1:8181 --check --out load.json \
+            --markdown load.md
           python benchmarks/load_bench.py --render load.json --markdown rendered.md && cmp load.md rendered.md
           cat load.md >> "$GITHUB_STEP_SUMMARY"
       - name: Load benchmark harness on the other stores (synthetic smoke runs)

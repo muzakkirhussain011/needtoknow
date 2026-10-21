@@ -7,7 +7,8 @@ OpenSearch, Weaviate; see stores.py) it measures
 * recall@k against brute force over the same vectors, and latency, by permission selectivity, one
   query at a time,
 * throughput and latency percentiles as the number of concurrent users grows, with every chunk
-  returned under load checked against the permissions of the subject it was returned to,
+  returned under load checked against the permissions of the subject it was returned to, and each
+  measurement repeated `--repeat` times to show how much it varies,
 * what a remote permission service costs per retrieval: the in-process MetadataACLAuthorizer
   against Open Policy Agent over HTTP, with and without CachingAuthorizer (`--opa-url`).
 
@@ -26,6 +27,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -129,6 +131,27 @@ def throughput(
     }
 
 
+def repeated(measure_once: Callable[[], dict], times: int) -> dict:
+    """Run one throughput measurement `times` times, as `--repeat` asks.
+
+    The row reports the median of each rate and latency, with the slowest and fastest request rates,
+    and the sums of requests, errors, chunks checked and leaks, so a leak in any run shows. Every run
+    is kept under "runs".
+    """
+    runs = [measure_once() for _ in range(times)]
+    if times == 1:
+        return runs[0]
+    row: dict[str, Any] = {"users": runs[0]["users"]}
+    for key in ("qps", "p50_ms", "p95_ms", "p99_ms"):
+        row[key] = round(float(np.median([r[key] for r in runs])), 2)
+    row["qps_min"] = min(r["qps"] for r in runs)
+    row["qps_max"] = max(r["qps"] for r in runs)
+    for key in ("requests", "errors", "checked", "leaks"):
+        row[key] = sum(r[key] for r in runs)
+    row["runs"] = runs
+    return row
+
+
 def build_cases(
     queries: Sequence[str],
     query_vecs: np.ndarray,
@@ -173,12 +196,17 @@ FORMATS = {"recall": "{:.3f}", "complete_rate": "{:.0%}"}
 
 
 def markdown(report: dict) -> str:
+    def cell(row: dict, key: str) -> str:
+        if key not in row:  # reports from before results were checked under load have no such column
+            return "not checked"
+        if key == "qps" and "qps_min" in row:  # --repeat: the median, then the slowest and fastest run
+            return f"{row['qps']} ({row['qps_min']} to {row['qps_max']})"
+        return FORMATS.get(key, "{}").format(row[key])
+
     def table(rows: list[dict], columns: list[tuple[str, str]]) -> list[str]:
         out = ["| " + " | ".join(title for title, _ in columns) + " |", "|---" * len(columns) + "|"]
         for r in rows:
-            # Reports from before results were checked under load have no checked or leaks column.
-            cells = (FORMATS.get(key, "{}").format(r[key]) if key in r else "not checked" for _, key in columns)
-            out.append("| " + " | ".join(cells) + " |")
+            out.append("| " + " | ".join(cell(r, key) for _, key in columns) + " |")
         return [*out, ""]
 
     load, store = report["load"], report["config"].get("backend", "pgvector")
@@ -204,11 +232,19 @@ def markdown(report: dict) -> str:
         "### Recall and latency by selectivity (one query at a time)",
         "",
     ]
+    repeat = report["config"].get("repeat", 1)
+    note: list[str] = []
+    if repeat > 1:
+        note = [
+            f"Each row is the median of {repeat} runs of {report['config']['seconds']} s; requests/s also gives"
+            " the slowest and fastest run. Errors, chunks checked and leaks are totals over the runs.",
+            "",
+        ]
     out += table(report["scale"], SCALE_COLUMNS)
-    out += ["### Throughput with concurrent users", ""]
+    out += ["### Throughput with concurrent users", "", *note]
     out += table(report["throughput"], [("Selectivity", "selectivity"), ("Users", "users"), *LOAD_COLUMNS])
     if report["authorizers"]:
-        out += ["### Cost of the permission service", ""]
+        out += ["### Cost of the permission service", "", *note]
         out += table(report["authorizers"], [("Authorizer", "authorizer"), ("Users", "users"), *LOAD_COLUMNS])
     return "\n".join(out)
 
@@ -226,6 +262,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--throughput-selectivity", type=float, default=0.01)
     p.add_argument("--users", default="1,2,4,8,16", help="concurrent users for the throughput runs")
     p.add_argument("--seconds", type=float, default=20.0, help="duration of each throughput run")
+    p.add_argument("--repeat", type=int, default=1, help="runs per throughput row; the row reports their median")
     p.add_argument("--backend", choices=STORES, default="pgvector", help="the vector store to measure")
     p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"), help="for pgvector")
     p.add_argument("--url", default=os.environ.get("NEEDTOKNOW_BENCH_URL"), help="for the other stores")
@@ -258,6 +295,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("pgvector needs --database-url (or NEEDTOKNOW_BENCH_DATABASE_URL); other stores --url")
     if args.teams % 100:
         raise SystemExit("--teams must be a multiple of 100")
+    if args.repeat < 1:
+        raise SystemExit("--repeat must be at least 1")
     selectivities = [float(s) for s in args.selectivity.split(",")]
     users = [int(u) for u in args.users.split(",")]
     rng = np.random.default_rng(args.seed)
@@ -298,7 +337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for n in users:
         retriever = PermissionedRetriever(store.backend(embed, n), acl, strategy="prefilter")
         row = {"selectivity": f"{args.throughput_selectivity:.1%}"}
-        row |= throughput(retriever, busy, args.k, n, args.seconds, row_of)
+        row |= repeated(partial(throughput, retriever, busy, args.k, n, args.seconds, row_of), args.repeat)
         rows.append(row)
         log(
             f"throughput {n:>3} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, p99 {row['p99_ms']} ms,"
@@ -320,7 +359,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, make in candidates:
             for n in sorted({1, max(users)}):
                 retriever = PermissionedRetriever(store.backend(embed, n), make(), strategy="prefilter")
-                row = {"authorizer": name} | throughput(retriever, busy, args.k, n, args.seconds, row_of)
+                once = partial(throughput, retriever, busy, args.k, n, args.seconds, row_of)
+                row = {"authorizer": name} | repeated(once, args.repeat)
                 authorizers.append(row)
                 log(
                     f"{name}, {n} users: {row['qps']} req/s, p50 {row['p50_ms']} ms, errors {row['errors']},"
