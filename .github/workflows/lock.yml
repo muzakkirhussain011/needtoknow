@@ -3,13 +3,20 @@ name: Lock
 # Every install in CI and in the release comes from uv.lock (and examples/gateway/uv.lock), by hash.
 # When a branch changes a pyproject.toml, this job runs `uv lock` and commits the result to the
 # same branch, so the locks always match what the project declares; `uv lock --check` in CI fails a
-# pull request whose locks are stale. Dependabot keeps the locked versions current on main.
+# pull request whose locks are stale. Dependabot keeps the locked versions current on main. Run it by
+# hand on a branch with `upgrade` to move named packages to their newest allowed release in both locks,
+# for example for a security fix that has not reached Dependabot yet.
 
 on:
   push:
     branches-ignore: [main]
     paths: [pyproject.toml, examples/gateway/pyproject.toml, .github/workflows/lock.yml]
   workflow_dispatch:
+    inputs:
+      upgrade:
+        description: Packages to upgrade in both locks, separated by spaces
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -27,6 +34,21 @@ jobs:
       - run: uv lock
       - run: uv lock
         working-directory: examples/gateway
+      - name: Upgrade the packages asked for
+        if: inputs.upgrade != ''
+        env:
+          UPGRADE: ${{ inputs.upgrade }}
+        run: |
+          args=()
+          for package in $UPGRADE; do
+            if ! [[ "$package" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+              echo "::error::not a package name: $package"
+              exit 1
+            fi
+            args+=(--upgrade-package "$package")
+          done
+          uv lock "${args[@]}"
+          (cd examples/gateway && uv lock "${args[@]}")
       - name: Commit the locks if they changed
         run: |
           git add uv.lock examples/gateway/uv.lock
