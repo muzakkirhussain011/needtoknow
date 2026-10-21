@@ -68,7 +68,7 @@ fails. Each item links to the page with the details.
   describes.
 - [ ] Capacity is measured on your own data with the load harness in `benchmarks/`
   ([Benchmarks](benchmarks.md#reproduce-it)). In ours, over a million chunks, one 4-CPU machine
-  shared by PostgreSQL and the load generator peaked at 129 requests a second.
+  shared by PostgreSQL and the load generator peaked at 126 requests a second.
 
 ## When something fails
 
