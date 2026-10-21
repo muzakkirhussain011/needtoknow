@@ -6,6 +6,40 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-10-22
+
+Closes three gaps that remained in `CachingAuthorizer.invalidate()` after 1.3.2, found by a
+review of the code. Upgrade if you use a shared cache and call `invalidate()`.
+
+### Security
+
+- In rare interleavings, a decision revoked with `invalidate()` could still be used afterwards, for
+  up to `ttl`. An `invalidate()` of everyone deleted every id's epoch, including one that a
+  concurrent `invalidate()` of that id had just written, so a retrieval in flight could store its
+  earlier answer where every replica accepted it. And in the process calling `invalidate()`, a read
+  of the global epoch already in flight could put back the epoch it replaced, for up to
+  `local_ttl`. Epochs now live outside the keys that invalidation deletes, and a read never replaces
+  a newer epoch.
+- An `invalidate()` of everyone reached other replicas within twice `local_ttl`, not within
+  `local_ttl` as documented: an entry accepted against a copy of the global epoch was kept for
+  another `local_ttl`. Copies now expire with that epoch.
+
+### Fixed
+
+- Epochs are stored as hex text. Random bytes broke shared caches whose Redis client decodes
+  responses (`decode_responses=True`): reads raised `UnicodeDecodeError`, so every lookup asked the
+  permission service and logged a warning.
+- `invalidate()` raises `TypeError` for an id that is not a string: `invalidate(42)` for the id
+  `"42"` missed this process's own entries.
+- A retrieval event that cannot be built is logged and dropped, instead of replacing the
+  retrieval's result or error, and query fingerprints accept a lone surrogate.
+
+### Changed
+
+- An id's epoch has a new key in the shared cache. During a rolling upgrade, an `invalidate()` of an
+  id made by one version does not reach the other version's entries: call `invalidate()` once every
+  replica runs 1.3.3, or allow for `ttl`.
+
 ## [1.3.2] - 2026-10-19
 
 Completes the 1.3.1 fix for `CachingAuthorizer.invalidate()`. Upgrade if you use a shared cache.
@@ -407,7 +441,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0

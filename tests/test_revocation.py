@@ -121,7 +121,7 @@ def test_an_answer_another_replica_writes_after_invalidate_is_never_read(scope):
     slow = CachingAuthorizer(held, shared=shared)  # its answer arrives after the revocation
     admin = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared)  # the replica that revokes
     _in_flight(lambda: slow.check(BOB, HITS), held, lambda: admin.invalidate(BOB if scope == "subject" else None))
-    assert any(not key.endswith("!epoch") for key in shared.data)  # the late answer was written...
+    assert any("!epoch" not in key for key in shared.data)  # the late answer was written...
     third = CachingAuthorizer(fresh, shared=shared)
     third.check(BOB, HITS)
     assert fresh.checks == 2  # ...but no replica uses it
@@ -135,7 +135,7 @@ def test_an_answer_copied_from_the_shared_cache_while_invalidate_runs_is_not_kep
         during = None
 
         def set_many(self, entries, ttl):
-            if self.during is not None and any(k.endswith("!epoch") for k in entries):
+            if self.during is not None and any("!epoch" in k for k in entries):
                 during, self.during = self.during, None
                 during()
             super().set_many(entries, ttl)
