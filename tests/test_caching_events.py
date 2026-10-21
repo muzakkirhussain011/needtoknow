@@ -175,6 +175,32 @@ def test_failures_are_reported_and_still_raised_and_observers_cannot_break_retri
     assert asyncio.run(ok.aretrieve("leave", BOB)).hits[0].id == "handbook"
 
 
+def test_a_query_with_a_lone_surrogate_is_fingerprinted_not_refused():
+    events = []
+    retriever = PermissionedRetriever(
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+    )
+    retriever.retrieve("leave \ud800", BOB)  # a JSON body can carry one ("\ud800")
+    assert events[0].query_hmac == query_fingerprint("leave \ud800", b"k") != query_fingerprint("leave", b"k")
+
+
+def test_an_event_that_cannot_be_built_never_replaces_the_error_or_the_result(monkeypatch, caplog):
+    def broken(query, key):
+        raise RuntimeError("fingerprint bug")
+
+    monkeypatch.setattr("needtoknow.retriever.query_fingerprint", broken)
+    events = []
+    authz = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
+    failing = PermissionedRetriever(InMemoryBackend(DOCS), authz, observers=[events.append], audit_key=b"k")
+    with pytest.raises(AuthorizationError):  # the retrieval's own error, not the reporting one
+        failing.retrieve("leave", BOB)
+    ok = PermissionedRetriever(
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+    )
+    assert [h.id for h in ok.retrieve("leave", BOB).hits] == ["handbook"]
+    assert events == [] and "could not build the retrieval event" in caplog.text
+
+
 def test_without_an_audit_key_there_is_no_fingerprint():
     events = []
     PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append]).retrieve(
