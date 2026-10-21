@@ -15,9 +15,11 @@ long a retrieval takes. Results and their discussion are in the
 | `pgvector` | PostgreSQL + pgvector HNSW index, filter in the SQL query, iterative index scans |
 | `pgvector, no iterative scan` | The same index with `hnsw.iterative_scan` off, as before pgvector 0.8 |
 
-Strategies: needtoknow's `prefilter` and `postfilter`, and two baselines that needtoknow exists to
-replace: `naive top-k` (take the top k, then drop what the user may not read) and `unprotected`
-(no permission check at all).
+Strategies: needtoknow's `prefilter` and `postfilter`, and the baselines that needtoknow exists to
+replace: `naive top-k` (take the top k, then drop what the user may not read), `unprotected`
+(no permission check at all) and, with `--backends ...,pgvector-rls`, `row-level security`:
+PostgreSQL enforcing the permissions itself, with a row-level security policy on a copy of the
+pgvector table that has the same HNSW index and iterative scans, and no needtoknow in the path.
 
 Ground truth is computed independently of needtoknow: the exact top-k by cosine similarity among
 the chunks the subject may read.
