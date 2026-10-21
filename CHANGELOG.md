@@ -73,6 +73,12 @@ All notable changes are recorded here. The format follows
   organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
   connectors return too.
 
+### Changed
+
+- An id's epoch has a new key in the shared cache, outside the keys that invalidation deletes.
+  During a rolling upgrade, an `invalidate()` of an id made by one version does not reach the other
+  version's entries: call `invalidate()` once every replica runs this version, or allow for `ttl`.
+
 ### Fixed
 
 - A retrieval cancelled while it ran (an asyncio task cancelled, a `KeyboardInterrupt`) produced no
@@ -85,9 +91,27 @@ All notable changes are recorded here. The format follows
   seconds or more (new, default 3) now gives no filter, so the retriever post-filters. Such a list
   never let anyone read more, but it could hide documents they may read while the result reported
   `complete=True`.
+- Shared-cache epochs are stored as hex text. Random bytes broke shared caches whose Redis client
+  decodes responses (`decode_responses=True`): reads raised `UnicodeDecodeError`, so every lookup
+  asked the permission service and logged a warning.
+- `CachingAuthorizer.invalidate()` raises `TypeError` for an id that is not a string:
+  `invalidate(42)` for the id `"42"` deleted the shared entries but missed this process's own.
+- A retrieval event that cannot be built is logged and dropped, instead of replacing the
+  retrieval's own result or error (a cancellation included), and query fingerprints accept a lone
+  surrogate.
 
 ### Security
 
+- Three gaps remained in `CachingAuthorizer.invalidate()` after the 1.3.1 and 1.3.2 fixes, found
+  by a review of the code; they are also fixed in 1.3.3 and 1.2.2. In rare interleavings, a
+  decision revoked with `invalidate()` could still be used afterwards, for up to `ttl`: an
+  `invalidate()` of everyone deleted every id's epoch, including one a concurrent `invalidate()` of
+  that id had just written, so a retrieval in flight could store its earlier answer where every
+  replica accepted it; and in the process calling `invalidate()`, a read of the global epoch already
+  in flight could put back the epoch it replaced, for up to `local_ttl`. Epochs now live outside the
+  keys that invalidation deletes, and a read never replaces a newer epoch. Also, an `invalidate()` of
+  everyone reached other replicas within twice `local_ttl`, not `local_ttl`; copies of shared
+  entries now expire with the global epoch they were accepted against.
 - The example gateway (`examples/gateway`) stores API keys as scrypt hashes (n=16384, r=8) with a
   random salt per principals file, instead of unsalted SHA-256, so a leaked principals file costs
   one scrypt per guessed key. `rampart new-key` issues random keys, `rampart key-hashing` starts a
