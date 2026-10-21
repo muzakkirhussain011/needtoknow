@@ -39,7 +39,8 @@ reason = "NLTK model save and load APIs bypass path security. needtoknow never c
 # Pillow 12.3.0 comes in only through llama-index-core (the llamaindex extra), and only for Python 3.10:
 # the lock resolves Pillow 13.0.0, which fixes all of these, for Python 3.11 and later, but Pillow 13
 # requires Python 3.11. needtoknow never opens, decodes or saves an image. The entries go when 1.4.0
-# drops Python 3.10 (after 2026-10-31), and expire on 2026-11-30 in case that slips. Reviewed 2026-10-22.
+# drops Python 3.10 (after 2026-10-31), and expire on 2026-11-30 in case that slips. Reviewed 2026-10-22;
+# the last seven, published late on 2026-10-21, were added the same day.
 
 [[IgnoredVulns]]
 id = "GHSA-22hg-r758-rrw9"
@@ -145,3 +146,38 @@ reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Argu
 id = "GHSA-xgh8-jp6q-p5x8"
 ignoreUntil = 2026-11-30
 reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): ReDoS in XbmImagePlugin: 512-byte file stalls Image.open() for minutes. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-332p-7hrc-92wf"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Heap buffer overflow in _tiffWriteProc when saving TIFF to BytesIO. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-4rr5-89j8-mwwm"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Heap use-after-free when encoding TIFF to an in-memory buffer. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-5xm2-6676-qcp9"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): APNG background disposal allocates full canvas before decompression bomb check. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-f2g6-542v-9j58"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Infinite loop in PdfParser.rewrite_pages on page tree Parent cycle. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-gg2r-wvfm-q9rx"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): MSP RLE decoder expands a tiny file into unbounded memory. needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-jg86-v3jv-hrpm"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Quadratic-time DoS in PDF save_all (PdfParser.next_object_id). needtoknow never handles images."
+
+[[IgnoredVulns]]
+id = "GHSA-xvh5-g6gv-559v"
+ignoreUntil = 2026-11-30
+reason = "Pillow 12.3.0, Python 3.10 only (13.0.0 fixes it and needs 3.11): Memory disclosure and segfault in libtiff encoder via crafted TIFF tags. needtoknow never handles images."
