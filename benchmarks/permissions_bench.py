@@ -24,6 +24,9 @@ Run it on Kaggle with a GPU for the embeddings (see benchmarks/README.md):
     python benchmarks/permissions_bench.py --dataset fiqa --embedder Qwen/Qwen3-Embedding-0.6B \\
         --backends exact,chroma,pgvector --database-url postgresql://...
 
+`--backends ...,pgvector-rls` adds a baseline without needtoknow: PostgreSQL's own row-level security on
+a copy of the pgvector table (see `pgvector_rls_run`).
+
 `--dataset synthetic --embedder hashing` needs no model or network. With `--check` the run fails
 unless no strategy leaks, nothing errors, and the exact backend's complete results are exact.
 """
@@ -261,6 +264,73 @@ def pgvector_backends(
     return backends, {"postgres": server, "pgvector": extension}
 
 
+RLS = "row-level security"
+
+
+def pgvector_rls_run(
+    url: str, docs: list[Document], vectors: np.ndarray, embed: Any, batch: int
+) -> tuple[Run, dict[str, str]]:
+    """PostgreSQL's own row-level security: the baseline that needtoknow's pgvector backend replaces.
+
+    A separate table holds the same chunks with the same HNSW index, and row-level security is
+    forced on it with the policy most applications would write for a jsonb ACL: a row is visible
+    when its `allowed_groups` holds one of the groups the request puts in `needtoknow.groups`. Each
+    search sets that list for its own transaction, then asks for the k nearest rows with no filter
+    of its own and the same iterative scan as needtoknow's backend, so the database alone decides
+    what is visible. needtoknow plays no part in these results.
+    """
+    from psycopg import sql
+    from psycopg_pool import ConnectionPool
+
+    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+
+    name = "needtoknow_bench_rls"
+    table = sql.Identifier(name)
+    pool = ConnectionPool(url, min_size=1, max_size=2, open=True)
+    with pool.connection() as conn:
+        conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(table))
+    create_schema(pool, vectors.shape[1], table=name, hnsw=False)
+    loader = PgVectorBackend(pool, embed, table=name)
+    for start in range(0, len(docs), batch):
+        loader.add(docs[start : start + batch], embeddings=vectors[start : start + batch])
+    field = sql.Literal(FIELD)
+    with pool.connection() as conn:
+        conn.execute("SET maintenance_work_mem = '1GB'")
+        conn.execute(sql.SQL("CREATE INDEX ON {} USING hnsw (embedding vector_cosine_ops)").format(table))
+        # The default jsonb_ops class, unlike jsonb_path_ops, serves the policy's ?| test.
+        conn.execute(sql.SQL("CREATE INDEX ON {} USING gin ((metadata -> {}))").format(table, field))
+        conn.execute(sql.SQL("ANALYZE {}").format(table))
+        conn.execute(sql.SQL("ALTER TABLE {} ENABLE ROW LEVEL SECURITY").format(table))
+        conn.execute(sql.SQL("ALTER TABLE {} FORCE ROW LEVEL SECURITY").format(table))  # for the owner too
+        # With no groups set, current_setting gives NULL and no row is visible.
+        conn.execute(
+            sql.SQL(
+                "CREATE POLICY readable ON {} FOR SELECT"
+                " USING (metadata -> {} ?| string_to_array(current_setting('needtoknow.groups', true), ','))"
+            ).format(table, field)
+        )
+        server = conn.execute("SHOW server_version").fetchone()[0]
+        extension = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()[0]
+    statement = sql.SQL(
+        "WITH candidates AS MATERIALIZED ("
+        " SELECT id, embedding <=> %s::vector AS distance FROM {} ORDER BY distance LIMIT %s)"
+        " SELECT id FROM candidates ORDER BY distance, id"
+    ).format(table)
+
+    def run(query: str, subject: Subject, k: int) -> tuple[list[str], int, bool, int]:
+        if any("," in group for group in subject.groups):
+            raise ValueError("a group name with a comma cannot be passed in needtoknow.groups")
+        vector = "[" + ",".join(f"{v:.8g}" for v in embed(query)) + "]"
+        with pool.connection() as conn, conn.transaction():
+            conn.execute("SELECT set_config('needtoknow.groups', %s, true)", [",".join(subject.groups)])
+            conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
+            ids = [row[0] for row in conn.execute(statement, [vector, k]).fetchall()]
+        # The database checks rows itself, so nothing is examined by the application.
+        return ids, 0, len(ids) == k, 0
+
+    return run, {"postgres": server, "pgvector": extension}
+
+
 # ---- systems under test ----------------------------------------------------------------------
 
 
@@ -382,7 +452,8 @@ def markdown(rows: Sequence[dict[str, Any]], k: int) -> str:
         out += [f"### Layout: {layout}", "", "| " + " | ".join(header) + " |", "|---" * len(header) + "|"]
         for r in (r for r in rows if r["layout"] == layout):
             cells = [f"{r['selectivity']:.1%}", f"{r['readable']:.2%}", r["backend"], r["strategy"]]
-            cells += [f"{r['recall']:.3f}", f"{r['complete_rate']:.0%}", f"{r['examined']:g}"]
+            examined = "n/a" if r["strategy"] == RLS else f"{r['examined']:g}"  # checked inside the database
+            cells += [f"{r['recall']:.3f}", f"{r['complete_rate']:.0%}", examined]
             cells += [f"{r['p50_ms']:.1f}", f"{r['p95_ms']:.1f}", str(r["leaks"])]
             out.append("| " + " | ".join(cells) + " |")
         out.append("")
@@ -460,9 +531,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     selectivities = [float(s) for s in args.selectivity.split(",")]
     if args.teams % 100 or not all(0 < s <= 1 for s in selectivities) or not set(layouts) <= set(LAYOUTS):
         raise SystemExit("--teams must be a multiple of 100, selectivities in (0, 1], layouts from " + str(LAYOUTS))
-    if not set(wanted) <= {"exact", "chroma", "pgvector"}:
-        raise SystemExit("--backends takes exact, chroma and pgvector")
-    if "pgvector" in wanted and not args.database_url:
+    if not set(wanted) <= {"exact", "chroma", "pgvector", "pgvector-rls"}:
+        raise SystemExit("--backends takes exact, chroma, pgvector and pgvector-rls")
+    if {"pgvector", "pgvector-rls"} & set(wanted) and not args.database_url:
         raise SystemExit("pgvector needs --database-url or NEEDTOKNOW_BENCH_DATABASE_URL")
     rng = np.random.default_rng(args.seed)
     began = time.perf_counter()
@@ -488,7 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     backends: dict[str, Any] = {}
     if "exact" in wanted:
         backends["exact"] = ExactBackend(ids, doc_vecs, metadata, embed)
-    docs = documents(ids, texts, metadata) if {"chroma", "pgvector"} & set(wanted) else []
+    docs = documents(ids, texts, metadata) if {"chroma", "pgvector", "pgvector-rls"} & set(wanted) else []
     if "chroma" in wanted:
         backends["chroma"], versions = chroma_backend(docs, doc_vecs, embed, args.load_batch)
         env.update(versions)
@@ -496,10 +567,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         more, versions = pgvector_backends(args.database_url, docs, doc_vecs, embed, args.load_batch)
         backends.update(more)
         env.update(versions)
-    log(f"backends ready: {', '.join(backends)} ({time.perf_counter() - began:.0f} s)")
+    baselines: list[tuple[str, str, Run]] = []
+    if "pgvector-rls" in wanted:
+        rls, versions = pgvector_rls_run(args.database_url, docs, doc_vecs, embed, args.load_batch)
+        baselines.append(("pgvector", RLS, rls))
+        env.update(versions)
+    ready = [*backends, *(f"{name} {strategy}" for name, strategy, _ in baselines)]
+    log(f"backends ready: {', '.join(ready)} ({time.perf_counter() - began:.0f} s)")
 
     rows = []
-    under_test = systems(backends, args.max_candidates)
+    under_test = systems(backends, args.max_candidates) + baselines
     for layout in layouts:
         teams, prefix = (random_teams, "r") if layout == "random" else (topical_teams, "t")
         for selectivity in selectivities:

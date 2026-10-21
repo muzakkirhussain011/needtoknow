@@ -178,7 +178,8 @@ jobs:
           NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: |
           python benchmarks/permissions_bench.py --teams 100 --docs 3000 --queries 15 \
-            --selectivity 0.01,0.1,1 --check --out bench.json --markdown bench.md
+            --selectivity 0.01,0.1,1 --backends exact,chroma,pgvector,pgvector-rls --check \
+            --out bench.json --markdown bench.md
           cat bench.md >> "$GITHUB_STEP_SUMMARY"
       - name: Load benchmark harness (synthetic smoke run against real PostgreSQL and OPA)
         env:
