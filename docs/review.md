@@ -16,7 +16,7 @@ separate deployment with its
 
 1. [Security model](security.md): what is guaranteed, what is assumed, and the invariants S1 to S10
    with the tests that hold each one.
-2. [Threat model](threat-model.md): assets, trust boundaries, sixteen threats, remaining risks.
+2. [Threat model](threat-model.md): assets, trust boundaries, seventeen threats, remaining risks.
 3. [Concepts](concepts.md): pre-filtering, post-filtering, the re-check, failing closed.
 4. [Revocation and consistency](revocation.md): where staleness comes from, and the two ways to
    configure it.

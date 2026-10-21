@@ -46,6 +46,12 @@ keyword = PgVectorBackend(pool, None, mode="keyword", text_search="english")
 retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
 ```
 
+Every backend applies the permission filter inside its keyword search, so only permitted chunks come
+back. Their order is another matter: BM25 weighs each term by statistics over the whole index or
+collection, chunks the subject may not read included, on every backend above except PostgreSQL,
+whose `ts_rank_cd` uses no such statistics. Do not show keyword scores to end users, or give each
+tenant its own keyword index ([threat model](threat-model.md), T17).
+
 ## How results are fused
 
 Reciprocal rank fusion scores a chunk by its rank in each backend's results, not by the backends'
