@@ -20,11 +20,22 @@ Nothing else in the request is read for identity.
 
 ```python
 def caller(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]) -> Subject:
-    claims = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=["HS256"],
-                        audience=settings.audience, issuer=settings.issuer,
-                        options={"require": ["exp", "iss", "aud", "sub", "tid"]})
+    claims = jwt.decode(
+        credentials.credentials,
+        settings.jwt_secret,
+        algorithms=["HS256"],
+        audience=settings.audience,
+        issuer=settings.issuer,
+        options={"require": ["exp", "iss", "aud", "sub", "tid"]},
+    )
     return Subject(claims["sub"], claims.get("groups", []), {"tenant": claims["tid"]})
 ```
+
+If the dependency is defined inside a function, as in the example's `create_app`, leave out
+`from __future__ import annotations` in that module. FastAPI resolves string annotations against the
+module's globals, so it cannot find a local `caller`, and treats `subject` as a required query
+parameter instead, so a request without that parameter fails with 422 and the token is never checked.
+The example's tests catch it.
 
 **The body cannot name anyone.** Request models forbid unknown fields, so a body with `user`,
 `groups`, `tenant` or `subject` is refused with 422, and the query string is never read.
