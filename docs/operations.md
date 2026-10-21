@@ -292,3 +292,5 @@ either.
 | Shared cache failing | `CachingAuthorizer.stats().shared_failures` rising, or `needtoknow shared cache` warnings in the log | Every replica is asking the permission service directly; answers stay correct, but load and latency rise. |
 | Cache not helping | Hit rate, `(hits + shared_hits) / (hits + shared_hits + misses)`, falling | `ttl` too short for the traffic, `maxsize` too small, or subjects whose groups or attributes change on every request (each change is a new cache key). |
 | Paused permission service | `CircuitBreaker.is_open` | Requests are being refused without calling the service, for `reset_after` seconds. |
+
+When one of these fires, the [incident runbook](runbook.md) has the steps, containment first.

@@ -88,6 +88,8 @@ says why. The table shows what each failure looks like.
 | `invalidate()` cannot reach Redis | Raises, because the caller asked for a revocation now | The exception at the caller |
 | An observer raises | Logs it; retrieval is unaffected | An error on the `needtoknow` logger |
 
+What to do about each, containment first, is in the [incident runbook](runbook.md).
+
 What needtoknow does not protect against is listed in the
 [security model](security.md#what-it-does-not-do): output control, prompt injection inside readable
 chunks, and the side channels above.
