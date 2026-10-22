@@ -151,6 +151,15 @@ For users who may read most of a Chroma collection, `strategy="postfilter"` is m
 100% readable). For users who may read little of it, pre-filtering is the only strategy that finds
 their documents.
 
+**PostgreSQL row-level security is exact but slows down as users may read more.** A second run
+enforced the same permissions with a row-level security policy instead of needtoknow
+([results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/fiqa-row-level-security.md)).
+It never leaked and its recall stayed at 0.998 or better, but its median latency rose with the
+readable share: 2 to 11 ms up to 1% readable, about 40 ms at 5%, 160 ms at 20% and 600 ms at 100%,
+against 3 to 82 ms for needtoknow's pre-filtering on the same table. Row-level security is a strong
+boundary when the permissions live in PostgreSQL; needtoknow gives the same guarantee for the
+other stores and permission services, at the HNSW index's recall.
+
 ## At a million chunks, under load
 
 The runs above measure quality on a mid-sized corpus, one query at a time, with the permission
