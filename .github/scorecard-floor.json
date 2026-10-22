@@ -2,6 +2,7 @@
   "Binary-Artifacts": 10,
   "Branch-Protection": 3,
   "CI-Tests": 10,
+  "CII-Best-Practices": 5,
   "Dangerous-Workflow": 10,
   "Dependency-Update-Tool": 10,
   "Fuzzing": 10,
