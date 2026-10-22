@@ -19,6 +19,7 @@
   <a href="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/needtoknow"><img src="https://api.securityscorecards.dev/projects/github.com/muzakkirhussain011/needtoknow/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://www.bestpractices.dev/projects/15794"><img src="https://www.bestpractices.dev/projects/15794/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
