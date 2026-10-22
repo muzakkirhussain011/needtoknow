@@ -255,74 +255,77 @@ permission can take up to the `ttl` to apply (see [Operations](operations.md)).
 
 The same million vectors, questions and permissions, loaded through each store's needtoknow backend
 at the store's own default settings, and measured the same way on a Kaggle machine with 4 CPUs
-shared by the store and the benchmark's client. Qdrant, Elasticsearch, OpenSearch and Weaviate ran
-one after another in one session on one machine, on 2026-10-17, with
+shared by the store and the benchmark's client. Qdrant, Elasticsearch, OpenSearch, Weaviate, LanceDB
+and Redis ran one after another in one session on one machine, on 2026-10-22, with
 [`kaggle_stores.ipynb`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/kaggle_stores.ipynb);
-pgvector ran in an earlier session. Every number is in the full results:
-[four stores](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-every-store.md),
-[pgvector](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md)
-and an [earlier Qdrant run](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-qdrant.md).
+each throughput setting ran three times, and every chunk returned under load was checked against
+the subject's permissions. pgvector ran in its own session. Every number is in the full results:
+[six stores](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-every-store.md),
+[pgvector](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
 
 Pre-filtered recall@10, by the share of the corpus the user may read:
 
-| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate |
-|---|---|---|---|---|---|
-| 0.1% | 0.972 | 0.998 | 0.935 | 0.998 | 0.998 |
-| 1% | 0.933 | 0.996 | 0.615 | 0.996 | 0.996 |
-| 10% | 0.883 | 0.982 | 0.820 | 0.994 | 0.904 |
-| 100% | 0.895 | 0.979 | 0.874 | 0.972 | 0.965 |
+| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate | Redis | LanceDB |
+|---|---|---|---|---|---|---|---|
+| 0.1% | 0.968 | 0.998 | 0.936 | 0.998 | 0.998 | 0.998 | 0.510 |
+| 1% | 0.927 | 0.996 | 0.628 | 0.996 | 0.996 | 0.996 | 0.474 |
+| 10% | 0.883 | 0.977 | 0.814 | 0.993 | 0.907 | 0.897 | 0.474 |
+| 100% | 0.890 | 0.977 | 0.875 | 0.971 | 0.965 | 0.769 | 0.517 |
 
 Median latency of a pre-filtered retrieval, one query at a time, in milliseconds:
 
-| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate |
-|---|---|---|---|---|---|
-| 0.1% | 11.0 | 17.0 | 31.8 | 47.3 | 6.6 |
-| 1% | 21.2 | 8.4 | 13.0 | 14.2 | 14.9 |
-| 10% | 4.3 | 8.1 | 10.4 | 25.6 | 16.4 |
-| 100% | 3.2 | 8.9 | 9.5 | 10.4 | 9.1 |
+| Readable | pgvector | Qdrant | Elasticsearch | OpenSearch | Weaviate | Redis | LanceDB |
+|---|---|---|---|---|---|---|---|
+| 0.1% | 10.6 | 5.3 | 16.6 | 14.8 | 4.2 | 2.8 | 18.9 |
+| 1% | 21.4 | 6.7 | 11.3 | 13.6 | 11.6 | 13.0 | 20.1 |
+| 10% | 4.4 | 5.9 | 14.7 | 21.7 | 10.6 | 2.5 | 20.2 |
+| 100% | 3.3 | 6.8 | 8.2 | 9.0 | 6.3 | 1.6 | 28.2 |
 
-| Store | Peak throughput (users, p99) | Loading the million chunks | Then until searchable |
+| Store | Peak throughput: median of 3 runs (users, p99) | Loading the million chunks | Then until searchable |
 |---|---|---|---|
-| pgvector | 129 requests/s (4, 72 ms) | 36 s, binary `COPY` | 4.5 min to build the indexes |
-| Qdrant | 201 requests/s (16, 120 ms) | 17.4 min through `add` | 12.2 min to build the index |
-| Elasticsearch | 219 requests/s (4, 34 ms) | 25.2 min through `add` | 1 s |
-| OpenSearch | 160 requests/s (8, 89 ms) | 38.1 min through `add` | 2 s |
-| Weaviate | 230 requests/s (8, 63 ms) | 22.7 min through `add` | none: it indexes while importing |
+| pgvector | 126 requests/s (4, 70 ms), one run | 36 s, binary `COPY` | 4.5 min to build the indexes |
+| Qdrant | 266 requests/s (16, 92 ms) | 8.0 min through `add` | 9.3 min to build the index |
+| Elasticsearch | 236 requests/s (8, 65 ms) | 20.0 min through `add` | 1 s |
+| OpenSearch | 196 requests/s (16, 153 ms) | 29.4 min through `add` | 1 s |
+| Weaviate | 277 requests/s (16, 123 ms) | 19.1 min through `add` | none: it indexes while importing |
+| Redis | 276 requests/s (16, 73 ms) | 8.8 min through `add` | none: it indexes while loading |
+| LanceDB (embedded) | 118 requests/s (16, 194 ms) | 18 s, `table.add` | 1.6 min to build the indexes |
 
-- **No retrieval leaked on any store**, pre- or post-filtered, at any share readable, and no request
-  failed under load. What the stores differ in is recall and speed at their defaults.
+- **No retrieval leaked on any store.** Pre- and post-filtered, at every share readable, and under
+  load, where about 3.2 million returned chunks were checked across the six stores. Two requests
+  failed, on Qdrant at 16 users, out of about 16,000 at that setting; they returned errors, not
+  data. What the stores differ in is recall and speed at their defaults.
 - **Elasticsearch's lower recall comes from its default index.** For 384-dimensional vectors,
   Elasticsearch 9.1 and later index with `bbq_hnsw`, a 1-bit quantization that saves memory and
-  costs recall, and the backend asks each shard for 100 candidates. Measured again in a later
-  session with `num_candidates=500`, `int8_hnsw` reached 0.988, 0.983, 0.932 and 0.966 pre-filtered
-  recall (0.1% to 100% readable) in the same 2.2 GiB, and full-precision `hnsw` 1.000, 1.000, 0.933
-  and 0.988 in 2.5 GiB, at similar median latency except `hnsw` at 0.1% readable (161 ms)
+  costs recall, and the backend asks each shard for 100 candidates. Measured in a separate session
+  with `num_candidates=500`, `int8_hnsw` reached 0.988, 0.983, 0.932 and 0.966 pre-filtered recall
+  (0.1% to 100% readable) in the same 2.2 GiB, and full-precision `hnsw` 1.000, 1.000, 0.933 and
+  0.988 in 2.5 GiB, at similar median latency except `hnsw` at 0.1% readable (161 ms)
   ([full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-elasticsearch-index-types.md)).
   The index type and the candidate count changed together, so part of the gain is the larger count.
-- **Post-filtering collapses for selective users on every store** (0.093 to 0.095 of the top 10 at
+- **Redis's recall falls as users may read more**, from 0.998 at 0.1% readable to 0.769 at 100%:
+  its HNSW search keeps 10 candidates (`EF_RUNTIME`) by default, which a broad filter leaves too
+  few of. Set `ef_runtime` on `RedisBackend` higher for users who may read most of the corpus.
+- **LanceDB, embedded, found about half the true top 10 at its defaults** (IVF_PQ without
+  `refine_factor`), at every share readable, so pre-filtering cost it no recall; a
+  [tuning run](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-lancedb.md)
+  shows what `nprobes` and `refine_factor` buy.
+- **Post-filtering collapses for selective users on every store** (0.082 to 0.095 of the top 10 at
   0.1% readable): it is a property of post-filtering, not of any store, and the reason
   `strategy="auto"` pre-filters.
-- **The two Qdrant runs agree on recall but not on speed.** The earlier session measured 312
-  requests a second and a 3.4 ms median at 0.1% readable; this one 201 and 17.0 ms. Kaggle gave the
-  sessions different machines (the first had GPUs attached), so compare stores within one session,
-  and measure capacity on your own hardware.
-- **Under load on 4 shared CPUs, Elasticsearch peaked early**: its throughput fell after 4 users and
-  its p99 reached 1,074 ms at 16. Qdrant, OpenSearch and Weaviate stayed close to their peak at 16
-  users. With `int8_hnsw` or `hnsw`, in the later session, Elasticsearch held 244 and 235 requests a
-  second at 16 users with a p99 under 90 ms; that session ran on a different machine, so this points
-  at the default index without proving it.
-- **LanceDB, embedded, found about half the true top 10 at its defaults.** Measured later, in its
-  own session: LanceDB's default vector index (IVF_PQ, without `refine_factor`) gave 0.47 to 0.51
-  pre-filtered recall at every share readable, 16 to 29 ms median latency and up to 140 requests a
-  second, with no leak or error. Pre-filtering cost no recall: 0.1% readable scored the same as
-  everything readable. The million chunks bulk-loaded with `table.add` in 21 s, and the indexes
-  took 75 s more
-  ([full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-lancedb.md)).
-- **Loading through a backend is the slow part on every store**: 17 to 38 minutes for the million
-  chunks through each backend's batched writes over HTTP, against 36 seconds of binary `COPY` into
-  PostgreSQL. For a first load of millions of chunks, a store's own bulk loader can write the
-  same layout (each [integration page](integrations/index.md) describes it), and `add` and
-  `set_metadata` keep it current afterwards.
+- **Sessions differ; compare stores within one.** Qdrant reached 312 requests a second in an early
+  session, 201 in a session on 2026-10-17 and 266 in this one; Elasticsearch fell after 4 users with
+  a 1,074 ms p99 at 16 in the 2026-10-17 session, and held 234 requests a second with a 115 ms p99
+  here. Kaggle gives each session a different machine, so measure capacity on your own hardware.
+- **The first throughput run can hit a cold store.** OpenSearch's first setting, straight after the
+  one-at-a-time measurements, averaged under 1 request a second in two of its three runs, and
+  Weaviate's first run had a 60 ms p95; both were at full speed from the next setting. The range in
+  brackets in the full results shows such runs.
+- **Loading through a backend is the slow part**: 8 to 29 minutes for the million chunks through
+  each backend's batched writes over HTTP, against 36 seconds of binary `COPY` into PostgreSQL and
+  18 seconds into embedded LanceDB. For a first load of millions of chunks, a store's own bulk
+  loader can write the same layout (each [integration page](integrations/index.md) describes it),
+  and `add` and `set_metadata` keep it current afterwards.
 
 ## Limits of these benchmarks
 
