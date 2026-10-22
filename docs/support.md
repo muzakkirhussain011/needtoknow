@@ -51,8 +51,9 @@ Each store runs as a real server (or embedded library) in CI, and its backend pa
 | OpenFGA | 1.22.0 | Compared with the reference answer |
 | SpiceDB | 1.56.2, in-memory datastore | Compared with the reference answer and the conformance kit |
 | Cerbos | 0.56.0 | The example policy, compared with the reference answer and the conformance kit |
+| Cedar | cedarpy 4.12.2, in process | The metadata ACL model written in Cedar, compared with the reference answer and the conformance kit |
 
-The authorizers use only the standard library to reach these services.
+The HTTP authorizers use only the standard library to reach these services; the Cedar authorizer needs the `cedar` extra.
 
 ## Frameworks and tools
 

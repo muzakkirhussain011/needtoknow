@@ -102,6 +102,8 @@ modules and need their extra.
 
 .. autofunction:: needtoknow.authorizers.cerbos.plan_to_filter
 
+.. autoclass:: needtoknow.authorizers.cedar.CedarAuthorizer
+
 .. autoclass:: needtoknow.authorizers.CircuitBreaker
    :members: is_open
 ```

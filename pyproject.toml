@@ -47,6 +47,7 @@ llamaindex = ["llama-index-core>=0.12"]
 haystack = ["haystack-ai>=2.12"]
 mcp = ["mcp>=2.3"]
 otel = ["opentelemetry-api>=1.30"]
+cedar = ["cedarpy>=4.12"]
 # Sphinx 9 needs Python 3.12, so the documentation is built on 3.12 or later.
 docs = [
   "sphinx>=9.1; python_version >= '3.12'",
@@ -114,6 +115,10 @@ ignore_missing_imports = true  # pymilvus has no py.typed marker
 [[tool.mypy.overrides]]
 module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true  # pyarrow has no py.typed marker
+
+[[tool.mypy.overrides]]
+module = ["cedarpy", "cedarpy.*"]
+ignore_missing_imports = true  # in case cedarpy has no py.typed marker
 
 [tool.coverage.run]
 source = ["needtoknow"]
