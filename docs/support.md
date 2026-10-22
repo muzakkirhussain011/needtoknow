@@ -10,11 +10,10 @@ record.
 
 | Python | Tested |
 |---|---|
-| 3.10, 3.11, 3.13, 3.14 | The whole library without external services: property tests, the reference backend, composition, caching, the frameworks |
+| 3.11, 3.13, 3.14 | The whole library without external services: property tests, the reference backend, composition, caching, the frameworks |
 | 3.12 | All of that, plus every store and permission service below, the examples, the benchmark harnesses and the docs build |
 
-Python 3.10 reaches its end of life on 2026-10-31; the first minor release after that date (1.4.0)
-requires 3.11.
+Python 3.10 reaches its end of life on 2026-10-31; 1.4.0 requires 3.11.
 
 ## Operating systems
 

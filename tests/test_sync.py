@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from hypothesis import given
@@ -10,7 +10,7 @@ from needtoknow import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, Pe
 from needtoknow.sync import Access, with_access
 from needtoknow.sync.google_drive import FIELDS, GoogleDriveACL, drive_access
 
-NOW = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 
 
 def user(email, role="reader", **extra):

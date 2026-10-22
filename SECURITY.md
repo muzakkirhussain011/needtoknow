@@ -20,9 +20,9 @@ releases, for six months after its successor came out. Older releases get none.
 
 | Version | Security fixes | Until |
 |---|---|---|
-| 1.3.x | Yes (latest) | |
-| 1.2.x | Yes | 2027-04-17, six months after 1.3.0 |
-| 1.1.x and earlier | No | |
+| 1.4.x | Yes (latest) | |
+| 1.3.x | Yes | 2027-04-22, six months after 1.4.0 |
+| 1.2.x and earlier | No | |
 
 ## How reports are handled
 
