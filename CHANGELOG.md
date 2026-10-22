@@ -6,6 +6,19 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-22
+
+Every store now serves both halves of hybrid search under the permission filter: keyword search
+(BM25) arrives on Qdrant, Milvus, MongoDB Atlas, Weaviate, Redis and LanceDB. Cedar joins OPA,
+OpenFGA, SpiceDB and Cerbos as a permission system, evaluated in the process. Permissions can be
+synced from Google Drive. Operators get the cause of each failure, cache statistics and an incident
+runbook; security reviewers get a threat model, the invariants with the tests that hold them, and a
+compliance mapping. Several fail-closed gaps found by review are fixed, and from this release every
+package carries SLSA build provenance.
+
+**Python 3.11 or newer is required.** Python 3.10 reaches its end of life on 2026-10-31, and its
+last dependency releases (Pillow 12.3 among them) no longer receive security fixes.
+
 ### Added
 
 - `CedarAuthorizer` (the `cedar` extra): Cedar policies evaluated in the process with cedarpy. The
@@ -630,7 +643,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1

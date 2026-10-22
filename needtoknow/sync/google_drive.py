@@ -32,7 +32,7 @@ or when it cannot be read with certainty:
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from needtoknow.sync import Access
@@ -105,7 +105,7 @@ def drive_access(
     """
     if isinstance(domains, str):
         raise TypeError("domains must be a collection of domain names, not a single string")
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     inside = None if domains is None else {d.lower() for d in domains}
     users: set[str] = set()
     groups: set[str] = set()
