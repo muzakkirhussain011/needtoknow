@@ -8,6 +8,12 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `CedarAuthorizer` (the `cedar` extra): Cedar policies evaluated in the process with cedarpy. The
+  principal carries the subject's id, groups and attributes, with its groups as parent entities;
+  each chunk is a resource with its metadata as attributes; `entities` adds hierarchies. Cedar skips
+  a policy whose evaluation errors, a `forbid` included, so a chunk whose evaluation reports an
+  error is denied. No pre-filter: the retriever post-filters. Compared with the reference answer
+  on generated corpora and checked with the conformance kit.
 - `mode="keyword"` on the Qdrant backend: BM25 under the same `query_filter`, with no model. A
   collection created with `create_collection(..., text_search=True)` gets a sparse vector with
   Qdrant's IDF modifier; the backend writes each chunk's BM25 term weights there (the new
