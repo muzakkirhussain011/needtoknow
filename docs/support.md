@@ -83,3 +83,24 @@ The authorizers use only the standard library to reach these services.
   offerings use the same APIs as the servers above, but are not part of CI.
 - **Production deployments.** No deployment has been independently verified; see the
   [security model](security.md) for the assumptions a deployment must meet.
+
+## Versions, support and deprecation
+
+needtoknow follows [semantic versioning](https://semver.org). The public API is what the
+[API reference](api.md) documents; names starting with an underscore are private.
+
+- **Patch releases** (1.3.3) fix bugs and security problems. They change no documented behaviour,
+  except to make it match the documentation.
+- **Minor releases** (1.4.0) add features and may drop a Python version that has reached its end of
+  life. They never remove a public name, and never weaken a default that keeps a protection on
+  (invariant S8 in the [security model](security.md)).
+- **Major releases** (2.0.0) are the only ones that remove or change a public API. Anything removed
+  is deprecated first: it emits a `DeprecationWarning` naming its replacement for at least one minor
+  release and at least six months, and the changelog lists it under Deprecated.
+- **Security fixes** reach the latest minor release and, for six months after its successor came
+  out, the one before it, as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md)
+  describes. Each advisory names the fixed versions of both.
+- **Python versions** are supported until their upstream end of life; the first minor release after
+  that date drops them.
+- **Stores, permission services and frameworks** are supported at the versions in the tables above,
+  which CI tests. Other versions with the same API usually work, but are not tested.
