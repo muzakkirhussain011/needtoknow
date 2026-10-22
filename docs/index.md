@@ -307,6 +307,7 @@ integrations/langchain
 integrations/llamaindex
 integrations/haystack
 integrations/mcp
+integrations/agents
 integrations/fastapi
 ```
 
