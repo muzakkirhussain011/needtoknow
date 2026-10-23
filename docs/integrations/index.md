@@ -26,7 +26,8 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
 | [Haystack](haystack.md) | Framework | `needtoknow[haystack]` | Through any needtoknow backend |
 | [MCP](mcp.md) | Agent tool server | `needtoknow[mcp]` | Through any needtoknow backend |
-| [Agent frameworks](agents.md) | OpenAI Agents SDK, Pydantic AI, CrewAI, through MCP | none (the framework's MCP client) | Through any needtoknow backend |
+| [Agent frameworks](agents.md) | OpenAI Agents SDK, Pydantic AI, CrewAI, AutoGen, Semantic Kernel, DSPy, through MCP | none (the framework's MCP client) | Through any needtoknow backend |
+| [HTTP service](http.md) | Retrieval for any language, OIDC tokens | `needtoknow[server]` | Through any needtoknow backend |
 | [FastAPI](fastapi.md) | Reference RAG service: verified tokens, tenants, safe errors | none (your app's FastAPI) | Through any needtoknow backend |
 | [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
 

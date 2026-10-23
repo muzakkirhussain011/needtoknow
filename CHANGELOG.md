@@ -13,12 +13,25 @@ All notable changes are recorded here. The format follows
   subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A
   result carrying an error, a malformed answer or a wrong number of results raises
   `AuthorizationError`. Tested against Keto 26.2.0 and with the conformance kit.
+- An HTTP service, `needtoknow.server` (the `server` extra), so applications in any language get
+  permission-aware retrieval: `create_app(retriever, authenticate)` serves `POST /v1/retrieve`,
+  `GET /healthz` and an OpenAPI description. The subject comes from the verified bearer token
+  alone; `OIDCAuthenticator` verifies JWTs against the identity provider's published keys
+  (asymmetric algorithms only, issuer, audience, expiry, an optional tenant claim). Unknown request
+  fields are refused, a failed permission check answers 503 without details, and hits carry no
+  metadata unless named.
+- Redaction: `PermissionedRetriever(redactor=...)` hides parts of the chunks a subject may read, after
+  the permission check and before a reranker or a model sees them. `SpanRedactor` hides spans listed
+  in a chunk's metadata, each with its own readers; `PatternRedactor` hides text matching patterns
+  unless the subject is in an exempt group. A redactor may change text and metadata but not which
+  hits are returned, and one that fails makes the retrieval raise `AuthorizationError`.
 
 ## [1.4.0] - 2026-10-22
 
-Every store now serves both halves of hybrid search under the permission filter: keyword search
-(BM25) arrives on Qdrant, Milvus, MongoDB Atlas, Weaviate, Redis and LanceDB. Cedar joins OPA,
-OpenFGA, SpiceDB and Cerbos as a permission system, evaluated in the process. Permissions can be
+Nine of the ten stores now serve both halves of hybrid search under the permission filter: keyword
+search (BM25) arrives on Qdrant, Milvus, MongoDB Atlas, Weaviate, Redis and LanceDB (Chroma has
+none). Cedar joins OPA, OpenFGA, SpiceDB and Cerbos as a permission system, evaluated in the
+process. Permissions can be
 synced from Google Drive. Operators get the cause of each failure, cache statistics and an incident
 runbook; security reviewers get a threat model, the invariants with the tests that hold them, and a
 compliance mapping. Several fail-closed gaps found by review are fixed, and from this release every

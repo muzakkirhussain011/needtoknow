@@ -277,6 +277,7 @@ combining
 hybrid
 vectors
 reranking
+redaction
 security
 threat-model
 revocation
@@ -313,6 +314,7 @@ integrations/llamaindex
 integrations/haystack
 integrations/mcp
 integrations/agents
+integrations/http
 integrations/fastapi
 ```
 

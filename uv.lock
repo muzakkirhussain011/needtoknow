@@ -3581,6 +3581,10 @@ qdrant = [
 redis = [
     { name = "redis" },
 ]
+server = [
+    { name = "fastapi" },
+    { name = "pyjwt", extra = ["crypto"] },
+]
 weaviate = [
     { name = "weaviate-client" },
 ]
@@ -3608,6 +3612,7 @@ requires-dist = [
     { name = "cedarpy", marker = "extra == 'cedar'", specifier = ">=4.12" },
     { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=1.5" },
     { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.12" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
     { name = "haystack-ai", marker = "extra == 'haystack'", specifier = ">=2.12" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.40" },
@@ -3619,6 +3624,7 @@ requires-dist = [
     { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.4" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.30" },
     { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'pgvector'", specifier = ">=3.2" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'server'", specifier = ">=2.10" },
     { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.13" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
@@ -3632,7 +3638,7 @@ requires-dist = [
     { name = "sphinx-design", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.7" },
     { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.16" },
 ]
-provides-extras = ["cedar", "chroma", "dev", "docs", "elasticsearch", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "qdrant", "redis", "weaviate"]
+provides-extras = ["cedar", "chroma", "dev", "docs", "elasticsearch", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "qdrant", "redis", "server", "weaviate"]
 
 [package.metadata.requires-dev]
 examples = [
