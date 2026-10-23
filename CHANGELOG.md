@@ -8,6 +8,10 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `FaissBackend` (the `faiss` extra): vector search with FAISS in the process. The permission filter is
+  matched against the chunks' metadata and passed to FAISS as an ID selector, so pre-filtering is
+  exact. Exact search by default, or any trained index that supports ID selectors; `add`, `delete`,
+  `set_metadata`, and `save` and `load` to a directory. Passes the conformance kit.
 - `KetoAuthorizer`: relationship checks against Ory Keto (`POST /relation-tuples/batch/check`), with no
   extra dependency. Each chunk's document is a Keto object; `group_subjects=True` also checks the
   subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A

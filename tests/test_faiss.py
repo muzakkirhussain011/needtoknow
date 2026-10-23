@@ -1,0 +1,84 @@
+"""FaissBackend: the conformance kit, exact pre-filtering, persistence and changes."""
+
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("faiss")
+
+from needtoknow import (  # noqa: E402
+    Document,
+    In,
+    MetadataACLAuthorizer,
+    PermissionedRetriever,
+    Query,
+    Subject,
+)
+from needtoknow.backends.faiss import FaissBackend  # noqa: E402
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend  # noqa: E402
+
+EMBED = HashingEmbedder()
+DOCS = [
+    Document("eng", "engineering launch plan", {"allowed_groups": ["eng"]}),
+    Document("hr", "pay bands for the launch", {"allowed_groups": ["hr"]}),
+    Document("all", "launch date for everyone", {"allowed_groups": ["*"]}),
+]
+
+
+def backend(docs=DOCS):
+    b = FaissBackend(EMBED, EMBED.dim)
+    b.add(docs)
+    return b
+
+
+def test_the_conformance_kit():
+    check_backend(backend)
+
+
+def test_the_conformance_kit_with_query_vectors():
+    def make(docs):
+        b = FaissBackend(None, EMBED.dim)
+        b.add(docs, [EMBED(d.text) for d in docs])
+        return b
+
+    check_backend(make, examples=8, query=Query(vector=EMBED(QUERY)))
+
+
+def test_pre_filtering_considers_only_permitted_chunks():
+    retriever = PermissionedRetriever(backend(), MetadataACLAuthorizer(), strategy="prefilter")
+    assert {h.id for h in retriever.retrieve("launch", Subject("ann", ["eng"]), k=3).hits} == {"eng", "all"}
+    assert backend().search("launch", 3, In("allowed_groups", ["nobody"])) == []
+
+
+def test_changes_replace_delete_and_set_metadata():
+    b = backend()
+    b.add([Document("hr", "pay bands, revised", {"allowed_groups": ["hr"]})])
+    assert len(b) == 3 and b.index.ntotal == 3
+    assert next(h for h in b.search("pay bands", 3) if h.id == "hr").text == "pay bands, revised"
+    b.set_metadata({"hr": {"allowed_groups": ["eng"]}, "missing": {}})
+    assert {h.id for h in b.search("launch", 3, In("allowed_groups", ["eng"]))} == {"eng", "hr"}
+    b.delete(["eng", "missing"])
+    assert len(b) == 2 and b.index.ntotal == 2 and "eng" not in {h.id for h in b.search("launch", 3)}
+    b.add([])
+    assert b.search("launch", 0) == [] and FaissBackend(EMBED, EMBED.dim).search("launch", 3) == []
+
+
+def test_save_and_load(tmp_path):
+    original = backend()
+    original.save(tmp_path / "index")
+    loaded = FaissBackend.load(tmp_path / "index", EMBED)
+    assert [h.id for h in loaded.search("launch", 3)] == [h.id for h in original.search("launch", 3)]
+    loaded.add([Document("new", "launch notes", {})])
+    assert len(loaded) == 4
+    (tmp_path / "index" / "chunks.json").write_text('{"dim": 16, "next": 0, "chunks": []}', encoding="utf-8")
+    with pytest.raises(ValueError, match="do not match"):
+        FaissBackend.load(tmp_path / "index", EMBED)
+
+
+def test_dimensions_are_checked():
+    with pytest.raises(ValueError):
+        FaissBackend(EMBED, 0)
+    with pytest.raises(ValueError, match="dimensions"):
+        FaissBackend(EMBED, 8, index=FaissBackend(EMBED, 16).index)
+    with pytest.raises(ValueError, match="dimensions"):
+        FaissBackend(EMBED, EMBED.dim).add([Document("x", "text")], [[1.0, 2.0]])
