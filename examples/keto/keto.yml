@@ -15,4 +15,4 @@ serve:
     port: 4467
 
 log:
-  level: warning
+  level: warn
