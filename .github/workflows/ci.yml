@@ -131,6 +131,17 @@ jobs:
         run: |
           docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:6333/readyz && break; sleep 1; done
+      - name: Start Cassandra
+        run: docker run -d --name cassandra -p 9042:9042 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=200M cassandra:5.0.9
+      - name: Start Vespa and deploy the example application
+        run: |
+          docker run -d --name vespa --hostname vespa-container -p 8090:8080 -p 19071:19071 vespaengine/vespa:8.763.13
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:19071/state/v1/health | grep -q '"up"' && break; sleep 2; done
+          (cd examples/vespa/app && zip -qr - .) | curl -sf --header Content-Type:application/zip --data-binary @- \
+            http://127.0.0.1:19071/application/v2/tenant/default/prepareandactivate || { docker logs --tail 80 vespa; exit 1; }
+          probe=http://127.0.0.1:8090/document/v1/needtoknow/needtoknow/docid/ready
+          for i in $(seq 1 90); do curl -sf -X POST -H 'Content-Type: application/json' -d '{"fields":{}}' "$probe" && break; sleep 2; done
+          curl -sf -X DELETE "$probe" || { docker logs --tail 80 vespa; exit 1; }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with: { version: "0.13.1", enable-cache: false }
       - name: Install from uv.lock, by hash
@@ -139,8 +150,10 @@ jobs:
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r .github/requirements/build.txt
           pip install --no-deps --no-build-isolation -e .
-      - name: Wait for Elasticsearch, OpenSearch, Milvus and MongoDB
+      - name: Wait for Elasticsearch, OpenSearch, Milvus, MongoDB and Cassandra
         run: |
+          for i in $(seq 1 90); do docker exec cassandra cqlsh -e 'SELECT release_version FROM system.local' > /dev/null 2>&1 && break; sleep 2; done
+          docker exec cassandra cqlsh -e 'SELECT release_version FROM system.local' || { docker logs --tail 50 cassandra; exit 1; }
           for url in http://127.0.0.1:9200 http://127.0.0.1:9201; do
             for i in $(seq 1 90); do
               curl -sf "$url/_cluster/health?wait_for_status=yellow&timeout=2s" > /dev/null && break
@@ -152,7 +165,7 @@ jobs:
           curl -sf http://127.0.0.1:9091/healthz || { docker logs --tail 50 milvus; exit 1; }
           for i in $(seq 1 120); do [ "$(docker inspect -f '{{.State.Health.Status}}' mongodb)" = healthy ] && break; sleep 2; done
           [ "$(docker inspect -f '{{.State.Health.Status}}' mongodb)" = healthy ] || { docker logs --tail 50 mongodb; exit 1; }
-      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, OPA, OpenFGA, SpiceDB, Cerbos and Redis)
+      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, Vespa, Cassandra, OPA, OpenFGA, SpiceDB, Cerbos and Redis)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
@@ -164,6 +177,8 @@ jobs:
           NEEDTOKNOW_TEST_KETO_WRITE_URL: http://127.0.0.1:4467
           NEEDTOKNOW_TEST_REDIS_URL: redis://127.0.0.1:6379/0
           NEEDTOKNOW_TEST_QDRANT_URL: http://127.0.0.1:6333
+          NEEDTOKNOW_TEST_VESPA_URL: http://127.0.0.1:8090
+          NEEDTOKNOW_TEST_CASSANDRA_HOST: 127.0.0.1
           NEEDTOKNOW_TEST_MILVUS_URL: http://127.0.0.1:19530
           NEEDTOKNOW_TEST_MONGODB_URL: mongodb://127.0.0.1:27017/?directConnection=true
           NEEDTOKNOW_TEST_WEAVIATE_URL: http://127.0.0.1:8079
@@ -177,6 +192,11 @@ jobs:
           # The code that decides who reads what is held to a higher bar: the retriever, the filter
           # language, composition, caching and the permission-service clients, together.
           coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
+      - name: Cassandra and Vespa server errors, when a step failed
+        if: failure()
+        run: |
+          docker logs cassandra 2>&1 | grep -A30 -E "^ERROR" | tail -150 || true
+          docker logs vespa 2>&1 | grep -iE "error|fatal" | tail -40 || true
       - name: Runnable examples
         run: |
           python examples/langchain_quickstart.py

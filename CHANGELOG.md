@@ -6,6 +6,28 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-23
+
+Vespa and Apache Cassandra join the stores, each tested with the conformance kit against a real
+server in CI. Vespa applies the permission filter inside its nearest-neighbor and BM25 search;
+Cassandra applies it in the `WHERE` of each ANN query, with every value bound as a parameter.
+
+### Added
+
+- `CassandraBackend` (the `cassandra` extra): vector search on Apache Cassandra 5.0 with Storage-Attached
+  Indexes. The filter becomes an OR of ANDs on type-tagged terms in an indexed `set<text>`; each AND
+  is one ANN query with bound `CONTAINS` parameters, run concurrently, and the best `k` are kept; past
+  `max_queries`, one query on the terms every match needs is filtered in the process.
+  `set_metadata` uses a lightweight transaction so an id that is not stored creates no row;
+  `create_table` creates the table and indexes. Tested with the conformance kit against Cassandra
+  5.0.9. Writes go 4 at a time (`write_concurrency`), as Cassandra 5.0's vector index accepts few
+  concurrent writes, and a refused write is retried once.
+- `VespaBackend` (the `vespa` extra): nearest-neighbor or BM25 search on Vespa through its HTTP APIs,
+  with the permission filter in the YQL query as conditions on hex-encoded, type-tagged terms, so
+  Vespa applies it inside the search and no metadata value can change the query. HNSW or exact
+  search; `schema(dim)` writes the schema and `examples/vespa` is a complete application package.
+  Tested with the conformance kit against Vespa 8.763.13, in vector, keyword and hybrid search.
+
 ## [1.5.0] - 2026-10-23
 
 Applications in any language can now use needtoknow through an HTTP service that takes the user
@@ -679,7 +701,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3

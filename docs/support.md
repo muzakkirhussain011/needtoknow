@@ -42,6 +42,8 @@ Each store runs as a real server (or embedded library) in CI, and its backend pa
 | Redis (Query Engine) | 8.10.2 | redis 8.1.0 | `redis>=5` |
 | LanceDB | embedded 0.40.0 | lancedb 0.40.0 | `lancedb>=0.40` |
 | FAISS | in process | faiss-cpu 1.15.1 | `faiss-cpu>=1.15` |
+| Vespa | 8.763.13 | httpx 0.28.1 | `httpx>=0.27` |
+| Apache Cassandra | 5.0.9 | cassandra-driver 3.30.1 | `cassandra-driver>=3.29` |
 
 ## Permission services
 

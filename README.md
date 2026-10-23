@@ -122,6 +122,8 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [Redis](https://muzakkirhussain011.github.io/needtoknow/integrations/redis.html) | Vector store | `needtoknow[redis]` | In the same KNN query, on hex-encoded terms |
 | [LanceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/lancedb.html) | Vector store, embedded | `needtoknow[lancedb]` | Before the vector search ranks, on hex-encoded terms |
 | [FAISS](https://muzakkirhussain011.github.io/needtoknow/integrations/faiss.html) | Vector search library, in process | `needtoknow[faiss]` | Before the search ranks, as an ID selector |
+| [Vespa](https://muzakkirhussain011.github.io/needtoknow/integrations/vespa.html) | Search engine | `needtoknow[vespa]` | In the YQL query, inside the nearest-neighbor search |
+| [Apache Cassandra](https://muzakkirhussain011.github.io/needtoknow/integrations/cassandra.html) | Database with vector search | `needtoknow[cassandra]` | In each ANN query's `WHERE`, as bound parameters |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
@@ -585,8 +587,8 @@ permission check, searches with your own vectors, permission changes without re-
 search tool for AI agents, a Haystack component, and the MongoDB Atlas, Weaviate, Redis and LanceDB
 backends. 1.4 added keyword search on every store but Chroma, the Cedar authorizer and permission sync from
 Google Drive. 1.5 added an HTTP service for any language, redaction, the Ory Keto and Casbin
-authorizers and the FAISS backend. Next, in rough order: permission sync from SharePoint and
-Confluence, and more vector stores. Contributions are welcome; see
+authorizers and the FAISS backend. 1.6 added the Vespa and Cassandra backends. Next, in rough
+order: permission sync from SharePoint and Confluence, and Pinecone and Azure AI Search backends. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
