@@ -55,7 +55,14 @@ authorizer = CedarAuthorizer(POLICIES, entities=[payroll])
 - **Errors deny.** Cedar skips a policy whose evaluation errors, for example on a missing attribute,
   and that includes a `forbid`. wardowl therefore denies any chunk whose evaluation reported an
   error, and logs how many on the `wardowl` logger. Guard optional attributes with `has`.
-- **Values Cedar cannot hold**, such as floats and None, are left out of a chunk's attributes, so a
-  policy reading them errors and the chunk is denied.
+- **Values Cedar cannot hold are never left out.** Cedar has strings, booleans, 64-bit integers
+  (Long), sets and records. Integers, and floats with no fractional part (`3.0`, from a store that
+  returns every number as a float), become Longs. A chunk whose metadata holds any other value (a
+  float such as `2.5`, None, an integer beyond 64 bits, or a list or record holding one) is denied
+  without asking Cedar, and counted with the errors in the log: left out, the attribute would make
+  `resource has x` false and a `forbid` guarded by it would stop applying. A subject attribute of
+  that kind raises `AuthorizationError`. Store absent values as absent keys, not None, and numbers
+  that need a fraction as strings or scaled integers. Metadata keys that are not strings, or that
+  start with `__` (`__entity` and `__extn` have special meanings in Cedar's JSON), are left out.
 - **Configuration** is checked when the authorizer is created: policies Cedar cannot parse raise
   `ValueError`. Any other failure raises `AuthorizationError`, and the retriever returns nothing.
