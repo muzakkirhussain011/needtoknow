@@ -518,6 +518,18 @@ wheels = [
 ]
 
 [[package]]
+name = "casbin"
+version = "1.43.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "simpleeval" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ad/df/ff2aa55cf0d7c14622ce4f9252cdc34c828c81d4213965d73207ac5434ae/casbin-1.43.0.tar.gz", hash = "sha256:d2e90ce8e72f912877851e94d37999f32c558c6ba7aba0437d483275262e86e0", size = 425727, upload-time = "2025-05-10T06:57:18.902Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/07/facef6abd81378e6153b757dc1848621675d971fbc88ebb5d182ebc1c37f/casbin-1.43.0-py3-none-any.whl", hash = "sha256:63a3d1228870250e859ccd94133fe478821093f71dd37f05e0baa0c6fea26623", size = 475059, upload-time = "2025-05-10T06:57:16.89Z" },
+]
+
+[[package]]
 name = "cedarpy"
 version = "4.12.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3522,6 +3534,9 @@ source = { editable = "." }
 default-groups = []
 
 [package.optional-dependencies]
+casbin = [
+    { name = "casbin" },
+]
 cedar = [
     { name = "cedarpy" },
 ]
@@ -3605,6 +3620,7 @@ release = [
 
 [package.metadata]
 requires-dist = [
+    { name = "casbin", marker = "extra == 'casbin'", specifier = ">=1.43" },
     { name = "cedarpy", marker = "extra == 'cedar'", specifier = ">=4.12" },
     { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=1.5" },
     { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.12" },
@@ -3632,7 +3648,7 @@ requires-dist = [
     { name = "sphinx-design", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.7" },
     { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.16" },
 ]
-provides-extras = ["cedar", "chroma", "dev", "docs", "elasticsearch", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "qdrant", "redis", "weaviate"]
+provides-extras = ["casbin", "cedar", "chroma", "dev", "docs", "elasticsearch", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "qdrant", "redis", "weaviate"]
 
 [package.metadata.requires-dev]
 examples = [
@@ -5992,6 +6008,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b4/54/102e772445c5e849b826fbdcd44eb9ad7b3d10fda17b08964658ec7027dc/sigstore_rekor_types-0.0.18.tar.gz", hash = "sha256:19aef25433218ebf9975a1e8b523cc84aaf3cd395ad39a30523b083ea7917ec5", size = 15687, upload-time = "2024-11-22T13:59:54.009Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/45/7c/f0b4e19fd424df4cc964f5d454e1d814fd2dc3b386342e6040441024318f/sigstore_rekor_types-0.0.18-py3-none-any.whl", hash = "sha256:b62bf38c5b1a62bc0d7fe0ee51a0709e49311d137c7880c329882a8f4b2d1d78", size = 20610, upload-time = "2024-11-22T13:59:52.684Z" },
+]
+
+[[package]]
+name = "simpleeval"
+version = "1.0.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/89/3e/25326f373871a34e78cac231c0d3c18a0a5c3a80aa4813b50b9f26a5d460/simpleeval-1.0.8.tar.gz", hash = "sha256:b417f869c11f2de034eb919820a825f35d12ce99f63a43971947ce73679eb9ba", size = 31846, upload-time = "2026-09-12T10:16:08.103Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/33/d1ecd9f4f5f272b36ad7b268e307ba0a59c109d8ad134a231cda780baac9/simpleeval-1.0.8-py3-none-any.whl", hash = "sha256:c9c4ff42879ebf0c05f6562cb81031869948916be343bcc950b81fcc081fe9ce", size = 18925, upload-time = "2026-09-12T10:16:06.862Z" },
 ]
 
 [[package]]
