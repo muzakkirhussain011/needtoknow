@@ -145,11 +145,11 @@ class CassandraBackend:
             return
         vectors = document_vectors(docs, embeddings, self.embed)
         latest = {d.id: i for i, d in enumerate(docs)}  # the last of repeated ids wins, as in order
-        rows = [
-            (docs[i].id, docs[i].text, json.dumps(dict(docs[i].metadata)), set(terms(docs[i].id, docs[i].metadata)),
-             [float(x) for x in vectors[i]])
-            for i in latest.values()
-        ]
+        rows: list[tuple[Any, ...]] = []
+        for i in latest.values():
+            doc = docs[i]
+            row = (doc.id, doc.text, json.dumps(dict(doc.metadata)), set(terms(doc.id, doc.metadata)))
+            rows.append((*row, [float(x) for x in vectors[i]]))
         self._run(
             f"INSERT INTO {self.name} (id, text, metadata, needtoknow_terms, embedding) VALUES (?, ?, ?, ?, ?)", rows
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 
 import pytest
 
@@ -65,7 +66,7 @@ def test_settings_and_searches_that_need_no_query():
 # ---- a real Cassandra --------------------------------------------------------------------------
 
 needs_cassandra = pytest.mark.skipif(not HOST, reason="set NEEDTOKNOW_TEST_CASSANDRA_HOST to run against Cassandra")
-_STORED: set[str] = set()
+_TABLES: list[str] = []
 
 
 @pytest.fixture(scope="module")
@@ -77,18 +78,19 @@ def session():
         "CREATE KEYSPACE IF NOT EXISTS needtoknow_test "
         "WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}"
     )
-    create_table(session, "needtoknow_test", "chunks", EMBED.dim)
     yield session
     cluster.shutdown()
 
 
 def _factory(session, *, vectors=False):
     def make(docs):
-        backend = CassandraBackend(session, "needtoknow_test", "chunks", None if vectors else EMBED)
-        backend.delete(_STORED)  # one table for every test: each corpus replaces the one before
-        _STORED.clear()
+        # A new table for each corpus: rows deleted from the one before must not linger in its index.
+        for old in _TABLES:
+            session.execute(f"DROP TABLE IF EXISTS needtoknow_test.{old}")
+        _TABLES[:] = [f"chunks_{uuid.uuid4().hex[:12]}"]
+        create_table(session, "needtoknow_test", _TABLES[0], EMBED.dim)
+        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], None if vectors else EMBED)
         backend.add(docs, [EMBED(d.text) for d in docs] if vectors else None)
-        _STORED.update(d.id for d in docs)
         return backend
 
     return make

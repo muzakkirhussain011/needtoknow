@@ -175,6 +175,8 @@ class VespaBackend:
             if response.status_code not in ok:
                 raise RuntimeError(f"Vespa {what} failed: HTTP {response.status_code}: {response.text[:300]}")
 
+        if not items:
+            return
         if len(items) == 1:
             run(items[0])
             return

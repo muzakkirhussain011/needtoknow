@@ -192,6 +192,11 @@ jobs:
           # The code that decides who reads what is held to a higher bar: the retriever, the filter
           # language, composition, caching and the permission-service clients, together.
           coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
+      - name: Cassandra and Vespa server errors, when a step failed
+        if: failure()
+        run: |
+          docker logs cassandra 2>&1 | grep -A30 -E "^ERROR" | tail -150 || true
+          docker logs vespa 2>&1 | grep -iE "error|fatal" | tail -40 || true
       - name: Runnable examples
         run: |
           python examples/langchain_quickstart.py
