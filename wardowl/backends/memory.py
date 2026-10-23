@@ -6,6 +6,7 @@ semantics: other backends are tested against it.
 
 from __future__ import annotations
 
+import copy
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping
@@ -23,6 +24,12 @@ def _tokens(text: str) -> list[str]:
     return _TOKEN.findall(text.lower())
 
 
+def _copy(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    # The store keeps its own copy and hands out copies: a caller changing a hit's metadata, or the
+    # dict it stored, must not change the permissions of the chunk stored here.
+    return copy.deepcopy(dict(metadata))
+
+
 class InMemoryBackend:
     """Keeps documents in memory and ranks them by keyword overlap.
 
@@ -38,14 +45,14 @@ class InMemoryBackend:
 
     def add(self, documents: Iterable[Document]) -> None:
         for doc in documents:
-            self._docs[doc.id] = doc
+            self._docs[doc.id] = Document(doc.id, doc.text, _copy(doc.metadata))
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
         """Replace the metadata of stored chunks, keeping their text. Ids not stored are ignored."""
         for doc_id, new in metadata.items():
             old = self._docs.get(doc_id)
             if old is not None:
-                self._docs[doc_id] = Document(doc_id, old.text, dict(new))
+                self._docs[doc_id] = Document(doc_id, old.text, _copy(new))
 
     def __len__(self) -> int:
         return len(self._docs)
@@ -54,7 +61,7 @@ class InMemoryBackend:
         terms = set(_tokens(Query.of(query).keywords()))
         if not terms or k < 1:
             return []
-        hits = []
+        scored: list[tuple[float, Document]] = []
         for doc in self._docs.values():
             if filter is not None and not matches(filter, doc.metadata):
                 continue
@@ -63,6 +70,6 @@ class InMemoryBackend:
             # ranking is meaningful but fully deterministic.
             score = sum(1.0 + 0.1 * min(counts[t], 5) for t in terms if counts[t]) / len(terms)
             if score > 0:
-                hits.append(Hit(doc.id, doc.text, score, doc.metadata))
-        hits.sort(key=lambda h: (-h.score, h.id))
-        return hits[:k]
+                scored.append((score, doc))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].id))
+        return [Hit(doc.id, doc.text, score, _copy(doc.metadata)) for score, doc in scored[:k]]

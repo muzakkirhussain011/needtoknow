@@ -113,6 +113,17 @@ def test_a_decision_cached_for_a_subject_is_not_reused_after_its_attributes_chan
     assert authz.check(Subject("bob", [], {"tenants": []}), hits) == [False]
 
 
+def test_the_in_memory_backend_keeps_its_own_copy_of_the_metadata():
+    stored = {"allowed_groups": ["hr"]}
+    backend = InMemoryBackend([Document("d", "leave", stored)])
+    stored["allowed_groups"].append("eng")  # the caller's dict, changed after it was added
+    hit = backend.search("leave", 1)[0]
+    hit.metadata["allowed_groups"].append("sales")  # a hit handed out, changed by whoever got it
+    hit.metadata["allowed_users"] = ["bob"]
+    assert backend.search("leave", 1)[0].metadata == {"allowed_groups": ["hr"]}
+    assert PermissionedRetriever(backend, MetadataACLAuthorizer()).retrieve("leave", BOB).hits == []
+
+
 # ---- metadata ACL ------------------------------------------------------------------------------
 
 
