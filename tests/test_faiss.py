@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("faiss")
 
-from needtoknow import (  # noqa: E402
+from needtoknow import (
     Document,
     In,
     MetadataACLAuthorizer,
@@ -14,8 +14,8 @@ from needtoknow import (  # noqa: E402
     Query,
     Subject,
 )
-from needtoknow.backends.faiss import FaissBackend  # noqa: E402
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend  # noqa: E402
+from needtoknow.backends.faiss import FaissBackend
+from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 DOCS = [
