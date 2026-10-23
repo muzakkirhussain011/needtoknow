@@ -1,11 +1,18 @@
 name: Lock
 
 # Every install in CI and in the release comes from uv.lock (and examples/gateway/uv.lock), by hash.
-# When a branch changes a pyproject.toml, this job runs `uv lock` and commits the result to the
+# When a branch changes a pyproject.toml, this workflow runs `uv lock` and commits the result to the
 # same branch, so the locks always match what the project declares; `uv lock --check` in CI fails a
 # pull request whose locks are stale. Dependabot keeps the locked versions current on main. Run it by
 # hand on a branch with `upgrade` to move named packages to their newest allowed release in both locks,
 # for example for a security fix that has not reached Dependabot yet.
+#
+# Resolving reads PyPI, so it runs in a job of its own with a read-only token: the checkout keeps
+# no credentials, `--no-build` never builds a source distribution (the projects' own build backends
+# still run), and a version uploaded less than 7 days ago is refused unless it was named in
+# `upgrade` (Dependabot waits the same week). A second job, which runs no project or package code,
+# commits the locks it produced and pushes them. A commit pushed with the workflow's token starts no
+# workflow, so that job then starts CI on it.
 
 on:
   push:
@@ -22,17 +29,18 @@ permissions:
   contents: read
 
 jobs:
-  lock:
-    if: github.ref != 'refs/heads/main'
+  resolve:
+    if: github.ref != 'refs/heads/main' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # to commit the updated locks to this branch
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with: { version: "0.13.1", enable-cache: false }
-      - run: uv lock
-      - run: uv lock
+      - run: uv lock --no-build
+      - run: uv lock --no-build
         working-directory: examples/gateway
       - name: Upgrade the packages asked for
         if: inputs.upgrade != ''
@@ -47,13 +55,89 @@ jobs:
             fi
             args+=(--upgrade-package "$package")
           done
-          uv lock "${args[@]}"
-          (cd examples/gateway && uv lock "${args[@]}")
-      - name: Commit the locks if they changed
+          uv lock --no-build "${args[@]}"
+          (cd examples/gateway && uv lock --no-build "${args[@]}")
+      - name: No version uploaded in the last 7 days, unless it was asked for
+        env:
+          UPGRADE: ${{ inputs.upgrade }}
+        run: |
+          python3 - <<'EOF'
+          import os, re, subprocess, sys, tomllib
+          from datetime import datetime, timedelta, timezone
+
+
+          def normalized(name):
+              return re.sub(r"[-_.]+", "-", name).lower()
+
+
+          def uploads(text):
+              """The newest upload time of each locked (package, version)."""
+              found = {}
+              for package in tomllib.loads(text).get("package", []):
+                  files = ([package["sdist"]] if "sdist" in package else []) + package.get("wheels", [])
+                  times = [datetime.fromisoformat(f["upload-time"].replace("Z", "+00:00")) for f in files if "upload-time" in f]
+                  if times:
+                      found[(normalized(package["name"]), package.get("version"))] = max(times)
+              return found
+
+
+          asked = {normalized(name) for name in os.environ.get("UPGRADE", "").split()}
+          cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+          fresh = []
+          for path in ("uv.lock", "examples/gateway/uv.lock"):
+              before = subprocess.run(["git", "show", f"HEAD:{path}"], capture_output=True, text=True)
+              old = uploads(before.stdout) if before.returncode == 0 else {}
+              with open(path, encoding="utf-8") as lock:
+                  new = uploads(lock.read())
+              for (package, version), uploaded in sorted(new.items()):
+                  if (package, version) not in old and package not in asked and uploaded > cutoff:
+                      fresh.append(f"{path}: {package} {version}, uploaded {uploaded:%Y-%m-%d %H:%M} UTC")
+          for line in fresh:
+              print(f"::error::uploaded less than 7 days ago; name it in `upgrade` to take it now: {line}")
+          sys.exit(1 if fresh else 0)
+          EOF
+      - id: diff
+        run: |
+          if git diff --quiet -- uv.lock examples/gateway/uv.lock; then
+            echo "the locks are up to date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: locks
+          path: |
+            uv.lock
+            examples/gateway/uv.lock
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    needs: resolve
+    if: needs.resolve.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to push the new locks to this branch
+      actions: write # to start CI on that commit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: locks, path: . }
+      - name: Commit the locks, push them and start CI on the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git add uv.lock examples/gateway/uv.lock
           if git diff --cached --quiet; then echo "the locks are up to date"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Lock dependencies with uv"
-          git push
+          basic=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
+            push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" \
+            || echo "::warning::CI was not started on the lock commit; push again or run CI by hand"
