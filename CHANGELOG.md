@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Redaction: `PermissionedRetriever(redactor=...)` hides parts of the chunks a subject may read, after
+  the permission check and before a reranker or a model sees them. `SpanRedactor` hides spans listed
+  in a chunk's metadata, each with its own readers; `PatternRedactor` hides text matching patterns
+  unless the subject is in an exempt group. A redactor may change text and metadata but not which
+  hits are returned, and one that fails makes the retrieval raise `AuthorizationError`.
+
 ## [1.4.0] - 2026-10-22
 
 Nine of the ten stores now serve both halves of hybrid search under the permission filter: keyword
