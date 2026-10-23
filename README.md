@@ -123,6 +123,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [LanceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/lancedb.html) | Vector store, embedded | `needtoknow[lancedb]` | Before the vector search ranks, on hex-encoded terms |
 | [FAISS](https://muzakkirhussain011.github.io/needtoknow/integrations/faiss.html) | Vector search library, in process | `needtoknow[faiss]` | Before the search ranks, as an ID selector |
 | [Vespa](https://muzakkirhussain011.github.io/needtoknow/integrations/vespa.html) | Search engine | `needtoknow[vespa]` | In the YQL query, inside the nearest-neighbor search |
+| [Apache Cassandra](https://muzakkirhussain011.github.io/needtoknow/integrations/cassandra.html) | Database with vector search | `needtoknow[cassandra]` | In each ANN query's `WHERE`, as bound parameters |
 | [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
 | [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
 | [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |

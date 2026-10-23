@@ -41,6 +41,8 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       # Every extra, so the adapters are checked against the real libraries' types.
+      - name: Start Cassandra
+        run: docker run -d --name cassandra -p 9042:9042 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=200M cassandra:5.0.9
       - name: Start Vespa and deploy the example application
         run: |
           docker run -d --name vespa --hostname vespa-container -p 8090:8080 -p 19071:19071 vespaengine/vespa:8.763.13
@@ -148,8 +150,10 @@ jobs:
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r .github/requirements/build.txt
           pip install --no-deps --no-build-isolation -e .
-      - name: Wait for Elasticsearch, OpenSearch, Milvus and MongoDB
+      - name: Wait for Elasticsearch, OpenSearch, Milvus, MongoDB and Cassandra
         run: |
+          for i in $(seq 1 90); do docker exec cassandra cqlsh -e 'SELECT release_version FROM system.local' > /dev/null 2>&1 && break; sleep 2; done
+          docker exec cassandra cqlsh -e 'SELECT release_version FROM system.local' || { docker logs --tail 50 cassandra; exit 1; }
           for url in http://127.0.0.1:9200 http://127.0.0.1:9201; do
             for i in $(seq 1 90); do
               curl -sf "$url/_cluster/health?wait_for_status=yellow&timeout=2s" > /dev/null && break
@@ -161,7 +165,7 @@ jobs:
           curl -sf http://127.0.0.1:9091/healthz || { docker logs --tail 50 milvus; exit 1; }
           for i in $(seq 1 120); do [ "$(docker inspect -f '{{.State.Health.Status}}' mongodb)" = healthy ] && break; sleep 2; done
           [ "$(docker inspect -f '{{.State.Health.Status}}' mongodb)" = healthy ] || { docker logs --tail 50 mongodb; exit 1; }
-      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, Vespa, OPA, OpenFGA, SpiceDB, Cerbos and Redis)
+      - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, Vespa, Cassandra, OPA, OpenFGA, SpiceDB, Cerbos and Redis)
         env:
           NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
           NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
@@ -174,6 +178,7 @@ jobs:
           NEEDTOKNOW_TEST_REDIS_URL: redis://127.0.0.1:6379/0
           NEEDTOKNOW_TEST_QDRANT_URL: http://127.0.0.1:6333
           NEEDTOKNOW_TEST_VESPA_URL: http://127.0.0.1:8090
+          NEEDTOKNOW_TEST_CASSANDRA_HOST: 127.0.0.1
           NEEDTOKNOW_TEST_MILVUS_URL: http://127.0.0.1:19530
           NEEDTOKNOW_TEST_MONGODB_URL: mongodb://127.0.0.1:27017/?directConnection=true
           NEEDTOKNOW_TEST_WEAVIATE_URL: http://127.0.0.1:8079

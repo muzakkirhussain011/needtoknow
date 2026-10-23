@@ -8,6 +8,12 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `CassandraBackend` (the `cassandra` extra): vector search on Apache Cassandra 5.0 with Storage-Attached
+  Indexes. The filter becomes an OR of ANDs on type-tagged terms in an indexed `set<text>`; each AND
+  is one ANN query with bound `CONTAINS` parameters, run concurrently, and the best `k` are kept.
+  `set_metadata` uses a lightweight transaction so an id that is not stored creates no row;
+  `create_table` creates the table and indexes. Tested with the conformance kit against Cassandra
+  5.0.9.
 - `VespaBackend` (the `vespa` extra): nearest-neighbor or BM25 search on Vespa through its HTTP APIs,
   with the permission filter in the YQL query as conditions on hex-encoded, type-tagged terms, so
   Vespa applies it inside the search and no metadata value can change the query. HNSW or exact

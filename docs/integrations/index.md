@@ -17,6 +17,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [LanceDB](lancedb.md) | Backend | `needtoknow[lancedb]` | Yes, before the vector search ranks |
 | [FAISS](faiss.md) | Backend, in process | `needtoknow[faiss]` | Yes, an ID selector inside the search |
 | [Vespa](vespa.md) | Backend | `needtoknow[vespa]` | Yes, in the YQL query, inside the nearest-neighbor search |
+| [Apache Cassandra](cassandra.md) | Backend | `needtoknow[cassandra]` | Yes, in each ANN query's `WHERE` |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
@@ -54,6 +55,7 @@ and keeps permission values out of query text. They differ in what is worth know
 | [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | BM25, `mode="keyword"` | LanceDB 0.40, embedded |
 | [FAISS](faiss.md) | At once | No (a thread) | `matches` over the stored metadata, then an ID selector | None | faiss-cpu 1.15, in process |
 | [Vespa](vespa.md) | When `add` returns | No (a thread) | Hex-encoded terms in YQL (`in`) | BM25, `mode="keyword"` | 8.763.13 |
+| [Apache Cassandra](cassandra.md) | When `add` returns, at the session's consistency level | No (a thread) | Bound `CONTAINS` parameters, one ANN query per AND | No | 5.0.9 |
 
 Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
 stores as well as within one. Measured recall, latency and throughput at a million chunks are in
