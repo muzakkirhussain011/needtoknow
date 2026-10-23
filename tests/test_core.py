@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
+import pickle
 
 import pytest
 
 from wardowl import (
     And,
     AuthorizationError,
+    CachingAuthorizer,
     Document,
     FunctionAuthorizer,
+    Hit,
     In,
     InMemoryBackend,
     MetadataACLAuthorizer,
@@ -64,6 +69,48 @@ def test_subject_rejects_a_single_string_for_groups():
 
 def test_subjects_are_hashable_for_caching():
     assert hash(Subject("bob", ["eng"])) == hash(Subject("bob", ["eng"], {"region": "eu"}))
+
+
+@pytest.mark.parametrize("bad", [lambda: Subject(42), lambda: Subject(b"bob"), lambda: Subject("bob", ["eng", 7])])
+def test_subject_ids_and_groups_are_strings(bad):
+    # 7 and "7" are different filter values, so a group of another type would match differently.
+    with pytest.raises(TypeError):
+        bad()
+
+
+def test_subject_attributes_cannot_change_once_the_subject_is_made():
+    roles, org = ["reader"], {"region": "eu"}
+    attributes = {"tenant": "acme", "roles": roles, "org": org, "tags": {"a"}}
+    subject = Subject("bob", ["eng"], attributes)
+    attributes["tenant"], org["region"] = "globex", "us"
+    roles.append("admin")
+    assert subject.attributes == {"tenant": "acme", "roles": ("reader",), "org": {"region": "eu"}, "tags": {"a"}}
+    changes = [
+        lambda: subject.attributes.__setitem__("tenant", "globex"),
+        lambda: subject.attributes.update(tenant="globex"),
+        lambda: subject.attributes.pop("tenant"),
+        lambda: subject.attributes.clear(),
+        lambda: subject.attributes["org"].__setitem__("region", "us"),
+        lambda: subject.attributes["org"].__ior__({"region": "us"}),
+    ]
+    for change in changes:
+        with pytest.raises(TypeError):
+            change()
+    assert subject.attributes["tenant"] == "acme" and subject.attributes["org"] == {"region": "eu"}
+    # Still a dict for the authorizers that send attributes to a permission service, and copyable.
+    plain = Subject("ann", [], {"tenant": "acme", "roles": ["reader"], "org": {"region": "eu"}})
+    assert json.loads(json.dumps(plain.attributes)) == {"tenant": "acme", "roles": ["reader"], "org": {"region": "eu"}}
+    assert pickle.loads(pickle.dumps(subject)) == subject == copy.deepcopy(subject)  # noqa: S301
+
+
+def test_a_decision_cached_for_a_subject_is_not_reused_after_its_attributes_change():
+    tenants = ["acme"]
+    bob = Subject("bob", [], {"tenants": tenants})
+    authz = CachingAuthorizer(FunctionAuthorizer(lambda s, hits, a: ["acme" in s.attributes["tenants"]] * len(hits)))
+    hits = [Hit("plan", "t", 1.0, {})]
+    assert authz.check(bob, hits) == [True]
+    tenants.remove("acme")  # the caller's list, changed after the decision was cached
+    assert authz.check(Subject("bob", [], {"tenants": []}), hits) == [False]
 
 
 # ---- metadata ACL ------------------------------------------------------------------------------

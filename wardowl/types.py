@@ -5,29 +5,75 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, NoReturn
 
 Embed = Callable[[str], Sequence[float]]
 """Turns text into a vector: your embedding model."""
 
 
+class _ReadOnlyDict(dict[str, Any]):
+    """A dict that refuses changes: a subject's attributes, and every mapping inside them.
+
+    A dict rather than a `MappingProxyType`, so that `json.dumps`, `dict()` and the authorizers that
+    send attributes to a permission service keep working, and so that subjects can be copied and
+    pickled. Every method that changes a dict raises `TypeError` (they are set below the class).
+    """
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # pickle and copy would otherwise refill the copy item by item, through __setitem__.
+        return (_ReadOnlyDict, (dict(self),))
+
+
+def _refuse(self: Any, *args: Any, **kwargs: Any) -> NoReturn:
+    raise TypeError("a subject's attributes cannot be changed; make a new Subject")
+
+
+for _method in ("__setitem__", "__delitem__", "__ior__", "clear", "pop", "popitem", "setdefault", "update"):
+    setattr(_ReadOnlyDict, _method, _refuse)
+
+
+def _frozen(value: Any) -> Any:
+    """A copy of `value` that cannot be changed: mappings read-only, lists tuples, sets frozensets."""
+    if isinstance(value, Mapping):
+        return _ReadOnlyDict({key: _frozen(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_frozen(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return frozenset(_frozen(item) for item in value)
+    if isinstance(value, bytearray):
+        return bytes(value)
+    return value
+
+
 @dataclass(frozen=True)
 class Subject:
-    """Who is asking: a user id, the groups they belong to, and any attributes your policy needs."""
+    """Who is asking: a user id, the groups they belong to, and any attributes your policy needs.
+
+    The id and every group are strings. `attributes` is copied when the subject is made, and the
+    copy cannot be changed: mappings in it are read-only, lists become tuples and sets frozensets.
+    Decisions are cached per subject, so a subject changed afterwards could otherwise be given an
+    answer cached for what it was before.
+    """
 
     id: str
     groups: frozenset[str] = frozenset()
     attributes: Mapping[str, Any] = field(default_factory=dict, hash=False)
 
     def __init__(self, id: str, groups: Iterable[str] = (), attributes: Mapping[str, Any] | None = None) -> None:
+        if not isinstance(id, str):
+            raise TypeError(f"a subject id is a string, not {type(id).__name__}")
         if not id:
             raise ValueError("a subject needs a non-empty id")
         if isinstance(groups, str):
             # frozenset("eng") would be {"e", "n", "g"}: reject instead of guessing.
             raise TypeError("groups must be a collection of group names, not a single string")
+        names = frozenset(groups)
+        if not all(isinstance(name, str) for name in names):
+            # 7 and "7" are different filter values: a group of another type would match differently.
+            raise TypeError("every group name is a string")
         object.__setattr__(self, "id", id)
-        object.__setattr__(self, "groups", frozenset(groups))
-        object.__setattr__(self, "attributes", dict(attributes or {}))
+        object.__setattr__(self, "groups", names)
+        object.__setattr__(self, "attributes", _frozen(dict(attributes or {})))
 
 
 @dataclass(frozen=True)
