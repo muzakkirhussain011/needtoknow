@@ -23,6 +23,7 @@ from wardowl.events import query_fingerprint
 from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
+KEY = b"k" * 16  # an audit key is at least 16 bytes
 BOB = Subject("bob", ["eng"])
 
 
@@ -146,7 +147,7 @@ def test_permissions_apply_to_vector_queries_as_to_text():
 def test_anything_but_a_string_or_query_is_refused_and_reported():
     events = []
     retriever = PermissionedRetriever(
-        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY
     )
     with pytest.raises(TypeError):
         retriever.retrieve([0.1, 0.2], BOB)  # type: ignore[arg-type]
@@ -199,9 +200,9 @@ def test_vector_fingerprints_match_equal_vectors_only():
 def test_the_retriever_fingerprints_vector_queries_without_storing_them():
     events = []
     retriever = PermissionedRetriever(
-        VectorOnly(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+        VectorOnly(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY
     )
     q = Query(vector=EMBED("doc leave policy"))
     retriever.retrieve(q, BOB, 1)
-    assert events[-1].query_hmac == query_fingerprint(q, b"k")
+    assert events[-1].query_hmac == query_fingerprint(q, KEY)
     assert "vector" not in events[-1].to_dict()

@@ -59,7 +59,7 @@ def test_policies_written_from_the_acls_give_exactly_the_reference_answer(docs, 
         for who in [*d.metadata.get("allowed_users", []), *d.metadata.get("allowed_groups", [])]
     ]
     authz = CasbinAuthorizer(enforcer(policies), resource_field=None, group_subjects=True)
-    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, max_candidates=len(docs) + k)
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
 

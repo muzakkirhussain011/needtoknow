@@ -54,7 +54,7 @@ def _in_tenant(subject):
 def test_all_of_is_the_intersection(docs, subject, query, k, strategy):
     subject = _in_tenant(subject)
     authz = AllOf(TenantAuthorizer(), MetadataACLAuthorizer())
-    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + k)
     expected = _oracle(docs, query, k, lambda d: d.metadata["tenant"] == "acme" and may_read(subject, d))
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == expected
 
@@ -64,7 +64,7 @@ def test_all_of_is_the_intersection(docs, subject, query, k, strategy):
 def test_any_of_is_the_union(docs, subject, query, k, strategy):
     subject = _in_tenant(subject)
     authz = AnyOf(MetadataACLAuthorizer(), TenantAuthorizer())
-    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + k)
     expected = _oracle(docs, query, k, lambda d: d.metadata["tenant"] == "acme" or may_read(subject, d))
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == expected
 

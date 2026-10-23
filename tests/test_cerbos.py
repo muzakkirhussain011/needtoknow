@@ -231,7 +231,7 @@ def test_the_example_policy_gives_a_pre_filter():
 )
 def test_the_example_policy_gives_exactly_the_reference_answer(docs, subject, query, k, strategy):
     authz = CerbosAuthorizer(CERBOS_URL)
-    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + k)
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
 

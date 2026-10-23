@@ -152,7 +152,7 @@ OPA_URL = os.environ.get("WARDOWL_TEST_OPA_URL")
 )
 def test_example_policy_gives_exactly_the_reference_answer(docs, subject, query, k, strategy):
     authz = OPAAuthorizer(OPA_URL, filter_path="wardowl/filter")
-    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + k)
     result = retriever.retrieve(query, subject, k)
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)
 

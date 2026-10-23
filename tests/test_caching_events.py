@@ -25,6 +25,7 @@ from wardowl import (
 from wardowl.caching import CacheStats
 from wardowl.events import query_fingerprint
 
+KEY = b"k" * 16  # an audit key is at least 16 bytes
 BOB = Subject("bob", ["eng"])
 DOCS = [
     Document("handbook", "leave policy", {"allowed_groups": ["*"]}),
@@ -67,7 +68,7 @@ class Clock:
 @given(corpora(max_size=20), subjects, queries, st.integers(1, 6), st.sampled_from(["auto", "prefilter", "postfilter"]))
 def test_caching_never_changes_the_answer(docs, subject, query, k, strategy):
     cached = CachingAuthorizer(MetadataACLAuthorizer())
-    retriever = PermissionedRetriever(InMemoryBackend(docs), cached, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), cached, strategy=strategy, max_candidates=len(docs) + k)
     for _ in range(2):  # the second round is served from the cache
         assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
@@ -148,12 +149,12 @@ def test_events_record_outcomes_but_never_the_query():
     stream, events = io.StringIO(), []
     observers = [events.append, JsonLinesAudit(stream)]
     retriever = PermissionedRetriever(
-        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=observers, audit_key=b"k"
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=observers, audit_key=KEY
     )
     retriever.retrieve("leave salary", BOB, k=3)
     (event,) = events
     assert event.subject_id == "bob" and event.strategy == "prefilter" and event.returned_ids == ("handbook",)
-    assert event.query_hmac == query_fingerprint("leave salary", b"k") and event.error is None
+    assert event.query_hmac == query_fingerprint("leave salary", KEY) and event.error is None
     line = stream.getvalue()
     assert json.loads(line)["returned_ids"] == ["handbook"]
     assert "leave" not in line and "salary" not in line
@@ -178,10 +179,10 @@ def test_failures_are_reported_and_still_raised_and_observers_cannot_break_retri
 def test_a_query_with_a_lone_surrogate_is_fingerprinted_not_refused():
     events = []
     retriever = PermissionedRetriever(
-        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY
     )
     retriever.retrieve("leave \ud800", BOB)  # a JSON body can carry one ("\ud800")
-    assert events[0].query_hmac == query_fingerprint("leave \ud800", b"k") != query_fingerprint("leave", b"k")
+    assert events[0].query_hmac == query_fingerprint("leave \ud800", KEY) != query_fingerprint("leave", KEY)
 
 
 def test_an_event_that_cannot_be_built_never_replaces_the_error_or_the_result(monkeypatch, caplog):
@@ -191,11 +192,11 @@ def test_an_event_that_cannot_be_built_never_replaces_the_error_or_the_result(mo
     monkeypatch.setattr("wardowl.retriever.query_fingerprint", broken)
     events = []
     authz = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
-    failing = PermissionedRetriever(InMemoryBackend(DOCS), authz, observers=[events.append], audit_key=b"k")
+    failing = PermissionedRetriever(InMemoryBackend(DOCS), authz, observers=[events.append], audit_key=KEY)
     with pytest.raises(AuthorizationError):  # the retrieval's own error, not the reporting one
         failing.retrieve("leave", BOB)
     ok = PermissionedRetriever(
-        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=b"k"
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY
     )
     assert [h.id for h in ok.retrieve("leave", BOB).hits] == ["handbook"]
     assert events == [] and "could not build the retrieval event" in caplog.text

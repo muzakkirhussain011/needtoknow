@@ -333,7 +333,7 @@ def test_sharing_never_changes_the_answer(docs, subject, query, k, strategy):
     shared = FakeShared()
     for _ in range(2):  # the second replica is served from the shared cache
         authz = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared, namespace=NS)
-        retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
+        retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + k)
         assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
 

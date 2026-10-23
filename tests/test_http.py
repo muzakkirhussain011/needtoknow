@@ -197,7 +197,7 @@ FAULTS = st.sampled_from(["ok", "503", "reset", "ok-then-close", "400", "badjson
 def test_under_any_faults_retrieval_is_exact_or_fails_closed(server, docs, subject, query, k, faults):
     server.script = list(faults)
     retriever = PermissionedRetriever(
-        InMemoryBackend(docs), OPAAuthorizer(server.url), strategy="postfilter", max_candidates=len(docs) + 1
+        InMemoryBackend(docs), OPAAuthorizer(server.url), strategy="postfilter", max_candidates=len(docs) + k
     )
     try:
         result = retriever.retrieve(query, subject, k)

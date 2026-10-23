@@ -162,6 +162,22 @@ def test_redaction_applies_to_async_retrieval_and_plain_functions():
     assert isinstance(SpanRedactor(), Redactor)
 
 
+def test_async_retrieval_runs_the_redactor_off_the_event_loop():
+    where = []
+
+    def redact(subject, hits):
+        try:
+            asyncio.get_running_loop()
+            where.append("on the event loop")
+        except RuntimeError:
+            where.append("in a thread")
+        return hits
+
+    retriever = PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), redactor=redact)
+    assert asyncio.run(retriever.aretrieve("plan", ANN, k=2)).hits
+    assert where == ["in a thread"]  # a slow redactor would otherwise hold up every other request
+
+
 @pytest.mark.parametrize(
     "redact",
     [

@@ -28,7 +28,7 @@ def test_never_returns_a_chunk_the_subject_may_not_read(docs, subject, query, k,
 def test_returns_exactly_the_top_k_of_what_the_subject_may_read(docs, subject, query, k, strategy):
     # With max_candidates covering the corpus, every strategy must produce the correct answer.
     retriever = PermissionedRetriever(
-        InMemoryBackend(docs), MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + 1
+        InMemoryBackend(docs), MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + k
     )
     result = retriever.retrieve(query, subject, k)
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)

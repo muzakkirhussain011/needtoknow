@@ -48,7 +48,7 @@ def test_fusing_a_store_with_itself_passes_the_conformance_kit():
 @given(corpora(max_size=20), subjects, queries, st.integers(1, 5), st.sampled_from(["auto", "prefilter", "postfilter"]))
 def test_retrieval_through_fusion_matches_the_oracle(docs, subject, query, k, strategy):
     fused = RankFusion(InMemoryBackend(docs), InMemoryBackend(docs))
-    retriever = PermissionedRetriever(fused, MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(fused, MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + k)
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
 
