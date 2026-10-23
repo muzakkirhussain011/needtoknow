@@ -9,7 +9,13 @@ import pytest
 
 from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
 from needtoknow.backends._engines import tag
-from needtoknow.backends.cassandra import CassandraBackend, create_table, filter_to_conjunctions
+from needtoknow.backends.cassandra import (
+    CassandraBackend,
+    TooManyQueries,
+    create_table,
+    filter_to_conjunctions,
+    required_terms,
+)
 from needtoknow.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
@@ -38,6 +44,10 @@ def test_filters_become_an_or_of_ands():
     with pytest.raises(ValueError, match="more than 5"):
         filter_to_conjunctions(wide, 5)
     assert filter_to_conjunctions(Or(In("a", ["x"]), And(In("a", ["x"]), In("b", ["y"])))) == [frozenset({a})]
+    assert required_terms(And(In("a", ["x"]), Or(And(In("b", ["y"]), In("c", [1])), In("b", ["y"])))) == {a, b}
+    assert required_terms(In("a", ["x", "z"])) == frozenset()
+    with pytest.raises(TypeError):
+        required_terms("a")
 
 
 class NoSession:
@@ -50,8 +60,8 @@ def test_settings_and_searches_that_need_no_query():
     assert backend.search("q", 0) == [] and backend.search("q", 3, In("team", [])) == []
     backend.add([])
     backend.delete([])
-    with pytest.raises(ValueError, match="max_queries"):
-        backend.search("q", 3, In("team", ["a", "b", "c"]))
+    with pytest.raises(TooManyQueries):
+        filter_to_conjunctions(In("team", ["a", "b", "c"]), 2)
     for bad in ({"keyspace": "Ks"}, {"table": "a;b"}):
         with pytest.raises(ValueError):
             CassandraBackend(NoSession(), **{"keyspace": "ks", "table": "t", **bad}, embed=EMBED)
@@ -92,9 +102,8 @@ def _factory(session, *, vectors=False):
             session.execute(f"DROP TABLE IF EXISTS needtoknow_test.{old}")
         _TABLES[:] = [f"chunks_{uuid.uuid4().hex[:12]}"]
         create_table(session, "needtoknow_test", _TABLES[0], EMBED.dim)
-        # The kit's random filters nest deep, so they expand to many ANN queries.
-        embed = None if vectors else EMBED
-        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], embed, max_queries=10_000)
+        # The kit's deeply nested filters pass max_queries, so they also take the one-query path.
+        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], None if vectors else EMBED)
         backend.add(docs, [EMBED(d.text) for d in docs] if vectors else None)
         return backend
 

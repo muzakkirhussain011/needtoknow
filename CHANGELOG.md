@@ -16,7 +16,8 @@ Cassandra applies it in the `WHERE` of each ANN query, with every value bound as
 
 - `CassandraBackend` (the `cassandra` extra): vector search on Apache Cassandra 5.0 with Storage-Attached
   Indexes. The filter becomes an OR of ANDs on type-tagged terms in an indexed `set<text>`; each AND
-  is one ANN query with bound `CONTAINS` parameters, run concurrently, and the best `k` are kept.
+  is one ANN query with bound `CONTAINS` parameters, run concurrently, and the best `k` are kept; past
+  `max_queries`, one query on the terms every match needs is filtered in the process.
   `set_metadata` uses a lightweight transaction so an id that is not stored creates no row;
   `create_table` creates the table and indexes. Tested with the conformance kit against Cassandra
   5.0.9. Writes go 4 at a time (`write_concurrency`), as Cassandra 5.0's vector index accepts few

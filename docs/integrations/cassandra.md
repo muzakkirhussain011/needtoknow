@@ -31,9 +31,11 @@ AND becomes one ANN query whose `WHERE` requires its terms with `needtoknow_term
 queries run concurrently and the best `k` hits of their union are returned. A subject in the groups
 `eng` and `sales` costs two ANN queries.
 
-`max_queries` (256 by default) bounds how many ANN queries one search may send. A filter that
-expands to more raises `ValueError`, so retrieval fails closed: raise the bound, or post-filter
-(`strategy="postfilter"`) for subjects with very many groups.
+`max_queries` (256 by default) bounds how many ANN queries one search sends; ANDs that another AND
+implies are dropped first. A filter that still needs more is sent as one ANN query on the terms
+every match must have, for 1,000 rows, and the backend applies the filter to those rows itself. It
+never returns a chunk the filter excludes, but it can miss matches beyond those 1,000 rows, as
+Cassandra's ANN search is approximate in any case.
 
 ## Production notes
 

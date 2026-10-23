@@ -9,8 +9,9 @@ results are kept. Every value is a bound parameter, never CQL text.
 
 `create_table(session, keyspace, table, dim)` creates the table and its indexes. Cassandra allows
 1,000 rows per ANN query, so `k` above that returns at most 1,000 hits. A filter that expands to more
-than `max_queries` ANDs (a subject in very many groups, say) raises `ValueError` rather than
-sending them all; raise `max_queries`, or let the retriever post-filter.
+than `max_queries` ANDs is sent as one ANN query on the terms every match must have, for 1,000
+rows, and the filter is applied to those rows here: never a chunk the filter excludes, but matches
+beyond those 1,000 rows can be missed, as Cassandra's ANN search is approximate in any case.
 """
 
 from __future__ import annotations
@@ -23,17 +24,32 @@ from typing import Any
 
 from needtoknow.backends._engines import _SEP, tag, terms
 from needtoknow.backends._vectors import document_vectors
-from needtoknow.filters import And, Filter, In, Or, _ordered
+from needtoknow.filters import And, Filter, In, Or, _ordered, matches
 from needtoknow.types import Document, Embed, Hit, Query
 
-__all__ = ["CassandraBackend", "create_table", "filter_to_conjunctions"]
+__all__ = ["CassandraBackend", "TooManyQueries", "create_table", "filter_to_conjunctions", "required_terms"]
 
 _NAME = re.compile(r"[a-z_][a-z0-9_]{0,47}\Z")
 _MAX_LIMIT = 1000  # Cassandra's limit for ANN queries
 
 
-def _too_many(limit: int) -> ValueError:
-    return ValueError(f"the filter expands to more than {limit} ANN queries (raise max_queries, or post-filter)")
+class TooManyQueries(ValueError):
+    """The filter expands to more ANDs than allowed."""
+
+
+def _too_many(limit: int) -> TooManyQueries:
+    return TooManyQueries(f"the filter expands to more than {limit} ANN queries")
+
+
+def required_terms(f: Filter) -> frozenset[str]:
+    """Terms every chunk the filter matches must have (possibly none)."""
+    if isinstance(f, In):
+        return frozenset({tag(f.field, v) for v in f.values}) if len(f.values) == 1 else frozenset()
+    if isinstance(f, And):
+        return frozenset().union(*(required_terms(c) for c in f.clauses))
+    if isinstance(f, Or):
+        return frozenset.intersection(*(required_terms(c) for c in f.clauses))
+    raise TypeError(f"not a filter: {f!r}")
 
 
 def _minimal(sets: Iterable[frozenset[str]], limit: int) -> list[frozenset[str]]:
@@ -199,12 +215,17 @@ class CassandraBackend:
         if k < 1:
             return []
         groups: list[frozenset[str]] = [frozenset()]
+        local = None  # a filter too wide for ANN queries, applied here to the rows of one query
         if filter is not None:
-            groups = filter_to_conjunctions(filter, self.max_queries)
+            try:
+                groups = filter_to_conjunctions(filter, self.max_queries)
+            except TooManyQueries:
+                groups, local = [required_terms(filter)], filter
             if not groups:
                 return []
         vector = [float(x) for x in Query.of(query).embedded(self.embed)]
         limit = min(k, _MAX_LIMIT)
+        fetch = _MAX_LIMIT if local is not None else limit
         best: dict[str, Hit] = {}
         for size in sorted({len(g) for g in groups}):
             where = " AND ".join(["needtoknow_terms CONTAINS ?"] * size)
@@ -212,10 +233,11 @@ class CassandraBackend:
                 f"SELECT id, text, metadata, similarity_{self.similarity}(embedding, ?) AS score FROM {self.name}"
                 f"{' WHERE ' + where if where else ''} ORDER BY embedding ANN OF ? LIMIT ?"
             )
-            args = [(vector, *sorted(g), vector, limit) for g in groups if len(g) == size]
+            args = [(vector, *sorted(g), vector, fetch) for g in groups if len(g) == size]
             for result in self._run(cql, args):
                 for row in result:
                     doc_id, text, metadata, score = (_field(row, n) for n in ("id", "text", "metadata", "score"))
-                    if doc_id not in best:
-                        best[doc_id] = Hit(doc_id, text or "", float(score), json.loads(metadata or "{}"))
+                    hit = Hit(doc_id, text or "", float(score), json.loads(metadata or "{}"))
+                    if doc_id not in best and (local is None or matches(local, hit.metadata)):
+                        best[doc_id] = hit
         return sorted(best.values(), key=lambda h: (-h.score, h.id))[:limit]
