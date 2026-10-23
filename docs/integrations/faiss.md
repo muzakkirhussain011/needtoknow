@@ -44,6 +44,7 @@ backend = FaissBackend(embed, dim=768, index=index)
 
 ## Changes
 
-`add` replaces chunks with the same id, `delete` removes chunks by id, and `set_metadata` changes a
-chunk's permissions without embedding it again. A lock serializes changes and searches, so one
+`add` replaces chunks with the same id, and keeps only the last of an id repeated in one call, as
+if they were added in turn. `delete` removes chunks by id, and `set_metadata` changes a chunk's
+permissions without embedding it again. A lock serializes changes and searches, so one
 backend can serve several threads.
