@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-23
+
+Applications in any language can now use needtoknow through an HTTP service that takes the user
+from a verified OIDC token. Redaction hides the parts of a permitted chunk a user may not see,
+before a reranker or a model reads it. Ory Keto and Casbin join the permission systems, and FAISS
+joins the stores, with exact pre-filtering in the process.
+
 ### Added
 
 - `FaissBackend` (the `faiss` extra): vector search with FAISS in the process. The permission filter is
@@ -40,9 +47,8 @@ All notable changes are recorded here. The format follows
 Nine of the ten stores now serve both halves of hybrid search under the permission filter: keyword
 search (BM25) arrives on Qdrant, Milvus, MongoDB Atlas, Weaviate, Redis and LanceDB (Chroma has
 none). Cedar joins OPA, OpenFGA, SpiceDB and Cerbos as a permission system, evaluated in the
-process. Permissions can be
-synced from Google Drive. Operators get the cause of each failure, cache statistics and an incident
-runbook; security reviewers get a threat model, the invariants with the tests that hold them, and a
+process. Permissions can be synced from Google Drive. Operators get the cause of each failure, cache
+statistics and an incident runbook; security reviewers get a threat model, the invariants with the tests that hold them, and a
 compliance mapping. Several fail-closed gaps found by review are fixed, and from this release every
 package carries SLSA build provenance.
 
@@ -673,7 +679,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
