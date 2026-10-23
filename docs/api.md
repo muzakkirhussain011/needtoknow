@@ -20,6 +20,8 @@ modules and need their extra.
 
 .. autoclass:: wardowl.SpanRedactor
 
+.. autofunction:: wardowl.redaction.span_digest
+
 .. autoclass:: wardowl.PatternRedactor
 
 .. autoclass:: wardowl.Reranker
@@ -285,6 +287,9 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autoclass:: wardowl.llamaindex.LlamaIndexBackend
 
 .. autoclass:: wardowl.haystack.WardowlRetriever
+   :members: run, run_async
+
+.. autoclass:: wardowl.haystack.BoundWardowlRetriever
    :members: run, run_async
 
 .. autofunction:: wardowl.mcp.add_search_tool
