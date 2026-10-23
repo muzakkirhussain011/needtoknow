@@ -1,0 +1,21 @@
+# Ory Keto configuration for needtoknow's tests and the KetoAuthorizer guide: an in-memory store
+# with a Document namespace (whose `view` relation grants access) and a Group namespace (whose
+# `members` relation lists a group's members). Not for production: data lives in memory.
+dsn: memory
+
+namespaces:
+  - id: 0
+    name: Document
+  - id: 1
+    name: Group
+
+serve:
+  read:
+    host: 0.0.0.0
+    port: 4466
+  write:
+    host: 0.0.0.0
+    port: 4467
+
+log:
+  level: warning

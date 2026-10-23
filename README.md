@@ -127,6 +127,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [SpiceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/spicedb.html) | Permission system | none | LookupResources pre-filter, bulk checks |
 | [Cerbos](https://muzakkirhussain011.github.io/needtoknow/integrations/cerbos.html) | Permission system | none | Pre-filter from query plans |
 | [Cedar](https://muzakkirhussain011.github.io/needtoknow/integrations/cedar.html) | Permission system, in process | `needtoknow[cedar]` | Post-filter |
+| [Ory Keto](https://muzakkirhussain011.github.io/needtoknow/integrations/keto.html) | Permission system | none | Post-filter |
 | [Open Policy Agent](https://muzakkirhussain011.github.io/needtoknow/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
 | [Google Drive](https://muzakkirhussain011.github.io/needtoknow/integrations/google-drive.html) | Permission sync | none (bring Google's client) | Copies Drive sharing onto the chunks |
 | [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |

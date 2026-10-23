@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `KetoAuthorizer`: relationship checks against Ory Keto (`POST /relation-tuples/batch/check`), with no
+  extra dependency. Each chunk's document is a Keto object; `group_subjects=True` also checks the
+  subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A
+  result carrying an error, a malformed answer or a wrong number of results raises
+  `AuthorizationError`. Tested against Keto 26.2.0 and with the conformance kit.
+
 ## [1.4.0] - 2026-10-22
 
 Every store now serves both halves of hybrid search under the permission filter: keyword search
