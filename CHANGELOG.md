@@ -13,6 +13,11 @@ All notable changes are recorded here. The format follows
   models; `group_subjects=True` also asks with each of the subject's groups, for allow-only models.
   An enforcer that raises or answers with anything but booleans raises `AuthorizationError`. Tested
   against the reference answer on generated corpora and with the conformance kit.
+- `KetoAuthorizer`: relationship checks against Ory Keto (`POST /relation-tuples/batch/check`), with no
+  extra dependency. Each chunk's document is a Keto object; `group_subjects=True` also checks the
+  subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A
+  result carrying an error, a malformed answer or a wrong number of results raises
+  `AuthorizationError`. Tested against Keto 26.2.0 and with the conformance kit.
 - An HTTP service, `needtoknow.server` (the `server` extra), so applications in any language get
   permission-aware retrieval: `create_app(retriever, authenticate)` serves `POST /v1/retrieve`,
   `GET /healthz` and an OpenAPI description. The subject comes from the verified bearer token
