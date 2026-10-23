@@ -1,5 +1,5 @@
 # Full local stack: gateway + Postgres/pgvector + OPA + Ollama (CPU is fine for the demo models).
-#   docker compose up -d --build
+#   RAMPART_DEMO=1 docker compose up -d --build
 #   docker compose exec gateway rampart ingest samples
 #   curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-bob" -H "Content-Type: application/json" \
 #        -d '{"question": "How many days of annual leave do I get?"}'
@@ -47,7 +47,15 @@ services:
       RAMPART_OPA_URL: http://opa:8181
       RAMPART_LLM_BASE_URL: ${RAMPART_LLM_BASE_URL:-http://ollama:11434/v1}
       RAMPART_EMBED_BASE_URL: ${RAMPART_EMBED_BASE_URL:-http://ollama:11434}
-    ports: ["8080:8080"]
+      # The demo principals are hashed under a secret published with this example, so the gateway
+      # refuses them unless RAMPART_DEMO=1. For anything else, mount your own principals file below
+      # and set RAMPART_KEY_SECRET to the secret it was hashed under (`rampart key-hashing`).
+      RAMPART_DEMO: ${RAMPART_DEMO:-0}
+      RAMPART_KEY_SECRET: ${RAMPART_KEY_SECRET:-}
+    volumes: ["./config/principals.yaml:/app/config/principals.yaml:ro"]
+    # The API on this machine only; put a TLS proxy in front of it to serve others. Metrics (9464)
+    # are not published: scrape gateway:9464 from inside the compose network.
+    ports: ["127.0.0.1:8080:8080"]
 
 volumes:
   pgdata:

@@ -1,7 +1,8 @@
 import pytest
 
 from rampart.documents import Chunk, ScoredChunk
-from rampart.gateway import PolicyDenied
+from rampart.gateway import PolicyDenied, denial_code
+from rampart.policy import CallablePolicyEngine, Decision
 from tests.conftest import ALICE, BOB
 
 
@@ -78,3 +79,41 @@ def test_every_request_is_in_an_intact_chain(gateway):
     with pytest.raises(PolicyDenied):
         gateway.ask(BOB, "salary", collections=["hr-policies"])
     assert gateway.audit.verify().ok
+
+
+def test_denial_metrics_use_fixed_reason_codes(gateway, chat):
+    def deny(policy_input):
+        model = policy_input["request"]["model"]
+        return Decision(allow=False, reasons=(f"model {model} is not approved for team platform", "unknown team"))
+
+    gateway.policy = CallablePolicyEngine(deny)
+    for i in range(3):  # each caller-chosen model name would have been a label value of its own
+        with pytest.raises(PolicyDenied):
+            gateway.ask(BOB, "leave?", model=f"made-up-model-{i}")
+    labels = {
+        sample.labels["reason"]: sample.value
+        for metric in gateway.metrics.registry.collect()
+        for sample in metric.samples
+        if sample.name == "rampart_policy_denials_total"
+    }
+    assert labels == {"model_not_approved": 3, "unknown_team": 3} and chat.calls == []
+
+
+@pytest.mark.parametrize(
+    ("reason", "code"),
+    [
+        ("account disabled", "account_disabled"),
+        ("model x is not approved for team interns", "model_not_approved"),
+        ("daily token budget exhausted for team interns", "budget_exhausted"),
+        ("not authorised for collection hr-policies", "collection_not_authorised"),
+        ("no readable collections", "no_readable_collections"),
+        ("prompt injection suspected in the question", "injection_suspected"),
+        ("ingest requires the admin role", "ingest_not_allowed"),
+        ("audit access requires the auditor or admin role", "audit_not_allowed"),
+        ("unknown action x", "unknown_action"),
+        ("default deny", "default_deny"),
+        ("anything else", "other"),
+    ],
+)
+def test_each_policy_reason_has_a_code(reason, code):
+    assert denial_code(reason) == code

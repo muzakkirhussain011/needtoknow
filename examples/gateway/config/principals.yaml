@@ -1,14 +1,13 @@
 # Demo principals for the fictional company "Najm Logistics".
-# API keys are never stored, only their scrypt hashes: a stolen copy of this file costs an attacker
-# one scrypt per guess. The demo keys are listed in the README so anyone can try the gateway
-# locally; replace this file (or point RAMPART_PRINCIPALS_FILE elsewhere) in a real deployment,
-# with a new salt and random keys:  rampart new-key  (or  rampart hash-key <key>  for a key you have).
+# API keys are never stored, only their HMAC-SHA256 digests under a secret the gateway holds in
+# RAMPART_KEY_SECRET; the file names that secret by its secret_id, never by its value. These demo
+# keys are listed in the README and hashed under a secret published in rampart/identity.py, so the
+# gateway accepts this file only with RAMPART_DEMO=1. For a real deployment, start a new file with
+# `rampart key-hashing` (a new secret), give each user a key from `rampart new-key` (or hash one you
+# have with `rampart hash-key <key>`), and mount the file into the container at run time.
 key_hashing:
-  scheme: scrypt
-  n: 16384
-  r: 8
-  p: 1
-  salt: 643fe817fe3d6a294768499076ad48a3
+  scheme: hmac-sha256
+  secret_id: ff523d8fa9da0f2b
 
 principals:
   - user_id: alice
@@ -17,7 +16,7 @@ principals:
     department: hr
     clearance: confidential
     roles: [employee, pii_reader]
-    key_scrypt: efa929e8c6711b60468e4d4f02919ef5ae4a8763ba73235374b9a633b39819c9  # demo-key-alice
+    key_hmac: eb05634be3a7011877dacf8d4ed7092a268e9ef72a8437d5df98e53321d12ca5  # demo-key-alice
 
   - user_id: bob
     name: Bob (platform engineer)
@@ -25,7 +24,7 @@ principals:
     department: engineering
     clearance: internal
     roles: [employee]
-    key_scrypt: b1dbea7418fcbb7bd5350be77f71a3af6ab9c361433a6ccebc766eaed72ed743  # demo-key-bob
+    key_hmac: bd6c45b9617dcabe30e21a9d7703370d3a5deee1a620ec0edcb2cf31382dd818  # demo-key-bob
 
   - user_id: carol
     name: Carol (treasury lead)
@@ -33,7 +32,7 @@ principals:
     department: finance
     clearance: restricted
     roles: [employee]
-    key_scrypt: bffaba3e366d53114de4fec96018ffede41fd0962c4437c22a36bbee946c8d93  # demo-key-carol
+    key_hmac: 46ea48eaedcf08cfe8032f554de014edeba4f7f4880920030811b668ddaa0b61  # demo-key-carol
 
   - user_id: dave
     name: Dave (security auditor)
@@ -41,7 +40,7 @@ principals:
     department: security
     clearance: internal
     roles: [auditor]
-    key_scrypt: 928ce7e24bafa6a3c0a5ab33dea889552f7f0321581ed2bd5454caf68e64a3f2  # demo-key-dave
+    key_hmac: 84e7f7c417691c2f5cfb41bf7e6d96c4c8201fb642794bfec32f3dfe88139c9d  # demo-key-dave
 
   - user_id: admin
     name: Platform admin
@@ -49,7 +48,7 @@ principals:
     department: it
     clearance: restricted
     roles: [admin]
-    key_scrypt: 00b5e09c3453c0648b02ae2648edee0bfeae010aa3159b69672bab0f5b469a70  # demo-key-admin
+    key_hmac: a8dcc15f13cc4b877f0d05a5b9a15e8b63a19e057048ec0e99e20cf94d7fb5dd  # demo-key-admin
 
   - user_id: intern
     name: Summer intern
@@ -57,4 +56,4 @@ principals:
     department: engineering
     clearance: public
     roles: [employee]
-    key_scrypt: 200655c1db4ec62a198dea266b1489dc4861392c43b0208e733d8b40b3a744e5  # demo-key-intern
+    key_hmac: 940c6e2fa92af4ca51b169fe51770a74e8754a269cc0c93ba6496cd412979007  # demo-key-intern

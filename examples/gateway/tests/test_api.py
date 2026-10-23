@@ -3,13 +3,13 @@ from fastapi.testclient import TestClient
 
 from rampart.app import create_app
 from rampart.config import Settings
-from rampart.identity import PrincipalDirectory
+from rampart.identity import DEMO_KEY_SECRET, KeyHashing, PrincipalDirectory
 from tests.conftest import ROOT
 
 
 @pytest.fixture
 def client(gateway):
-    directory = PrincipalDirectory.from_yaml(ROOT / "config" / "principals.yaml")
+    directory = PrincipalDirectory.from_yaml(ROOT / "config" / "principals.yaml", KeyHashing(DEMO_KEY_SECRET))
     app = create_app(Settings(), gateway=gateway, directory=directory)
     with TestClient(app) as c:
         yield c
@@ -70,6 +70,43 @@ def test_dashboard_uses_basic_auth(client):
     assert r.status_code == 200 and "Rampart AI Gateway" in r.text
 
 
-def test_metrics_endpoint(client):
+def test_metrics_are_not_served_on_the_api_port(client):
     client.post("/v1/ask", json={"question": "leave?"}, headers=auth("demo-key-bob"))
-    assert "rampart_requests_total" in client.get("/metrics").text
+    assert client.get("/metrics").status_code == 404
+    registry = client.app.state.metrics.registry
+    assert registry.get_sample_value("rampart_requests_total", {"team": "platform", "outcome": "answered"}) == 1
+
+
+def chat_request(client, messages, **extra):
+    body = {"model": "gemma4:e2b", "messages": messages, **extra}
+    return client.post("/v1/chat/completions", json=body, headers=auth("demo-key-bob"))
+
+
+@pytest.mark.parametrize(
+    "messages",
+    [
+        [{"role": "user", "content": "x" * 4001}],
+        [{"role": "user", "content": "leave?"}] * 21,
+        [{"role": "user" * 9, "content": "leave?"}],
+    ],
+)
+def test_chat_messages_are_bounded(client, chat, messages):
+    assert chat_request(client, messages).status_code == 422
+    assert chat.calls == []
+
+
+def test_chat_within_the_bounds_is_answered(client):
+    turns = [{"role": "user", "content": "leave? " * 500}, {"role": "assistant", "content": "ok"}] * 9
+    assert chat_request(client, [*turns, {"role": "user", "content": "leave?"}]).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"question": "leave?", "model": "m" * 201},
+        {"question": "leave?", "collections": ["c" * 201]},
+        {"question": "leave?", "collections": ["hr-policies"] * 51},
+    ],
+)
+def test_ask_names_are_bounded(client, body):
+    assert client.post("/v1/ask", json=body, headers=auth("demo-key-bob")).status_code == 422

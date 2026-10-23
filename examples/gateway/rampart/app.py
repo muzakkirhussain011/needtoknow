@@ -7,8 +7,9 @@ POST /v1/documents           ingest documents (admin)
 GET  /v1/audit               recent audit records (auditor, admin)
 GET  /v1/audit/verify        verify the audit hash chain (auditor, admin)
 GET  /dashboard              usage, denials and audit overview (HTTP Basic: user id + API key)
-GET  /metrics                Prometheus
 GET  /healthz
+
+Prometheus metrics are not on this port: `rampart serve` serves them on their own (9464).
 """
 
 # No `from __future__ import annotations` here: FastAPI must resolve the dependency annotations
@@ -21,10 +22,9 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from rampart import __version__
@@ -32,7 +32,7 @@ from rampart.audit import InMemoryAuditLog, PostgresAuditLog
 from rampart.config import Settings, get_settings
 from rampart.documents import Document, InMemoryDocumentStore, PgVectorDocumentStore
 from rampart.gateway import Gateway, PolicyDenied
-from rampart.identity import Principal, PrincipalDirectory
+from rampart.identity import Principal, PrincipalDirectory, key_hashing
 from rampart.injection import HeuristicInjectionScorer
 from rampart.metrics import Metrics
 from rampart.models import OllamaEmbedder, OpenAICompatibleChat
@@ -71,10 +71,22 @@ def build_gateway(settings: Settings, metrics: Metrics) -> tuple[Gateway, Any]:
     return gateway, pool
 
 
+def load_directory(settings: Settings) -> PrincipalDirectory:
+    """The principals file, read with the configured key secret. The demo principals, hashed under a
+    published secret, are refused unless RAMPART_DEMO=1."""
+    secret = settings.key_secret.get_secret_value() if settings.key_secret is not None else ""
+    return PrincipalDirectory.from_yaml(settings.principals_file, key_hashing(secret, settings.demo))
+
+
+# Everything a caller sends is bounded: it is masked and scored before the policy decides.
+MAX_TEXT = 4000
+Name = Annotated[str, Field(max_length=200)]
+
+
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=4000)
-    collections: list[str] = Field(default_factory=list)
-    model: str | None = None
+    question: str = Field(min_length=1, max_length=MAX_TEXT)
+    collections: list[Name] = Field(default_factory=list, max_length=50)
+    model: Name | None = None
 
 
 class DocumentIn(BaseModel):
@@ -90,14 +102,14 @@ class IngestRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: str = Field(max_length=32)
+    content: str = Field(max_length=MAX_TEXT)
 
 
 class ChatCompletionRequest(BaseModel):
-    model: str | None = None
-    messages: list[ChatMessage]
-    collections: list[str] = Field(default_factory=list)  # Rampart extension; other fields are ignored
+    model: Name | None = None
+    messages: list[ChatMessage] = Field(max_length=20)
+    collections: list[Name] = Field(default_factory=list, max_length=50)  # Rampart extension; others are ignored
 
 
 def create_app(
@@ -115,12 +127,13 @@ def create_app(
             app.state.gateway, pool = build_gateway(settings, metrics)
         else:
             app.state.gateway = gateway
-        app.state.directory = directory or PrincipalDirectory.from_yaml(settings.principals_file)
+        app.state.directory = directory or load_directory(settings)
         yield
         if pool is not None:
             pool.close()
 
     app = FastAPI(title="Rampart AI Gateway", version=__version__, lifespan=lifespan)
+    app.state.metrics = metrics  # served on a port of their own by `rampart serve`, not by this app
 
     def gw(request: Request) -> Gateway:
         return request.app.state.gateway
@@ -154,10 +167,6 @@ def create_app(
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
-
-    @app.get("/metrics")
-    def prometheus(request: Request) -> Response:
-        return Response(generate_latest(gw(request).metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
     @app.get("/v1/me")
     def me(request: Request, p: Annotated[Principal, Depends(principal)]) -> dict[str, Any]:
