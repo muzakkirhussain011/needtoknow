@@ -42,15 +42,15 @@ def client(authenticate=tokens, authorizer=None, **kwargs):
     return TestClient(create_app(retriever, authenticate, **kwargs))
 
 
-def ask(c, body, token="ann-token"):
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+def ask(c, body, who="ann-token"):
+    headers = {"Authorization": f"Bearer {who}"} if who else {}
     return c.post("/v1/retrieve", json=body, headers=headers)
 
 
 def test_a_caller_gets_only_what_their_token_permits():
     c = client()
     ann = ask(c, {"query": "launch", "k": 5}).json()
-    bob = ask(c, {"query": "launch", "k": 5}, token="bob-token").json()
+    bob = ask(c, {"query": "launch", "k": 5}, who="bob-token").json()
     assert {h["id"] for h in ann["hits"]} == {"eng-plan", "all-hands"} and ann["complete"] is True
     assert {h["id"] for h in bob["hits"]} == {"hr-pay", "all-hands"}
 
@@ -63,7 +63,7 @@ def test_hits_carry_only_the_metadata_fields_named():
 
 @pytest.mark.parametrize("token", [None, "forged"])
 def test_a_missing_or_invalid_token_is_refused(token):
-    response = ask(client(), {"query": "launch"}, token=token)
+    response = ask(client(), {"query": "launch"}, who=token)
     assert response.status_code == 401 and response.headers["www-authenticate"] == "Bearer"
 
 
@@ -204,5 +204,5 @@ def test_unsafe_configuration_is_refused(kwargs):
 
 def test_the_service_with_oidc_tokens():
     c = client(authenticate=oidc())
-    assert {h["id"] for h in ask(c, {"query": "launch"}, token=token()).json()["hits"]} == {"eng-plan", "all-hands"}
-    assert ask(c, {"query": "launch"}, token=token(aud="another-api")).status_code == 401
+    assert {h["id"] for h in ask(c, {"query": "launch"}, who=token()).json()["hits"]} == {"eng-plan", "all-hands"}
+    assert ask(c, {"query": "launch"}, who=token(aud="another-api")).status_code == 401

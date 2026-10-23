@@ -41,8 +41,8 @@ from needtoknow.types import Query, Subject
 try:
     import jwt
     from fastapi import Depends, FastAPI, HTTPException
-    from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+    from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
     from pydantic import BaseModel, ConfigDict, Field
 except ImportError as exc:  # pragma: no cover - exercised without the extra installed
     raise ImportError('needtoknow.server needs the server extra: pip install "needtoknow[server]"') from exc

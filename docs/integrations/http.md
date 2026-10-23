@@ -31,7 +31,7 @@ uvicorn service:app --host 0.0.0.0 --port 8000 --workers 4
 `POST /v1/retrieve`, with the caller's access token:
 
 ```http
-POST /v1/retrieve
+POST /v1/retrieve HTTP/1.1
 Authorization: Bearer eyJhbGciOiJSUzI1NiIs...
 Content-Type: application/json
 
