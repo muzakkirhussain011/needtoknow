@@ -41,17 +41,6 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.12", cache: pip }
       # Every extra, so the adapters are checked against the real libraries' types.
-      - name: Start Cassandra
-        run: docker run -d --name cassandra -p 9042:9042 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=200M cassandra:5.0.9
-      - name: Start Vespa and deploy the example application
-        run: |
-          docker run -d --name vespa --hostname vespa-container -p 8090:8080 -p 19071:19071 vespaengine/vespa:8.763.13
-          for i in $(seq 1 60); do curl -sf http://127.0.0.1:19071/state/v1/health | grep -q '"up"' && break; sleep 2; done
-          (cd examples/vespa/app && zip -qr - .) | curl -sf --header Content-Type:application/zip --data-binary @- \
-            http://127.0.0.1:19071/application/v2/tenant/default/prepareandactivate || { docker logs --tail 80 vespa; exit 1; }
-          probe=http://127.0.0.1:8090/document/v1/needtoknow/needtoknow/docid/ready
-          for i in $(seq 1 90); do curl -sf -X POST -H 'Content-Type: application/json' -d '{"fields":{}}' "$probe" && break; sleep 2; done
-          curl -sf -X DELETE "$probe" || { docker logs --tail 80 vespa; exit 1; }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with: { version: "0.13.1", enable-cache: false }
       - name: Install from uv.lock, by hash
@@ -142,6 +131,17 @@ jobs:
         run: |
           docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:6333/readyz && break; sleep 1; done
+      - name: Start Cassandra
+        run: docker run -d --name cassandra -p 9042:9042 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=200M cassandra:5.0.9
+      - name: Start Vespa and deploy the example application
+        run: |
+          docker run -d --name vespa --hostname vespa-container -p 8090:8080 -p 19071:19071 vespaengine/vespa:8.763.13
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:19071/state/v1/health | grep -q '"up"' && break; sleep 2; done
+          (cd examples/vespa/app && zip -qr - .) | curl -sf --header Content-Type:application/zip --data-binary @- \
+            http://127.0.0.1:19071/application/v2/tenant/default/prepareandactivate || { docker logs --tail 80 vespa; exit 1; }
+          probe=http://127.0.0.1:8090/document/v1/needtoknow/needtoknow/docid/ready
+          for i in $(seq 1 90); do curl -sf -X POST -H 'Content-Type: application/json' -d '{"fields":{}}' "$probe" && break; sleep 2; done
+          curl -sf -X DELETE "$probe" || { docker logs --tail 80 vespa; exit 1; }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with: { version: "0.13.1", enable-cache: false }
       - name: Install from uv.lock, by hash

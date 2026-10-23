@@ -101,6 +101,11 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 # Seeded random test data, not secrets.
 "needtoknow/testing.py" = ["S311"]
+# Query text that holds only names checked against a pattern and hex digits: Cassandra binds every
+# value as a parameter, and Vespa's filter values are hex-encoded terms.
+"needtoknow/backends/cassandra.py" = ["S608"]
+"needtoknow/backends/vespa.py" = ["S608"]
+"tests/test_vespa.py" = ["S608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
