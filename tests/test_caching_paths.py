@@ -11,16 +11,19 @@ from wardowl import (
     AuthorizationError,
     CachingAuthorizer,
     Document,
+    FunctionAuthorizer,
     Hit,
     In,
     InMemoryBackend,
     MetadataACLAuthorizer,
+    Or,
     PermissionedRetriever,
     Subject,
     TenantAuthorizer,
 )
 from wardowl.caching import RedisCache
 
+NS = "test-policy"
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})]
 
@@ -67,23 +70,101 @@ class NoFilter(Counting):
 def test_no_filter_is_an_answer_too_and_is_shared():
     shared = Shared()
     one, two = NoFilter(), NoFilter()
-    assert CachingAuthorizer(one, shared=shared).filter_for(BOB) is None
-    assert CachingAuthorizer(two, shared=shared).filter_for(BOB) is None
+    assert CachingAuthorizer(one, shared=shared, namespace=NS).filter_for(BOB) is None
+    assert CachingAuthorizer(two, shared=shared, namespace=NS).filter_for(BOB) is None
     assert (one.filters, two.filters) == (1, 0)  # the second replica read "no filter" from Redis
 
 
-def test_an_answer_that_is_not_a_filter_is_kept_out_of_the_shared_cache_and_fails_closed():
+@pytest.mark.parametrize("answer", ["everything", Or(In("team", ["a"]), "everything")])
+def test_an_answer_that_is_not_a_filter_is_never_cached_and_fails_closed(answer):
     class Bogus(Counting):
         def filter_for(self, subject, action="read"):
-            return "everything"
+            self.filters += 1
+            return answer
+
+    shared, bogus = Shared(), Bogus()
+    authz = CachingAuthorizer(bogus, shared=shared, namespace=NS)
+    retriever = PermissionedRetriever(InMemoryBackend([Document("d", "leave", {})]), authz)
+    for _ in range(2):
+        with pytest.raises((AuthorizationError, TypeError)):  # refused by the retriever, or by the store
+            retriever.retrieve("leave", BOB)
+    assert bogus.filters == 2 and shared.data == {}  # asked again: neither cache kept it
+
+
+class Opaque:
+    """A value a cache key cannot encode exactly: repr() would name it by its address."""
+
+
+@pytest.mark.parametrize("shared", [None, Shared()])
+def test_a_chunk_or_subject_holding_a_value_the_key_cannot_encode_is_never_cached(shared):
+    inner = Counting()
+    authz = CachingAuthorizer(inner, shared=shared, namespace=NS)
+    odd = Hit("a", "t", 1.0, {"allowed_groups": ["eng"], "blob": Opaque()})
+    good = Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})
+    assert authz.check(BOB, [odd]) == [True] and authz.check(BOB, [odd]) == [True]
+    assert authz.check(BOB, [good, odd]) == [False, True] and authz.check(BOB, [good, odd]) == [False, True]
+    assert asyncio.run(authz.acheck(BOB, [good, odd])) == [False, True]
+    assert inner.checks == 1 + 1 + 2 + 1 + 1  # the odd chunk every time; the good one once
+    session = Subject("bob", ["eng"], {"session": Opaque()})
+    assert authz.filter_for(session) == authz.filter_for(session) and inner.filters == 2
+    assert authz.check(session, [good]) == [False] and authz.check(session, [good]) == [False]
+    assert inner.checks == 6 + 2
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ({"allowed_groups": {1}}, {"allowed_groups": "{1}"}),  # repr() of a set, and that text
+        ({1: "eng"}, {"1": "eng"}),  # JSON turns the key 1 into "1"
+        ({"tags": ["a", "b"]}, {"tags": ("a", "b")}),
+        ({"level": 1}, {"level": True}),
+        ({"level": 1}, {"level": 1.0}),
+    ],
+)
+def test_chunks_whose_metadata_differs_only_in_type_or_layout_are_decided_separately(first, second):
+    calls = []
+
+    def deny(subject, hits, action):
+        calls.append(len(hits))
+        return [False] * len(hits)
 
     shared = Shared()
-    authz = CachingAuthorizer(Bogus(), shared=shared)
-    retriever = PermissionedRetriever(InMemoryBackend([Document("d", "leave", {})]), authz)
-    for _ in range(2):  # the second time from this process's cache, with the same result
-        with pytest.raises(AuthorizationError):
-            retriever.retrieve("leave", BOB)
-    assert shared.data == {}
+    a, b = (CachingAuthorizer(FunctionAuthorizer(deny), shared=shared, namespace=NS) for _ in range(2))
+    a.check(BOB, [Hit("d", "t", 1.0, first)])
+    b.check(BOB, [Hit("d", "t", 1.0, second)])  # not the shared answer for the first chunk
+    local = CachingAuthorizer(FunctionAuthorizer(deny))
+    local.check(BOB, [Hit("d", "t", 1.0, first)])
+    local.check(BOB, [Hit("d", "t", 1.0, second)])  # nor this process's
+    assert len(calls) == 4
+
+
+def test_subjects_whose_attributes_differ_only_in_type_are_decided_separately():
+    seen = []
+
+    def deny(subject, hits, action):
+        seen.append(dict(subject.attributes))
+        return [False] * len(hits)
+
+    authz = CachingAuthorizer(FunctionAuthorizer(deny))
+    for clearance in (1, True, 1.0, "1"):
+        authz.check(Subject("bob", ["eng"], {"clearance": clearance}), HITS[:1])
+    assert len(seen) == 4  # Python says 1 == True == 1.0; a policy reading JSON does not
+
+
+def test_the_parts_of_a_key_cannot_run_into_each_other():
+    # Joined with NUL and no lengths, the action "read" with the chunk "d\x00x" and the action
+    # "read\x00d" with the chunk "x" had the same key in the shared cache.
+    actions = []
+
+    def deny(subject, hits, action):
+        actions.append(action)
+        return [False] * len(hits)
+
+    shared = Shared()
+    a, b = (CachingAuthorizer(FunctionAuthorizer(deny), shared=shared, namespace=NS) for _ in range(2))
+    a.check(BOB, [Hit("d\x00x", "t", 1.0, {})], "read")
+    b.check(BOB, [Hit("x", "t", 1.0, {})], "read\x00d")
+    assert actions == ["read", "read\x00d"]
 
 
 def test_a_shared_cache_returning_text_or_the_wrong_count_is_a_miss():
@@ -98,7 +179,7 @@ def test_a_shared_cache_returning_text_or_the_wrong_count_is_a_miss():
 
     for shared in (Text(), Short()):
         inner = Counting()
-        assert CachingAuthorizer(inner, shared=shared).check(BOB, HITS) == [True, False]
+        assert CachingAuthorizer(inner, shared=shared, namespace=NS).check(BOB, HITS) == [True, False]
         assert inner.checks == 2  # asked the authorizer instead
 
 
@@ -108,7 +189,7 @@ def test_a_failing_shared_write_never_changes_an_answer():
             raise ConnectionError("read-only replica")
 
     inner = Counting()
-    authz = CachingAuthorizer(inner, shared=ReadOnly())
+    authz = CachingAuthorizer(inner, shared=ReadOnly(), namespace=NS)
     assert authz.check(BOB, HITS) == [True, False]
     assert authz.check(BOB, HITS) == [True, False]
     assert inner.checks == 2  # this process kept its own copy

@@ -13,9 +13,18 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from wardowl import CachingAuthorizer, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import (
+    CachingAuthorizer,
+    Hit,
+    InMemoryBackend,
+    MetadataACLAuthorizer,
+    PermissionedRetriever,
+    Subject,
+    TenantAuthorizer,
+)
 from wardowl.caching import RedisCache, SharedCache
 
+NS = "test-policy"  # a shared cache needs a namespace of its own
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})]
 
@@ -69,7 +78,7 @@ class FakeShared:
 def _replicas(shared, clock=None, ttl=30.0):
     clock = clock or Clock()
     inners = [Counting(), Counting()]
-    return clock, inners, [CachingAuthorizer(i, ttl=ttl, shared=shared, clock=clock) for i in inners]
+    return clock, inners, [CachingAuthorizer(i, ttl=ttl, shared=shared, namespace=NS, clock=clock) for i in inners]
 
 
 def test_fake_shared_is_a_shared_cache():
@@ -122,7 +131,7 @@ def test_invalidate_reaches_every_replica():
     assert two.checks == 2  # bob was asked again, ann still came from the shared cache
     a.invalidate()
     # Every entry is gone; the epochs stay (everyone's and bob's), and refuse late writes.
-    assert len(shared.data) == 2 and all(key.startswith("wardowl!epoch") for key in shared.data)
+    assert len(shared.data) == 2 and all(key.startswith(f"{NS}!epoch") for key in shared.data)
 
 
 def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
@@ -166,7 +175,7 @@ def test_a_global_epoch_read_in_flight_cannot_put_back_the_epoch_invalidate_repl
 
         def get_many(self, keys):
             values = super().get_many(keys)
-            if self.during is not None and keys == ["wardowl!epoch"]:
+            if self.during is not None and keys == [f"{NS}!epoch"]:
                 during, self.during = self.during, None
                 during()  # invalidate() runs after the old epoch was read, before it is kept
             return values
@@ -189,7 +198,7 @@ def test_invalidating_everyone_never_deletes_the_epoch_of_an_id():
     shared = FakeShared()
     _, _, (a, _b) = _replicas(shared)
     a.invalidate(BOB)
-    bobs = {key: value for key, value in shared.data.items() if key != "wardowl!epoch"}
+    bobs = {key: value for key, value in shared.data.items() if key != f"{NS}!epoch"}
     a.invalidate()  # while it deletes, an invalidate() of bob may have just written bob's epoch
     assert bobs and bobs.items() <= shared.data.items()
 
@@ -204,7 +213,7 @@ def test_epochs_are_text_that_a_redis_client_decoding_responses_can_read():
 
 def test_invalidate_refuses_an_id_of_another_type():
     with pytest.raises(TypeError):
-        CachingAuthorizer(Counting(), shared=FakeShared()).invalidate(42)  # the id "42" would be missed here
+        CachingAuthorizer(Counting(), shared=FakeShared(), namespace=NS).invalidate(42)  # "42" would be missed
 
 
 def test_without_a_shared_cache_entries_live_for_ttl():
@@ -216,10 +225,56 @@ def test_without_a_shared_cache_entries_live_for_ttl():
     assert inner.checks == 2  # local_ttl only applies next to a shared cache
 
 
-@pytest.mark.parametrize("options", [{"ttl": 0}, {"local_ttl": 0}, {"maxsize": 0}, {"namespace": ""}])
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"ttl": 0},
+        {"local_ttl": 0},
+        {"maxsize": 0},
+        {"namespace": ""},
+        {"namespace": None},  # a shared cache needs one
+        {"ttl": float("nan")},  # an entry would never expire: NaN never compares as past
+        {"ttl": float("inf")},
+        {"local_ttl": float("nan")},
+    ],
+)
 def test_invalid_options_are_refused(options):
     with pytest.raises(ValueError):
-        CachingAuthorizer(Counting(), shared=FakeShared(), **options)
+        CachingAuthorizer(Counting(), shared=FakeShared(), **{"namespace": NS, **options})
+
+
+def test_two_kinds_of_authorizer_never_share_a_namespace_of_one_shared_cache():
+    # AllOf(CachingAuthorizer(TenantAuthorizer(), shared=r), CachingAuthorizer(OpenFGAAuthorizer(...),
+    # shared=r)) once put both in the default namespace, where each answered with the other's decisions.
+    shared = FakeShared()
+    CachingAuthorizer(TenantAuthorizer(), shared=shared, namespace="tenant")
+    with pytest.raises(ValueError, match="namespace 'tenant'"):
+        CachingAuthorizer(MetadataACLAuthorizer(), shared=shared, namespace="tenant")
+    CachingAuthorizer(MetadataACLAuthorizer(), shared=shared, namespace="acl")  # a namespace of its own
+    CachingAuthorizer(TenantAuthorizer(), shared=shared, namespace="tenant")  # another copy of the same one
+
+    class Client:  # stands in for a redis.Redis: two RedisCache objects around it are one shared cache
+        pass
+
+    client = Client()
+    CachingAuthorizer(TenantAuthorizer(), shared=RedisCache(client), namespace="tenant")
+    with pytest.raises(ValueError, match="namespace 'tenant'"):
+        CachingAuthorizer(MetadataACLAuthorizer(), shared=RedisCache(client), namespace="tenant")
+
+
+@pytest.mark.parametrize("expires", [float("nan"), float("inf")])
+def test_an_expiry_that_is_not_a_finite_number_is_a_miss(expires):
+    shared = FakeShared()
+    clock, (_one, two), (a, b) = _replicas(shared)
+    a.check(BOB, HITS[:1])
+    (key,) = shared.data
+    entry = json.loads(shared.data[key])
+    shared.data[key] = json.dumps({**entry, "expires": expires}).encode()  # JSON carries NaN and Infinity
+    b.check(BOB, HITS[:1])  # a miss: b asks, and keeps its own answer for local_ttl
+    clock.now += 10**6
+    shared.data.clear()
+    b.check(BOB, HITS[:1])
+    assert two.checks == 2  # with NaN, a copy of the entry would never have expired here
 
 
 @pytest.mark.parametrize(
@@ -277,7 +332,7 @@ def test_async_paths_use_the_shared_cache():
 def test_sharing_never_changes_the_answer(docs, subject, query, k, strategy):
     shared = FakeShared()
     for _ in range(2):  # the second replica is served from the shared cache
-        authz = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared)
+        authz = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared, namespace=NS)
         retriever = PermissionedRetriever(InMemoryBackend(docs), authz, strategy=strategy, max_candidates=len(docs) + 1)
         assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 
@@ -362,6 +417,6 @@ def test_stats_count_shared_hits_and_failures():
     b.check(BOB, HITS)  # both answers from the shared cache
     assert (b.stats().shared_hits, b.stats().misses) == (2, 0)
     shared.fail = True
-    c = CachingAuthorizer(Counting(), shared=shared)
+    c = CachingAuthorizer(Counting(), shared=shared, namespace=NS)
     c.check(BOB, HITS)  # the read fails, so the authorizer is asked, and nothing is written
     assert (c.stats().shared_failures, c.stats().misses) == (1, 2)

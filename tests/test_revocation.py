@@ -26,6 +26,7 @@ from wardowl import (
     Subject,
 )
 
+NS = "test-policy"  # a shared cache needs a namespace of its own
 BOB = Subject("bob", ["eng"])
 ANN = Subject("ann", ["hr"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})]
@@ -118,11 +119,11 @@ def test_a_filter_given_before_invalidate_is_not_cached():
 def test_an_answer_another_replica_writes_after_invalidate_is_never_read(scope):
     shared = Shared()
     held, fresh = Held(), _released()
-    slow = CachingAuthorizer(held, shared=shared)  # its answer arrives after the revocation
-    admin = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared)  # the replica that revokes
+    slow = CachingAuthorizer(held, shared=shared, namespace=NS)  # its answer arrives after the revocation
+    admin = CachingAuthorizer(_released(), shared=shared, namespace=NS)  # the replica that revokes
     _in_flight(lambda: slow.check(BOB, HITS), held, lambda: admin.invalidate(BOB if scope == "subject" else None))
     assert any("!epoch" not in key for key in shared.data)  # the late answer was written...
-    third = CachingAuthorizer(fresh, shared=shared)
+    third = CachingAuthorizer(fresh, shared=shared, namespace=NS)
     third.check(BOB, HITS)
     assert fresh.checks == 2  # ...but no replica uses it
 
@@ -141,7 +142,7 @@ def test_an_answer_copied_from_the_shared_cache_while_invalidate_runs_is_not_kep
             super().set_many(entries, ttl)
 
     shared, held = Racing(), _released()
-    cache = CachingAuthorizer(held, shared=shared)
+    cache = CachingAuthorizer(held, shared=shared, namespace=NS)
     cache.check(BOB, HITS)  # cached in this process and in the shared cache
     # A retrieval in this process after it dropped its own entries, before the new epoch exists:
     # it finds the old entry in the shared cache, still valid, and copies it.
@@ -154,13 +155,13 @@ def test_an_answer_copied_from_the_shared_cache_while_invalidate_runs_is_not_kep
 
 def test_a_shared_entry_put_back_after_invalidate_is_refused():
     shared = Shared()
-    first = CachingAuthorizer(MetadataACLAuthorizer(), shared=shared)
+    first = CachingAuthorizer(_released(), shared=shared, namespace=NS)
     first.check(BOB, HITS)
     before = dict(shared.data)
     first.invalidate(BOB)
     shared.data.update(before)  # the entries as they were before the revocation, written back
     held = _released()
-    CachingAuthorizer(held, shared=shared).check(BOB, HITS)
+    CachingAuthorizer(held, shared=shared, namespace=NS).check(BOB, HITS)
     assert held.checks == 2
 
 
@@ -184,7 +185,7 @@ def test_async_answers_given_before_invalidate_are_not_cached():
 
     async def scenario(shared):
         held = HeldAsync()
-        cache = CachingAuthorizer(held, shared=shared)
+        cache = CachingAuthorizer(held, shared=shared, namespace=NS)
         call = asyncio.create_task(cache.acheck(BOB, HITS))
         await held.entered.wait()
         cache.invalidate(BOB)
@@ -216,7 +217,7 @@ def test_invalidate_drops_every_subject_with_the_id_whatever_its_groups_and_attr
 
 def test_invalidate_by_id_reaches_the_shared_cache():
     shared, two = Shared(), _released()
-    a, b = CachingAuthorizer(_released(), shared=shared), CachingAuthorizer(two, shared=shared)
+    a, b = (CachingAuthorizer(held, shared=shared, namespace=NS) for held in (_released(), two))
     for subject in [*BOBS, ANN]:
         a.check(subject, HITS)
     a.invalidate(BOBS[0])  # a Subject works too: every subject with its id is dropped
@@ -277,7 +278,9 @@ def test_once_invalidate_returns_a_revoked_document_stops_being_returned(replica
     # some of them and answers are in flight when the permission is revoked; ttl is long, so an
     # answer kept by mistake would be served for the rest of the test.
     caches = [
-        CachingAuthorizer(FunctionAuthorizer(source.check), ttl=30, maxsize=4, shared=shared, local_ttl=local_ttl)
+        CachingAuthorizer(
+            FunctionAuthorizer(source.check), ttl=30, maxsize=4, shared=shared, namespace=NS, local_ttl=local_ttl
+        )
         for _ in range(replicas)
     ]
     retrievers = [PermissionedRetriever(InMemoryBackend(DOCS), c, strategy="postfilter") for c in caches]

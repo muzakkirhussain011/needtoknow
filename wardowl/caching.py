@@ -11,29 +11,37 @@ call, to a retrieval still in progress, is not cached after it either.
 
 What is cached, per (subject, action): the pre-filter from `filter_for`, and each `check` decision,
 keyed by the chunk id and its metadata, so a chunk whose metadata changes is decided again.
-Errors are never cached: every failure reaches the caller and retrieval fails closed.
+Errors and malformed answers are never cached: every failure reaches the caller and retrieval fails
+closed. A subject or chunk holding a value the cache key cannot encode exactly is not cached either:
+the authorizer is asked every time.
 
-Across processes: pass `shared=RedisCache(redis_client)`, or any `SharedCache`, and every replica
-uses the answers any of them obtained. Each process then keeps its own copy of an answer for at
-most `local_ttl` seconds (1 by default) before reading the shared cache again, so `invalidate()` in
-one replica reaches every other one within `local_ttl`. Each shared entry carries its expiry time,
-so the revocation bound holds however many replicas copy it (with clocks kept in sync, as NTP
-does). `invalidate()` also replaces an epoch stored in the shared cache, and an entry is used only
-under the epoch it was written in, so an answer another replica obtained before the invalidation
-and writes after it is never read. A shared cache that fails is treated as a miss: the authorizer
-is asked, and the cache is never the reason access is granted.
+Across processes: pass `shared=RedisCache(redis_client)`, or any `SharedCache`, with a `namespace`
+of its own for the authorizer, and every replica uses the answers any of them obtained. Each process
+then keeps its own copy of an answer for at most `local_ttl` seconds (1 by default) before reading
+the shared cache again, so `invalidate()` in one replica reaches every other one within
+`local_ttl`. Each shared entry carries its expiry time, so the revocation bound holds however many
+replicas copy it (with clocks kept in sync, as NTP does). `invalidate()` also replaces an epoch
+stored in the shared cache, and an entry is used only under the epoch it was written in, so an
+answer another replica obtained before the invalidation and writes after it is never read. A shared
+cache that fails is treated as a miss: the authorizer is asked, and the cache is never the reason
+access is granted.
 """
 
 from __future__ import annotations
 
 import asyncio
+import datetime
+import decimal
 import hashlib
 import hmac
 import json
 import logging
+import math
 import secrets
 import threading
 import time
+import uuid
+import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -54,28 +62,124 @@ _EPOCH_MARGIN = 3600.0
 _log = logging.getLogger("wardowl")
 
 
-def _json_or_repr(value: Any) -> str:
-    try:
-        return json.dumps(value, sort_keys=True, default=repr)
-    except (TypeError, ValueError):
-        return repr(sorted(value.items(), key=repr)) if isinstance(value, Mapping) else repr(value)
+# ---- cache keys ----------------------------------------------------------------------------------
+# A key must tell apart every two subjects or chunks an authorizer could tell apart. Values are
+# encoded with their type and length, so 1, "1", True and 1.0 differ, as do {1} and "{1}", a key 1
+# and a key "1", and ("a", "b") and ("a\x00b",). A value of a type not listed has no exact encoding:
+# the subject or chunk holding it is not cached.
+
+_TIMES = (datetime.date, datetime.time, decimal.Decimal, uuid.UUID)
 
 
-def _hit_key(hit: Hit) -> tuple[str, str]:
-    return hit.id, _json_or_repr(dict(hit.metadata))
+def _text(out: list[str], tag: str, text: str) -> None:
+    out.append(f"{tag}{len(text)}:{text}")
+
+
+def _encode(value: Any, out: list[str]) -> None:
+    if value is None:
+        out.append("n")
+    elif isinstance(value, bool):
+        out.append("t" if value else "f")
+    elif isinstance(value, int):
+        _text(out, "i", int.__repr__(value))
+    elif isinstance(value, float):
+        _text(out, "d", float.__repr__(value))
+    elif isinstance(value, str):
+        _text(out, "s", str.__str__(value))
+    elif isinstance(value, (bytes, bytearray)):
+        _text(out, "b", bytes(value).hex())
+    elif isinstance(value, Mapping):
+        pairs = sorted((_canonical(k), _canonical(v)) for k, v in value.items())
+        out.append(f"m{len(pairs)}:")
+        out.extend(part for pair in pairs for part in pair)
+    elif isinstance(value, (list, tuple)):
+        out.append(f"{'l' if isinstance(value, list) else 'u'}{len(value)}:")
+        for item in value:
+            _encode(item, out)
+    elif isinstance(value, (set, frozenset)):
+        items = sorted(_canonical(item) for item in value)
+        out.append(f"e{len(items)}:")
+        out.extend(items)
+    elif isinstance(value, _TIMES):
+        _text(out, "x", type(value).__qualname__)
+        _text(out, "", value.isoformat() if isinstance(value, (datetime.date, datetime.time)) else str(value))
+    else:
+        raise TypeError(f"a {type(value).__name__} has no exact encoding in a cache key")
+
+
+def _canonical(value: Any) -> str:
+    """`value` as text that no value of another type, or with other contents, shares."""
+    out: list[str] = []
+    _encode(value, out)
+    return "".join(out)
 
 
 def _digest(*parts: str) -> str:
+    """A digest of `parts`, each prefixed with its length, so no other list of parts has the same one."""
     h = hashlib.blake2b(digest_size=16)
     for part in parts:
-        h.update(part.encode("utf-8", "surrogatepass"))
-        h.update(b"\x00")
+        data = part.encode("utf-8", "surrogatepass")
+        h.update(len(data).to_bytes(8, "big"))
+        h.update(data)
     return h.hexdigest()
 
 
-def _subject_digest(subject: Subject) -> str:
-    groups = sorted(subject.groups)
-    return _digest(subject.id, str(len(groups)), *groups, _json_or_repr(dict(subject.attributes)))
+def _key_of(value: Any) -> str | None:
+    """The digest of `value`'s exact encoding, or None when it holds a value that has none."""
+    try:
+        return _digest(_canonical(value))
+    except (TypeError, RecursionError):  # an unknown type, or nested too deep to encode
+        return None
+
+
+def _subject_key(subject: Subject) -> str | None:
+    return _key_of((subject.id, subject.groups, subject.attributes))
+
+
+def _hit_key(hit: Hit) -> str | None:
+    return _key_of((hit.id, hit.metadata))
+
+
+def _cacheable(answer: Any) -> bool:
+    """True for None and a well-formed filter; anything else is a malformed answer, never cached."""
+    if answer is None:
+        return True
+    try:
+        filter_to_dict(answer)
+    except (TypeError, RecursionError):
+        return False
+    return True
+
+
+# ---- which authorizer a shared namespace answers for, in this process ----------------------------
+
+_claims_lock = threading.Lock()
+# Per shared store (a SharedCache, or the Redis client a RedisCache wraps), by id: a weak reference
+# to it, and the authorizer type each namespace answers for. The reference tells a store from a later
+# one that was given the same id after the first was gone.
+_claims: dict[int, tuple[weakref.ref[Any], dict[str, str]]] = {}
+
+
+def _claim(shared: SharedCache, namespace: str, authorizer: Authorizer) -> None:
+    """Refuse a second kind of authorizer under a shared store and namespace this process uses."""
+    store = shared.client if isinstance(shared, RedisCache) else shared
+    kind = f"{type(authorizer).__module__}.{type(authorizer).__qualname__}"
+    with _claims_lock:
+        for gone in [key for key, (ref, _) in _claims.items() if ref() is None]:
+            del _claims[gone]
+        entry = _claims.get(id(store))
+        if entry is None or entry[0]() is not store:
+            try:
+                entry = (weakref.ref(store), {})
+            except TypeError:  # no weak references to it: the explicit namespace is the only guard
+                return
+            _claims[id(store)] = entry
+        claimed = entry[1].setdefault(namespace, kind)
+    if claimed != kind:
+        raise ValueError(
+            f"namespace {namespace!r} of this shared cache already holds the answers of a {claimed}; a "
+            f"{kind} would use them as its own. Give each differently configured authorizer its own namespace"
+        )
 
 
 def _epoch_id(blob: Any) -> str | None:
@@ -126,14 +230,17 @@ class CachingAuthorizer:
     `ttl` is the revocation bound: a permission revoked at the source stops granting access at
     most `ttl` seconds later. `maxsize` caps the number of entries in this process, dropping the
     least recently used first. `shared` adds a cache all processes share (for example
-    `RedisCache`), under keys starting with `namespace`; this process then keeps its own copy of
-    each answer for at most `local_ttl` seconds, which bounds how long an `invalidate()` made in
-    another process takes to reach this one. Errors and malformed answers are never cached.
-    `clock` is for tests.
+    `RedisCache`), under keys starting with `namespace`, which it requires; this process then keeps
+    its own copy of each answer for at most `local_ttl` seconds, which bounds how long an
+    `invalidate()` made in another process takes to reach this one. Errors and malformed answers
+    are never cached. `clock` is for tests.
 
     Every `CachingAuthorizer` with the same `shared` cache and `namespace` uses the same answers,
     whatever authorizer it wraps: give each differently configured authorizer (another policy,
-    store, tenant model or action mapping) a namespace of its own.
+    store, tenant model or action mapping) a namespace of its own. In one process, a second
+    `CachingAuthorizer` that wraps an authorizer of another type under a shared cache and namespace
+    already in use raises `ValueError`; it cannot tell two configurations of one type apart, nor
+    see other processes.
     """
 
     def __init__(
@@ -143,14 +250,22 @@ class CachingAuthorizer:
         ttl: float = 30.0,
         maxsize: int = 100_000,
         shared: SharedCache | None = None,
-        namespace: str = "wardowl",
+        namespace: str | None = None,
         local_ttl: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if ttl <= 0 or maxsize < 1 or local_ttl <= 0:
-            raise ValueError("ttl, local_ttl and maxsize must be positive")
-        if not namespace:
+        if not (math.isfinite(ttl) and math.isfinite(local_ttl)) or ttl <= 0 or maxsize < 1 or local_ttl <= 0:
+            raise ValueError("ttl and local_ttl must be positive finite numbers, and maxsize positive")
+        if namespace is not None and not namespace:
             raise ValueError("namespace must be non-empty")
+        if shared is not None:
+            if namespace is None:
+                # The default namespace once shared by every authorizer: one answered for another.
+                raise ValueError(
+                    "a shared cache needs a namespace naming this authorizer's policy, for example"
+                    " namespace='openfga-docs': caches sharing a namespace use each other's answers"
+                )
+            _claim(shared, namespace, authorizer)
         self.authorizer = authorizer
         self.ttl = ttl
         self.maxsize = maxsize
@@ -199,6 +314,8 @@ class CachingAuthorizer:
 
     def _put(self, key: Any, value: Any, generation: int, ttl: float | None = None) -> None:
         lifetime = self.local_ttl if ttl is None else min(ttl, self.local_ttl)
+        if not (math.isfinite(lifetime) and lifetime > 0):
+            return  # an entry that would never expire, or has already expired, is not kept
         with self._lock:
             if generation != self._generation:
                 return  # invalidate() ran while this answer was being obtained
@@ -215,9 +332,9 @@ class CachingAuthorizer:
         return f"{self.namespace}:{{{_digest(str(subject_id))}}}"
 
     def _name(self, key: tuple[Any, ...]) -> str:
-        kind, subject, action, *rest = key
-        detail = _digest(kind, action, *(part for pair in rest for part in pair))
-        return f"{self._tag(subject.id)}:{_subject_digest(subject)}:{detail}"
+        # A key is (kind, subject, the subject's digest, action), and for a check the chunk's digest.
+        kind, subject, who, *rest = key
+        return f"{self._tag(subject.id)}:{who}:{_digest(kind, *rest)}"
 
     def _epoch_name(self, subject_id: Any) -> str:
         # Never under "namespace:", the prefix that invalidate() deletes in every scope, so no
@@ -270,6 +387,8 @@ class CachingAuthorizer:
             if entry["epoch"] != epoch:
                 return _MISS, 0.0  # written before an invalidate(), perhaps by a call still in flight
         except (ValueError, TypeError, KeyError, RecursionError):  # nested too deep to decode: a miss
+            return _MISS, 0.0
+        if not math.isfinite(expires):  # JSON can carry NaN and Infinity, and NaN never compares as expired
             return _MISS, 0.0
         remaining = min(expires - now, self.ttl)
         if remaining <= 0:
@@ -383,22 +502,34 @@ class CachingAuthorizer:
 
     # ---- Authorizer ------------------------------------------------------------------------
 
-    def _lookup(self, key: tuple[Any, ...], generation: int) -> tuple[Any, Any]:
+    @staticmethod
+    def _answer_key(kind: str, subject: Subject, action: str) -> tuple[Any, ...] | None:
+        """The key of a filter or scope answer, or None when the subject cannot be encoded exactly."""
+        who = _subject_key(subject)
+        return None if who is None else (kind, subject, who, action)
+
+    def _lookup(self, key: tuple[Any, ...] | None, generation: int) -> tuple[Any, Any]:
         """The cached answer for `key` or None, and the shared epochs to write a new answer under."""
+        if key is None:
+            return None, _UNKNOWN
         cached = self._get(key)
         if cached is not None:
             return cached, _UNKNOWN
         found, epoch = self._shared_get([key], generation)
         return found[0], epoch
 
-    def _remember(self, key: tuple[Any, ...], result: Filter | None, generation: int, epoch: Any) -> Filter | None:
+    def _remember(
+        self, key: tuple[Any, ...] | None, result: Filter | None, generation: int, epoch: Any
+    ) -> Filter | None:
+        if key is None or not _cacheable(result):  # a malformed answer is returned, for the retriever to refuse
+            return result
         value = _NONE if result is None else result
         self._put(key, value, generation)
         self._shared_put([(key, value)], epoch)
         return result
 
     def filter_for(self, subject: Subject, action: str = "read") -> Filter | None:
-        key, generation = ("filter", subject, action), self._generation
+        key, generation = self._answer_key("filter", subject, action), self._generation
         cached, epoch = self._lookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
@@ -410,14 +541,16 @@ class CachingAuthorizer:
         inner = getattr(self.authorizer, "scope_for", None)
         if inner is None:
             return None
-        key, generation = ("scope", subject, action), self._generation
+        key, generation = self._answer_key("scope", subject, action), self._generation
         cached, epoch = self._lookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
         self._count("misses")
         return self._remember(key, inner(subject, action), generation, epoch)
 
-    async def _alookup(self, key: tuple[Any, ...], generation: int) -> tuple[Any, Any]:
+    async def _alookup(self, key: tuple[Any, ...] | None, generation: int) -> tuple[Any, Any]:
+        if key is None:
+            return None, _UNKNOWN
         cached = self._get(key)
         if cached is not None or self.shared is None:
             return cached, _UNKNOWN
@@ -425,16 +558,16 @@ class CachingAuthorizer:
         return found[0], epoch
 
     async def _aremember(
-        self, key: tuple[Any, ...], result: Filter | None, generation: int, epoch: Any
+        self, key: tuple[Any, ...] | None, result: Filter | None, generation: int, epoch: Any
     ) -> Filter | None:
-        if self.shared is None:
+        if self.shared is None or key is None:
             return self._remember(key, result, generation, epoch)
         return await asyncio.to_thread(self._remember, key, result, generation, epoch)
 
     async def ascope_for(self, subject: Subject, action: str = "read") -> Filter | None:
         if not hasattr(self.authorizer, "scope_for") and not hasattr(self.authorizer, "ascope_for"):
             return None
-        key, generation = ("scope", subject, action), self._generation
+        key, generation = self._answer_key("scope", subject, action), self._generation
         cached, epoch = await self._alookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
@@ -447,18 +580,38 @@ class CachingAuthorizer:
             result = await asyncio.to_thread(self.authorizer.scope_for, subject, action)  # type: ignore[attr-defined]
         return await self._aremember(key, result, generation, epoch)
 
-    def _local(self, subject: Subject, hits: Sequence[Hit], action: str) -> tuple[list[Any], list[bool | None]]:
-        keys = [("check", subject, action, _hit_key(h)) for h in hits]
-        return keys, [self._get(k) for k in keys]
+    def _local(
+        self, subject: Subject, hits: Sequence[Hit], action: str
+    ) -> tuple[list[tuple[Any, ...] | None], list[bool | None]]:
+        """Each hit's key (None for one that cannot be encoded exactly) and its cached decision."""
+        who = _subject_key(subject)
+        keys: list[tuple[Any, ...] | None] = []
+        for hit in hits:
+            chunk = None if who is None else _hit_key(hit)
+            keys.append(None if chunk is None else ("check", subject, who, action, chunk))
+        return keys, [None if key is None else self._get(key) for key in keys]
 
     @staticmethod
-    def _fill(cached: list[bool | None], found: list[Any]) -> None:
-        missing = [i for i, known in enumerate(cached) if known is None]
-        for i, value in zip(missing, found, strict=True):
+    def _missing(
+        keys: list[tuple[Any, ...] | None], cached: list[bool | None]
+    ) -> tuple[list[int], list[tuple[Any, ...]]]:
+        """The hits to look for in the shared cache, those not cached here that have a key: their
+        positions, and their keys."""
+        positions: list[int] = []
+        wanted: list[tuple[Any, ...]] = []
+        for i, (key, known) in enumerate(zip(keys, cached, strict=True)):
+            if known is None and key is not None:
+                positions.append(i)
+                wanted.append(key)
+        return positions, wanted
+
+    @staticmethod
+    def _fill(cached: list[bool | None], positions: list[int], found: list[Any]) -> None:
+        for i, value in zip(positions, found, strict=True):
             cached[i] = value
 
     def _merge(
-        self, keys: list[Any], cached: list[bool | None], fresh: Sequence[bool], generation: int
+        self, keys: list[tuple[Any, ...] | None], cached: list[bool | None], fresh: Sequence[bool], generation: int
     ) -> tuple[list[bool], list[tuple[Any, bool]]]:
         fresh = list(fresh)
         missing = sum(known is None for known in cached)
@@ -472,7 +625,8 @@ class CachingAuthorizer:
         for key, known in zip(keys, cached, strict=True):
             if known is None:
                 known = next(answers)
-                if isinstance(known, bool):  # never cache a malformed answer; the retriever rejects it
+                # Never cache a malformed answer (the retriever rejects it), nor one without a key.
+                if key is not None and isinstance(known, bool):
                     self._put(key, known, generation)
                     learned.append((key, known))
             decisions.append(known)
@@ -482,10 +636,10 @@ class CachingAuthorizer:
         generation = self._generation
         keys, cached = self._local(subject, hits, action)
         epoch: Any = _UNKNOWN
-        if self.shared is not None and None in cached:
-            missing = [k for k, known in zip(keys, cached, strict=True) if known is None]
-            found, epoch = self._shared_get(missing, generation)
-            self._fill(cached, found)
+        positions, wanted = self._missing(keys, cached)
+        if self.shared is not None and wanted:
+            found, epoch = self._shared_get(wanted, generation)
+            self._fill(cached, positions, found)
         todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
         self._count("misses", len(todo))
         fresh = self.authorizer.check(subject, todo, action) if todo else []
@@ -494,7 +648,7 @@ class CachingAuthorizer:
         return decisions
 
     async def afilter_for(self, subject: Subject, action: str = "read") -> Filter | None:
-        key, generation = ("filter", subject, action), self._generation
+        key, generation = self._answer_key("filter", subject, action), self._generation
         cached, epoch = await self._alookup(key, generation)
         if cached is not None:
             return None if cached is _NONE else cached
@@ -511,10 +665,10 @@ class CachingAuthorizer:
         generation = self._generation
         keys, cached = self._local(subject, hits, action)
         epoch: Any = _UNKNOWN
-        if self.shared is not None and None in cached:
-            todo_keys = [k for k, known in zip(keys, cached, strict=True) if known is None]
-            found, epoch = await asyncio.to_thread(self._shared_get, todo_keys, generation)
-            self._fill(cached, found)
+        positions, wanted = self._missing(keys, cached)
+        if self.shared is not None and wanted:
+            found, epoch = await asyncio.to_thread(self._shared_get, wanted, generation)
+            self._fill(cached, positions, found)
         todo = [h for h, known in zip(hits, cached, strict=True) if known is None]
         fresh: Sequence[bool] = []
         if todo:
