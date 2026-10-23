@@ -126,6 +126,7 @@ jobs:
           docker run -d --name keto -p 4466:4466 -p 4467:4467 -v "$PWD/examples/keto:/config" \
             oryd/keto:v26.2.0 serve -c /config/keto.yml
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:4466/health/ready && break; sleep 1; done
+          curl -sf http://127.0.0.1:4466/health/ready || { docker logs keto; exit 1; }
       - name: Start Qdrant
         run: |
           docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2

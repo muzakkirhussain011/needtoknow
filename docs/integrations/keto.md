@@ -45,5 +45,5 @@ a malformed answer, a wrong number of results, or a result that carries an error
 namespace, for example). Connections are reused, transient failures are retried once, and a
 `CircuitBreaker` can pause requests to a failing server.
 
-`examples/keto/keto.yml` is the configuration CI uses: an in-memory store with the `Document` and
-`Group` namespaces.
+`examples/keto/keto.yml` and `examples/keto/namespaces.ts` are the configuration CI uses: an
+in-memory store whose `Document` namespace grants `view` to users and to the members of groups.
