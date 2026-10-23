@@ -33,8 +33,11 @@ def test_filters_become_an_or_of_ands():
     with pytest.raises(TypeError):
         filter_to_conjunctions("a")
     wide = In("g", range(1000))
-    with pytest.raises(ValueError, match="too many"):
+    with pytest.raises(ValueError, match="more than 10000"):
         filter_to_conjunctions(And(wide, In("h", range(1000))))
+    with pytest.raises(ValueError, match="more than 5"):
+        filter_to_conjunctions(wide, 5)
+    assert filter_to_conjunctions(Or(In("a", ["x"]), And(In("a", ["x"]), In("b", ["y"])))) == [frozenset({a})]
 
 
 class NoSession:

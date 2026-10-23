@@ -19,8 +19,6 @@ import json
 import re
 import threading
 from collections.abc import Iterable, Mapping, Sequence
-from itertools import product
-from math import prod
 from typing import Any
 
 from needtoknow.backends._engines import _SEP, tag, terms
@@ -32,26 +30,43 @@ __all__ = ["CassandraBackend", "create_table", "filter_to_conjunctions"]
 
 _NAME = re.compile(r"[a-z_][a-z0-9_]{0,47}\Z")
 _MAX_LIMIT = 1000  # Cassandra's limit for ANN queries
-_MAX_EXPANSION = 100_000  # stop building the OR of ANDs long before it exhausts memory
 
 
-def filter_to_conjunctions(f: Filter) -> list[frozenset[str]]:
+def _too_many(limit: int) -> ValueError:
+    return ValueError(f"the filter expands to more than {limit} ANN queries (raise max_queries, or post-filter)")
+
+
+def _minimal(sets: Iterable[frozenset[str]], limit: int) -> list[frozenset[str]]:
+    """The sets no other set is a subset of (an AND that another AND implies is redundant), sorted."""
+    kept: list[frozenset[str]] = []
+    for s in sorted(set(sets), key=lambda s: (len(s), sorted(s))):
+        if not any(k <= s for k in kept):
+            kept.append(s)
+            if len(kept) > limit:
+                raise _too_many(limit)
+    return sorted(kept, key=sorted)
+
+
+def filter_to_conjunctions(f: Filter, limit: int = 10_000) -> list[frozenset[str]]:
     """The filter as an OR of ANDs: a chunk matches when its terms include every term of one set.
 
-    An empty list means nothing can match.
+    An empty list means nothing can match. ANDs implied by others are dropped, and a filter that
+    needs more than `limit` ANDs raises `ValueError`.
     """
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
-        return [frozenset({tag(f.field, v)}) for v in _ordered(f.values)]
+        return _minimal((frozenset({tag(f.field, v)}) for v in _ordered(f.values)), limit)
     if isinstance(f, And):
-        parts = [filter_to_conjunctions(c) for c in f.clauses]
-        if prod(len(p) for p in parts) > _MAX_EXPANSION:
-            raise ValueError("the filter expands to too many ANN queries")
-        found = {frozenset().union(*combo) for combo in product(*parts)}
-        return sorted(found, key=sorted)
+        found: list[frozenset[str]] = [frozenset()]
+        for clause in f.clauses:
+            part = filter_to_conjunctions(clause, limit)
+            if len(found) * len(part) > 16 * limit:  # stop before building a product far past the limit
+                raise _too_many(limit)
+            found = _minimal((a | b for a in found for b in part), limit)
+        return found
     if isinstance(f, Or):
-        return sorted({c for clause in f.clauses for c in filter_to_conjunctions(clause)}, key=sorted)
+        return _minimal((c for clause in f.clauses for c in filter_to_conjunctions(clause, limit)), limit)
     raise TypeError(f"not a filter: {f!r}")
 
 
@@ -185,13 +200,9 @@ class CassandraBackend:
             return []
         groups: list[frozenset[str]] = [frozenset()]
         if filter is not None:
-            groups = filter_to_conjunctions(filter)
+            groups = filter_to_conjunctions(filter, self.max_queries)
             if not groups:
                 return []
-            if len(groups) > self.max_queries:
-                raise ValueError(
-                    f"the filter expands to {len(groups)} ANN queries, more than max_queries={self.max_queries}"
-                )
         vector = [float(x) for x in Query.of(query).embedded(self.embed)]
         limit = min(k, _MAX_LIMIT)
         best: dict[str, Hit] = {}
