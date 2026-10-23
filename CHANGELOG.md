@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `CasbinAuthorizer` (the `casbin` extra): decisions from the Casbin enforcer you already use, in the
+  process, with `batch_enforce`. Requests are `(subject id, object, action)`, or your own for ABAC
+  models; `group_subjects=True` also asks with each of the subject's groups, for allow-only models.
+  An enforcer that raises or answers with anything but booleans raises `AuthorizationError`. Tested
+  against the reference answer on generated corpora and with the conformance kit.
+
 ## [1.4.0] - 2026-10-22
 
 Every store now serves both halves of hybrid search under the permission filter: keyword search

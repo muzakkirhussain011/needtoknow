@@ -104,6 +104,8 @@ modules and need their extra.
 
 .. autoclass:: needtoknow.authorizers.cedar.CedarAuthorizer
 
+.. autoclass:: needtoknow.authorizers.casbin.CasbinAuthorizer
+
 .. autoclass:: needtoknow.authorizers.CircuitBreaker
    :members: is_open
 ```
