@@ -293,7 +293,7 @@ jobs:
         with: { version: "0.13.1", enable-cache: false }
       - name: Install from uv.lock, by hash
         run: |
-          uv export --frozen --no-emit-project --extra docs --extra langchain --extra llamaindex --extra haystack --extra mcp --extra otel -o "$RUNNER_TEMP/requirements.txt"
+          uv export --frozen --no-emit-project --extra docs --extra langchain --extra llamaindex --extra haystack --extra mcp --extra otel --extra server -o "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
           pip install --require-hashes --no-deps -r .github/requirements/build.txt
           pip install --no-deps --no-build-isolation -e .
