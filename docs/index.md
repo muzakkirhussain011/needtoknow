@@ -41,7 +41,7 @@ sits between your application and your vector store, and closes that gap.
 :gutter: 3
 
 :::{grid-item-card} {octicon}`stack;1.4em;sd-text-primary` Works with what you have
-pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, LanceDB, Elasticsearch, OpenSearch, Chroma or
+pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, LanceDB, Elasticsearch, OpenSearch, Chroma, FAISS or
 any LangChain or LlamaIndex store; OpenFGA, SpiceDB, Cerbos, Open Policy Agent or your own rules. The
 core has no dependencies.
 :::
@@ -181,6 +181,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 - [Weaviate](integrations/weaviate.md)
 - [Redis](integrations/redis.md)
 - [LanceDB](integrations/lancedb.md)
+- [FAISS](integrations/faiss.md)
 - [Elasticsearch and OpenSearch](integrations/elasticsearch.md)
 - [Chroma](integrations/chroma.md)
 - Any [LangChain](integrations/langchain.md) or [LlamaIndex](integrations/llamaindex.md) store
@@ -303,6 +304,7 @@ integrations/mongodb
 integrations/weaviate
 integrations/redis
 integrations/lancedb
+integrations/faiss
 integrations/opa
 integrations/openfga
 integrations/spicedb

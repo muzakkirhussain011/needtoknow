@@ -47,6 +47,7 @@ haystack = ["haystack-ai>=2.12"]
 mcp = ["mcp>=2.3"]
 otel = ["opentelemetry-api>=1.30"]
 cedar = ["cedarpy>=4.12"]
+faiss = ["faiss-cpu>=1.15"]
 casbin = ["casbin>=1.43"]
 server = ["fastapi>=0.115", "pyjwt[crypto]>=2.10"]
 # Sphinx 9 needs Python 3.12, so the documentation is built on 3.12 or later.
@@ -120,6 +121,10 @@ ignore_missing_imports = true  # pyarrow has no py.typed marker
 [[tool.mypy.overrides]]
 module = ["cedarpy", "cedarpy.*"]
 ignore_missing_imports = true  # in case cedarpy has no py.typed marker
+
+[[tool.mypy.overrides]]
+module = ["faiss", "faiss.*"]
+ignore_missing_imports = true  # faiss-cpu has no py.typed marker
 
 [tool.coverage.run]
 source = ["needtoknow"]

@@ -8,6 +8,10 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `FaissBackend` (the `faiss` extra): vector search with FAISS in the process. The permission filter is
+  matched against the chunks' metadata and passed to FAISS as an ID selector, so pre-filtering is
+  exact. Exact search by default, or any trained index that supports ID selectors; `add`, `delete`,
+  `set_metadata`, and `save` and `load` to a directory. Passes the conformance kit.
 - `CasbinAuthorizer` (the `casbin` extra): decisions from the Casbin enforcer you already use, in the
   process, with `batch_enforce`. Requests are `(subject id, object, action)`, or your own for ABAC
   models; `group_subjects=True` also asks with each of the subject's groups, for allow-only models.

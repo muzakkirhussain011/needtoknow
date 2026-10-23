@@ -41,6 +41,7 @@ Each store runs as a real server (or embedded library) in CI, and its backend pa
 | Weaviate | 1.39.12 | weaviate-client 4.23.1 | `weaviate-client>=4.16` |
 | Redis (Query Engine) | 8.10.2 | redis 8.1.0 | `redis>=5` |
 | LanceDB | embedded 0.40.0 | lancedb 0.40.0 | `lancedb>=0.40` |
+| FAISS | in process | faiss-cpu 1.15.1 | `faiss-cpu>=1.15` |
 
 ## Permission services
 

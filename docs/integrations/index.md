@@ -15,6 +15,7 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 | [Weaviate](weaviate.md) | Backend | `needtoknow[weaviate]` | Yes, inside the vector search |
 | [Redis](redis.md) | Backend | `needtoknow[redis]` | Yes, in the same KNN query |
 | [LanceDB](lancedb.md) | Backend | `needtoknow[lancedb]` | Yes, before the vector search ranks |
+| [FAISS](faiss.md) | Backend, in process | `needtoknow[faiss]` | Yes, an ID selector inside the search |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
@@ -50,6 +51,7 @@ and keeps permission values out of query text. They differ in what is worth know
 | [Weaviate](weaviate.md) | When `add` returns | `WeaviateAsyncClient` | Filter objects (`contains_any`) | BM25, `mode="keyword"` | 1.39.12 |
 | [Redis](redis.md) | When `add` returns | `redis.asyncio` | Hex-encoded TAG values | BM25, `mode="keyword"` | 8.10.2 |
 | [LanceDB](lancedb.md) | When `add` returns | No (a thread) | Hex-encoded list values (`array_has_any`) | BM25, `mode="keyword"` | LanceDB 0.40, embedded |
+| [FAISS](faiss.md) | At once | No (a thread) | `matches` over the stored metadata, then an ID selector | None | faiss-cpu 1.15, in process |
 
 Keyword and vector search combine into [hybrid search](../hybrid.md) with `RankFusion`, across
 stores as well as within one. Measured recall, latency and throughput at a million chunks are in
