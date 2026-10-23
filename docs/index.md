@@ -191,6 +191,7 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 - [SpiceDB](integrations/spicedb.md)
 - [Cerbos](integrations/cerbos.md)
 - [Cedar](integrations/cedar.md)
+- [Casbin](integrations/casbin.md)
 - [Ory Keto](integrations/keto.md)
 - [Open Policy Agent](integrations/opa.md)
 - Permissions on the chunks, synced from [Google Drive](integrations/google-drive.md)
@@ -307,6 +308,7 @@ integrations/openfga
 integrations/spicedb
 integrations/cerbos
 integrations/cedar
+integrations/casbin
 integrations/keto
 integrations/google-drive
 integrations/langchain

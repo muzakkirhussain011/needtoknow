@@ -47,6 +47,7 @@ haystack = ["haystack-ai>=2.12"]
 mcp = ["mcp>=2.3"]
 otel = ["opentelemetry-api>=1.30"]
 cedar = ["cedarpy>=4.12"]
+casbin = ["casbin>=1.43"]
 server = ["fastapi>=0.115", "pyjwt[crypto]>=2.10"]
 # Sphinx 9 needs Python 3.12, so the documentation is built on 3.12 or later.
 docs = [

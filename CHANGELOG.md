@@ -8,6 +8,11 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `CasbinAuthorizer` (the `casbin` extra): decisions from the Casbin enforcer you already use, in the
+  process, with `batch_enforce`. Requests are `(subject id, object, action)`, or your own for ABAC
+  models; `group_subjects=True` also asks with each of the subject's groups, for allow-only models.
+  An enforcer that raises or answers with anything but booleans raises `AuthorizationError`. Tested
+  against the reference answer on generated corpora and with the conformance kit.
 - `KetoAuthorizer`: relationship checks against Ory Keto (`POST /relation-tuples/batch/check`), with no
   extra dependency. Each chunk's document is a Keto object; `group_subjects=True` also checks the
   subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A
