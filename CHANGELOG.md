@@ -13,6 +13,13 @@ All notable changes are recorded here. The format follows
   models; `group_subjects=True` also asks with each of the subject's groups, for allow-only models.
   An enforcer that raises or answers with anything but booleans raises `AuthorizationError`. Tested
   against the reference answer on generated corpora and with the conformance kit.
+- An HTTP service, `needtoknow.server` (the `server` extra), so applications in any language get
+  permission-aware retrieval: `create_app(retriever, authenticate)` serves `POST /v1/retrieve`,
+  `GET /healthz` and an OpenAPI description. The subject comes from the verified bearer token
+  alone; `OIDCAuthenticator` verifies JWTs against the identity provider's published keys
+  (asymmetric algorithms only, issuer, audience, expiry, an optional tenant claim). Unknown request
+  fields are refused, a failed permission check answers 503 without details, and hits carry no
+  metadata unless named.
 - Redaction: `PermissionedRetriever(redactor=...)` hides parts of the chunks a subject may read, after
   the permission check and before a reranker or a model sees them. `SpanRedactor` hides spans listed
   in a chunk's metadata, each with its own readers; `PatternRedactor` hides text matching patterns

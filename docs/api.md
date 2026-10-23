@@ -270,6 +270,13 @@ An observer is any callable that takes a `RetrievalEvent`.
    :members: run, run_async
 
 .. autofunction:: needtoknow.mcp.add_search_tool
+
+.. autofunction:: needtoknow.server.create_app
+
+.. autoclass:: needtoknow.server.OIDCAuthenticator
+   :members: subject
+
+.. autoclass:: needtoknow.server.InvalidToken
 ```
 
 ## Conformance testing

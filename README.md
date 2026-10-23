@@ -134,6 +134,7 @@ Each integration is an optional extra, so the core stays dependency-free.
 | [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
 | [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
 | [MCP](https://muzakkirhussain011.github.io/needtoknow/integrations/mcp.html) | Agent tool server | `needtoknow[mcp]` | Search tool; the user comes from the verified token |
+| [HTTP service](https://muzakkirhussain011.github.io/needtoknow/integrations/http.html) | Service for any language | `needtoknow[server]` | `POST /v1/retrieve`; the user comes from the verified OIDC token |
 
 Setup for each, with code:
 
