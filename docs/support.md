@@ -52,6 +52,7 @@ Each store runs as a real server (or embedded library) in CI, and its backend pa
 | SpiceDB | 1.56.2, in-memory datastore | Compared with the reference answer and the conformance kit |
 | Cerbos | 0.56.0 | The example policy, compared with the reference answer and the conformance kit |
 | Cedar | cedarpy 4.12.2, in process | The metadata ACL model written in Cedar, compared with the reference answer and the conformance kit |
+| Casbin | casbin 1.43.0, in process | The metadata ACL model written as Casbin policies, compared with the reference answer and the conformance kit |
 | Ory Keto | 26.2.0, in-memory store | Direct and group relationships, groups from the token, and the conformance kit |
 
 The HTTP authorizers use only the standard library to reach these services; the Cedar authorizer needs the `cedar` extra.
