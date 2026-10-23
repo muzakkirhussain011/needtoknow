@@ -6,6 +6,12 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-23
+
+Vespa and Apache Cassandra join the stores, each tested with the conformance kit against a real
+server in CI. Vespa applies the permission filter inside its nearest-neighbor and BM25 search;
+Cassandra applies it in the `WHERE` of each ANN query, with every value bound as a parameter.
+
 ### Added
 
 - `CassandraBackend` (the `cassandra` extra): vector search on Apache Cassandra 5.0 with Storage-Attached
@@ -694,7 +700,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3

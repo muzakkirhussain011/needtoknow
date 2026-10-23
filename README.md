@@ -587,8 +587,8 @@ permission check, searches with your own vectors, permission changes without re-
 search tool for AI agents, a Haystack component, and the MongoDB Atlas, Weaviate, Redis and LanceDB
 backends. 1.4 added keyword search on every store but Chroma, the Cedar authorizer and permission sync from
 Google Drive. 1.5 added an HTTP service for any language, redaction, the Ory Keto and Casbin
-authorizers and the FAISS backend. Next, in rough order: permission sync from SharePoint and
-Confluence, and more vector stores. Contributions are welcome; see
+authorizers and the FAISS backend. 1.6 added the Vespa and Cassandra backends. Next, in rough
+order: permission sync from SharePoint and Confluence, and Pinecone and Azure AI Search backends. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
