@@ -15,6 +15,13 @@ modules and need their extra.
 .. autoclass:: needtoknow.SearchBackend
    :members: search
 
+.. autoclass:: needtoknow.Redactor
+   :members: redact
+
+.. autoclass:: needtoknow.SpanRedactor
+
+.. autoclass:: needtoknow.PatternRedactor
+
 .. autoclass:: needtoknow.Reranker
    :members: rerank
 

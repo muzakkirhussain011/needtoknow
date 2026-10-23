@@ -276,6 +276,7 @@ combining
 hybrid
 vectors
 reranking
+redaction
 security
 threat-model
 revocation
