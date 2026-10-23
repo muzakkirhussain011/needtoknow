@@ -8,6 +8,11 @@ All notable changes are recorded here. The format follows
 
 ### Added
 
+- `VespaBackend` (the `vespa` extra): nearest-neighbor or BM25 search on Vespa through its HTTP APIs,
+  with the permission filter in the YQL query as conditions on hex-encoded, type-tagged terms, so
+  Vespa applies it inside the search and no metadata value can change the query. HNSW or exact
+  search; `schema(dim)` writes the schema and `examples/vespa` is a complete application package.
+  Tested with the conformance kit against Vespa 8.763.13, in vector, keyword and hybrid search.
 - `FaissBackend` (the `faiss` extra): vector search with FAISS in the process. The permission filter is
   matched against the chunks' metadata and passed to FAISS as an ID selector, so pre-filtering is
   exact. Exact search by default, or any trained index that supports ID selectors; `add`, `delete`,

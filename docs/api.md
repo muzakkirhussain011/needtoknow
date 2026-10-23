@@ -248,6 +248,11 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autoclass:: needtoknow.backends.faiss.FaissBackend
    :members: add, delete, set_metadata, search, save, load
 
+.. autoclass:: needtoknow.backends.vespa.VespaBackend
+   :members: add, delete, set_metadata, search, close
+
+.. autofunction:: needtoknow.backends.vespa.schema
+
 .. autofunction:: needtoknow.backends.lancedb.create_table
 
 .. autofunction:: needtoknow.backends.lancedb.create_indexes

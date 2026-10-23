@@ -1,0 +1,4 @@
+<!-- Vespa allows 400 hits per query by default; post-filtering can ask for more. -->
+<query-profile id="default">
+    <field name="maxHits">10000</field>
+</query-profile>
