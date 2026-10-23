@@ -53,10 +53,10 @@ def hit(id_, doc=None):
 @settings(max_examples=60, deadline=None)
 @given(docs=corpora(max_size=15), subject=subjects, query=queries, k=st.integers(min_value=1, max_value=6))
 def test_policies_written_from_the_acls_give_exactly_the_reference_answer(docs, subject, query, k):
-    policies = [
-        (who, d.id, "read")
-        for d in docs
-        for who in [*d.metadata.get("allowed_users", []), *d.metadata.get("allowed_groups", [])]
+    policies = [(u, d.id, "read") for d in docs for u in d.metadata.get("allowed_users", [])]
+    # Groups carry the group prefix; "*" is the model's everyone.
+    policies += [
+        (g if g == "*" else f"group:{g}", d.id, "read") for d in docs for g in d.metadata.get("allowed_groups", [])
     ]
     authz = CasbinAuthorizer(enforcer(policies), resource_field=None, group_subjects=True)
     retriever = PermissionedRetriever(InMemoryBackend(docs), authz, max_candidates=len(docs) + 1)
@@ -70,6 +70,23 @@ def test_memberships_kept_in_casbin_and_a_chunk_without_its_object():
     assert authz.check(Subject("ann"), hits) == [True, False, False]
     assert authz.check(Subject("hana"), hits) == [False, True, False]
     assert authz.check(Subject("zed"), [hit("c3")]) == [False]
+
+
+def test_groups_are_prefixed_so_they_cannot_pass_for_a_user_or_a_role():
+    # "admin" is a role and "ceo@corp.com" a user. A token group of the same name used to be sent as
+    # the bare subject, and got that role's or that user's access.
+    policies = [("admin", "secrets", "read"), ("ceo@corp.com", "board", "read"), ("group:eng", "spec", "read")]
+    authz = CasbinAuthorizer(enforcer(policies, groups=[("ann", "admin")]), group_subjects=True)
+    hits = [hit("c1", "secrets"), hit("c2", "board"), hit("c3", "spec")]
+    assert authz.check(Subject("mallory", ["admin", "ceo@corp.com", "eng"]), hits) == [False, False, True]
+    assert authz.check(Subject("ann"), hits) == [True, False, False]
+    assert authz.check(Subject("ceo@corp.com"), hits) == [False, True, False]
+    with pytest.raises(AuthorizationError, match="group prefix"):
+        authz.check(Subject("group:eng"), hits)  # would pass for the group
+    teams = CasbinAuthorizer(enforcer([("team/eng", "spec", "read")]), group_subjects=True, group_prefix="team/")
+    assert teams.check(Subject("bob", ["eng"]), hits) == [False, False, True]
+    with pytest.raises(ValueError, match="group_prefix"):
+        CasbinAuthorizer(enforcer(), group_subjects=True, group_prefix="")
 
 
 def test_a_custom_request_for_abac_models():
