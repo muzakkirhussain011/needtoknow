@@ -6,6 +6,16 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- An HTTP service, `needtoknow.server` (the `server` extra), so applications in any language get
+  permission-aware retrieval: `create_app(retriever, authenticate)` serves `POST /v1/retrieve`,
+  `GET /healthz` and an OpenAPI description. The subject comes from the verified bearer token
+  alone; `OIDCAuthenticator` verifies JWTs against the identity provider's published keys
+  (asymmetric algorithms only, issuer, audience, expiry, an optional tenant claim). Unknown request
+  fields are refused, a failed permission check answers 503 without details, and hits carry no
+  metadata unless named.
+
 ## [1.4.0] - 2026-10-22
 
 Every store now serves both halves of hybrid search under the permission filter: keyword search
