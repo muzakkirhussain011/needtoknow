@@ -189,7 +189,10 @@ class PineconeBackend:
         updates: list[dict[str, Any]] = []
         expected: dict[str, str | None] = {}
         for doc_id, new in metadata.items():
-            fields: dict[str, Any] = {METADATA_FIELD: json.dumps(dict(new)), TERMS_FIELD: [_hex(t) for t in terms(doc_id, new)]}
+            fields: dict[str, Any] = {
+                METADATA_FIELD: json.dumps(dict(new)),
+                TERMS_FIELD: [_hex(t) for t in terms(doc_id, new)],
+            }
             updates.append({"id": record_id(doc_id), "setMetadata": fields})
             expected[doc_id] = fields[METADATA_FIELD]
         self._each(updates, lambda u: self._post("/vectors/update", u, "update"))
