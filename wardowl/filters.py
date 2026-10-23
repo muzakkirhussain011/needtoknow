@@ -37,6 +37,9 @@ class In:
     def __init__(self, field: str, values: Iterable[str | int]) -> None:
         if not field:
             raise ValueError("In() needs a field name")
+        if isinstance(values, (str, bytes, bytearray, Mapping)):
+            # In("team", "12") would hold "1" and "2", and a mapping only its keys: reject instead of guessing.
+            raise TypeError(f"values must be a collection of values, not {type(values).__name__}")
         items = list(values)
         bad = [v for v in items if not _is_value(v)]
         if bad:

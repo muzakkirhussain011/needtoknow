@@ -20,6 +20,13 @@ def test_filter_values_must_be_strings_or_integers(bad):
         In("team", [bad])
 
 
+@pytest.mark.parametrize("values", ["12", b"12", bytearray(b"12"), {"a": 1}])
+def test_in_refuses_a_single_string_bytes_or_a_mapping_for_its_values(values):
+    # In("team", "12") would otherwise hold "1" and "2", and match chunks of team "1" or "2".
+    with pytest.raises(TypeError):
+        In("team", values)
+
+
 def test_booleans_and_floats_in_metadata_never_match():
     # Python says True == 1 and 1.0 == 1; JSON stores do not. The reference sides with the stores.
     assert not matches(In("level", {1}), {"level": True})
