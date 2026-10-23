@@ -70,8 +70,8 @@ separate deployment with its
 - **Tests.** Over 500, many of them Hypothesis property tests, compared with oracles written without
   the library's filter code. CI runs them on Python 3.11 to 3.14 on Linux, the library tests on
   macOS and Windows too, and the suites against 12 vector stores and 5 permission services running
-  as real servers, plus FAISS, Cedar and Casbin in process. Branch coverage must stay at 90% or more for the package and 95% or more for the
-  code that decides access (the retriever, filters, authorizers and cache).
+  as real servers, Pinecone's service, and FAISS, Cedar and Casbin in process. Branch coverage must
+  stay at 90% or more for the package and 95% or more for the code that decides access (the retriever, filters, authorizers and cache).
 - **Fuzzing.** ClusterFuzzLite (Atheris) fuzzes filter parsing and the translations that write query
   text, on pull requests and weekly.
 - **Static analysis.** CodeQL on every change; ruff with the bandit rules; mypy `--strict`.

@@ -258,6 +258,9 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 .. autofunction:: needtoknow.backends.cassandra.create_table
 
+.. autoclass:: needtoknow.backends.pinecone.PineconeBackend
+   :members: add, delete, set_metadata, search, clear, close
+
 .. autofunction:: needtoknow.backends.lancedb.create_table
 
 .. autofunction:: needtoknow.backends.lancedb.create_indexes

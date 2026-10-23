@@ -1,0 +1,50 @@
+# Pinecone
+
+[Pinecone](https://www.pinecone.io) is a managed vector database. `PineconeBackend` writes and
+searches through the index's data plane API (version 2026-07), with the permission filter in the
+query, so Pinecone applies it inside the search: pre-filtering is exact.
+
+```bash
+pip install "needtoknow[pinecone]"
+```
+
+```python
+import os
+
+from needtoknow import MetadataACLAuthorizer, PermissionedRetriever
+from needtoknow.backends.pinecone import PineconeBackend
+
+backend = PineconeBackend(
+    "my-index-abc123.svc.aped-1234.pinecone.io",  # the index's host, from the console
+    os.environ["PINECONE_API_KEY"],
+    embed,
+    namespace="tenant-a",
+)
+backend.add(chunks)  # or backend.add(chunks, embeddings) with vectors you computed
+retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
+```
+
+The index must be a vector index, created with a dimension and a metric (or, in API 2026-07, the
+reserved `_values` field). Document indexes do not serve the vector API.
+
+## How filtering works
+
+Each record's metadata holds the chunk's id, its text, its metadata as JSON (returned exactly as
+written), and a tagged term for every string or integer in its metadata (the field name, the
+value's type and the value), hex-encoded, in the list `needtoknow_terms`. A filter becomes `$in`
+conditions on those terms joined with `$and` and `$or`. The terms keep `1` and `"1"` apart, as the
+reference semantics do, and no metadata value can change the filter's structure.
+
+## Production notes
+
+- **Consistency:** serverless indexes are eventually consistent; a write usually shows within a
+  few seconds. `wait=30.0` makes `add`, `delete` and `set_metadata` wait, up to that many seconds,
+  until a search sees the change, and raise `TimeoutError` otherwise.
+- **The API key** is sent only in the `Api-Key` header and never appears in errors or `repr`.
+  Pass `client=httpx.Client(...)` for proxies or custom TLS.
+- **Ids:** Pinecone record ids are printable ASCII of at most 512 characters; other chunk ids are
+  stored under `sha256-` and their SHA-256, and returned as written.
+- **Limits:** Pinecone allows 40 KB of metadata per record, which includes the chunk's text, and
+  10,000 results per query. Writes go in batches of 100, 8 requests at a time.
+- **Namespaces** keep tenants or corpora apart; `clear()` removes every chunk in the backend's
+  namespace.

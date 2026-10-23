@@ -192,6 +192,10 @@ jobs:
           # The code that decides who reads what is held to a higher bar: the retriever, the filter
           # language, composition, caching and the permission-service clients, together.
           coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
+      - name: Pinecone, the service (only this step gets the key; skipped without the secret)
+        env:
+          NEEDTOKNOW_TEST_PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+        run: pytest -q -p no:cacheprovider tests/test_pinecone.py
       - name: Cassandra and Vespa server errors, when a step failed
         if: failure()
         run: |
