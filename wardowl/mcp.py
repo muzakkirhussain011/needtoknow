@@ -13,8 +13,9 @@ Whose permissions apply comes from the access token the server verified for the 
 from the tool's arguments: the model chooses what to search for, not who is asking. Over
 Streamable HTTP with a token verifier, `subject_for(token)` turns the verified token (its subject,
 client id, scopes and claims) into a wardowl `Subject`, and a call without a verified token is
-refused. For a server only one person can reach, such as a local stdio server, pass that person's
-`Subject` instead of a function.
+refused. A synchronous `subject_for` runs in a worker thread, so a directory lookup never stalls
+the server's event loop. For a server only one person can reach, such as a local stdio server,
+pass that person's `Subject` instead of a function.
 
 The tool returns each permitted chunk's id, text and score, and `complete`. Metadata is left out
 unless its keys are named in `metadata`, because permission fields describe who may read what. A
@@ -31,6 +32,7 @@ import inspect
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Annotated, Any
 
+import anyio.to_thread
 from mcp import MCPError
 from mcp.server import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -79,16 +81,21 @@ def add_search_tool(
     description: str = DESCRIPTION,
     limit: int = 5,
     max_limit: int = 20,
+    max_query_length: int = 4000,
     metadata: Sequence[str] = (),
 ) -> None:
     """Register a permission-aware search tool on `server`.
 
     `subject` is a function from the request's verified `AccessToken` to a `Subject`, or one fixed
-    `Subject` for a server only that person can reach. The tool takes `query` and `limit` (default
-    `limit`, at most `max_limit`); `metadata` names the metadata keys included in each result.
+    `Subject` for a server only that person can reach; an async function is awaited, and a
+    synchronous one runs in a worker thread. The tool takes `query` (at most `max_query_length`
+    characters) and `limit` (default `limit`, at most `max_limit`); `metadata` names the metadata
+    keys included in each result.
     """
     if not 1 <= limit <= max_limit:
         raise ValueError("limit must be at least 1 and at most max_limit")
+    if max_query_length < 1:
+        raise ValueError("max_query_length must be positive")
     if not isinstance(subject, Subject) and not callable(subject):
         raise TypeError("subject must be a wardowl Subject or a function of the access token")
     keys = tuple(metadata)
@@ -99,7 +106,11 @@ def add_search_tool(
         token = get_access_token()
         if token is None:  # stdio, or HTTP without a token verifier: nobody to apply permissions for
             raise MCPError(code=INVALID_REQUEST, message="this tool needs an authenticated caller")
-        found = subject(token)
+        found: Subject | Awaitable[Subject]
+        if inspect.iscoroutinefunction(subject):
+            found = subject(token)
+        else:  # it may block, on a directory or a database: keep it off the event loop
+            found = await anyio.to_thread.run_sync(subject, token)
         if inspect.isawaitable(found):
             found = await found
         if not isinstance(found, Subject):
@@ -107,7 +118,10 @@ def add_search_tool(
         return found
 
     async def search(
-        query: Annotated[str, Field(min_length=1, description="What to look for, in words or a question.")],
+        query: Annotated[
+            str,
+            Field(min_length=1, max_length=max_query_length, description="What to look for, in words or a question."),
+        ],
         limit: Annotated[int, Field(ge=1, le=max_limit, description="How many passages to return.")] = limit,
     ) -> SearchResults:
         who = await caller()

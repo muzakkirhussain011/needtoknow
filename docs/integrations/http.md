@@ -49,6 +49,11 @@ Content-Type: application/json
 
 - `query` is the text; `vector` (a list of numbers) searches with an embedding you computed; give
   either or both. `k` is between 1 and `max_k` (50 by default).
+- The query holds at most `max_query_length` characters (4,000 by default) and the vector at most
+  `max_vector_length` numbers (4,096 by default), all finite: `NaN` and infinities are refused.
+- A body over `max_body_bytes` (256 KiB by default) is refused with 413 before it is parsed, by its
+  `Content-Length` and by the bytes actually received. If you raise `max_vector_length` well past
+  4,096, raise `max_body_bytes` with it.
 - `GET /healthz` answers liveness probes. `GET /openapi.json` describes the API, for generating a
   client in your language; `create_app(..., docs=True)` also serves the interactive pages at `/docs`.
 
@@ -56,7 +61,8 @@ Content-Type: application/json
 |---|---|
 | 200 | The hits the caller may read, best first, and whether the result is `complete` |
 | 401 | No bearer token, or one that fails verification |
-| 422 | A malformed body, including one with a field the API does not define |
+| 413 | A body over `max_body_bytes` |
+| 422 | A malformed body, including one with a field the API does not define, or a value over its limit |
 | 503 | The permission check, or the token's verification, could not be completed: nothing is returned, and the reason goes to the `wardowl` logger, not to the caller |
 
 ## Who the caller is
@@ -67,13 +73,21 @@ any field the API does not define is refused, which is the same rule the
 
 `OIDCAuthenticator` verifies JWT access tokens against your identity provider's published keys:
 the signature (RS256 or ES256 by default; shared-secret algorithms are refused), the issuer, the
-audience and the expiry. The subject is the `sub` claim, its groups the `groups` claim
-(`groups_claim` renames it), and its tenant the claim named by `tenant_claim`. Keys are cached and
-refetched when a token names a key not seen before; if the key endpoint cannot be reached, requests
-answer 503.
+audience and the expiry. The token must name its key (`kid`), and is verified with that key's own
+algorithm, which must be one of `algorithms`; the algorithm in the token's header does not choose
+it. The subject is the `sub` claim, its groups the `groups` claim (`groups_claim` renames it), and
+its tenant the claim named by `tenant_claim`.
+
+The published keys are fetched with a 5-second `timeout` and kept for `lifespan` (300 seconds), so
+a key your provider rotates out stops verifying within that time. A token naming a key that is not
+in the set fetches the keys again, at most once every `cooldown` (30 seconds); until then such a
+token answers 401 at once, so made-up key ids cannot make the service hammer your provider. If the
+key endpoint cannot be reached or returns no usable keys, requests answer 503.
 
 For other token formats, pass your own function: it receives the bearer token and returns the
-`Subject`, or raises `wardowl.server.InvalidToken`. It may be async.
+`Subject`, or raises `wardowl.server.InvalidToken`. It may be async; a synchronous function, such
+as `OIDCAuthenticator`, runs in a worker thread, so a slow identity provider or database delays
+only the requests waiting on it, never the whole service.
 
 ```python
 from wardowl import Subject
