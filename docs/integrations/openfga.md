@@ -31,7 +31,12 @@ type document
 
 Chunks of one source document share its id in metadata (`doc_id` above), so a permission is
 written once per document, not once per chunk. With `resource_field=None` the chunk id is the
-resource. A chunk without its resource id is denied.
+resource. A chunk without its resource id, or whose field holds anything but one string (a list,
+a number), is denied.
+
+Subject ids and group names are written into OpenFGA's `type:id` strings, where `bob#manager`
+would be a userset, `*` the wildcard and a `:` another type. An id or group name that is empty or
+contains `:`, `#`, `*` or whitespace therefore raises `AuthorizationError` instead of being sent.
 
 Change the names with `object_type=`, `user_type=`, `relations={"read": "viewer"}`,
 `group_type=` and `group_relation=`. Pass `authorization_model_id=` to pin a model version.
@@ -57,6 +62,11 @@ retriever post-filters with BatchCheck instead. Set both to your server's values
 `list_objects_deadline=None` suits a server configured without a deadline. With the default
 `timeout` of 2 seconds, a call slow enough to meet the default deadline fails first and raises.
 
+`In` matches a list field when any of its elements is listed, while `check` denies a chunk whose
+resource field is not one string. The retriever's re-check of pre-filtered hits (`recheck=True`,
+the default) drops such a chunk and counts it in `violations`. With `recheck=False` the filter
+alone decides, so the resource field must be one string on every chunk.
+
 ## Consistency
 
 `consistency="HIGHER_CONSISTENCY"` asks OpenFGA to skip its cache for every check and list, so a
@@ -77,9 +87,11 @@ must come from authentication, not from the client.
 ## Failing closed
 
 Every failure raises `AuthorizationError`: an unreachable server, a timeout (`timeout=`, 2 seconds
-by default), an unexpected response, or an action with no configured relation. `headers=` adds
-headers to every request, for example an API token. Connections are reused and transient failures
-retried once (`retries=`); `circuit_breaker=` and `ssl_context=` work as described under
-[resilience](../operations.md#resilience-of-remote-permission-services).
+by default, for the whole call), an unexpected response or one larger than `max_response_bytes=`
+(10 MiB by default), or an action with no configured relation. `headers=` adds headers to every
+request, for example an API token; an `Authorization` header over `http://` to another machine
+needs `allow_insecure=True`, as for [OPA](opa.md#failing-closed). Connections are reused and
+transient failures retried once (`retries=`); `circuit_breaker=` and `ssl_context=` work as
+described under [resilience](../operations.md#resilience-of-remote-permission-services).
 
 For high traffic, wrap it in a [`CachingAuthorizer`](../operations.md#permission-caching).

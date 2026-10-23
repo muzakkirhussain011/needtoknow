@@ -23,7 +23,7 @@ import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from wardowl.authorizers._http import CircuitBreaker, JsonClient
+from wardowl.authorizers._http import DEFAULT_MAX_RESPONSE_BYTES, CircuitBreaker, JsonClient
 from wardowl.authz import AuthorizationError
 from wardowl.filters import Filter
 from wardowl.types import Hit, Subject
@@ -36,8 +36,8 @@ class KetoAuthorizer:
 
     `actions` maps wardowl actions to Keto relations (default `{"read": "view"}`). Objects live in
     `namespace` and come from `resource_field`. `batch_size` is how many tuples one request checks.
-    `retries`, `circuit_breaker` and `ssl_context` work as in `OPAAuthorizer`. Every failure raises
-    `AuthorizationError`.
+    `timeout`, `retries`, `circuit_breaker`, `ssl_context`, `max_response_bytes` and `allow_insecure`
+    work as in `OPAAuthorizer`. Every failure raises `AuthorizationError`.
     """
 
     def __init__(
@@ -56,6 +56,8 @@ class KetoAuthorizer:
         retries: int = 1,
         circuit_breaker: CircuitBreaker | None = None,
         ssl_context: ssl.SSLContext | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        allow_insecure: bool = False,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be positive")
@@ -67,6 +69,8 @@ class KetoAuthorizer:
             retries=retries,
             breaker=circuit_breaker,
             ssl_context=ssl_context,
+            max_response_bytes=max_response_bytes,
+            allow_insecure=allow_insecure,
         )
         self.namespace = namespace
         self.actions = dict(actions or {"read": "view"})

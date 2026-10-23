@@ -21,6 +21,10 @@ retriever = PermissionedRetriever(backend, authorizer)
 | `read` | Relation `view` (`actions={"read": "view"}`) |
 | The subject | `subject_id=<subject.id>`; Keto follows subject sets such as `Group:hr#members` itself |
 
+The subject id, and each group with `group_subjects=True`, travel as separate JSON fields
+(`subject_id`, or `subject_set` with its own namespace, object and relation), so a `:` or `#` in a
+name cannot change what it refers to.
+
 Checks go to `POST /relation-tuples/batch/check`, `batch_size` tuples at a time (100 by default).
 
 ## Groups from the token
@@ -42,8 +46,11 @@ so the search starts inside the subject's tenant.
 
 Every failure raises `AuthorizationError`, and the retriever returns nothing: an unreachable server,
 a malformed answer, a wrong number of results, or a result that carries an error (an unknown
-namespace, for example). Connections are reused, transient failures are retried once, and a
-`CircuitBreaker` can pause requests to a failing server.
+namespace, for example). `timeout=` (2 seconds by default) bounds the whole call, and an answer
+larger than `max_response_bytes=` (10 MiB by default) is refused. An `Authorization` header over
+`http://` to another machine needs `allow_insecure=True`, as for [OPA](opa.md#failing-closed).
+Connections are reused, transient failures are retried once, and a `CircuitBreaker` can pause
+requests to a failing server.
 
 `examples/keto/keto.yml` and `examples/keto/namespaces.ts` are the configuration CI uses: an
 in-memory store whose `Document` namespace grants `view` to users and to the members of groups.

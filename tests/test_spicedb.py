@@ -158,6 +158,15 @@ def test_lookup_errors_fail_closed(server, line):
         SpiceDBAuthorizer(server.url).filter_for(ANN)
 
 
+def test_a_resource_field_that_is_not_one_string_never_passes_check(server):
+    # The In pre-filter would match ["d1", "d2"] by either element; check denies it without asking,
+    # so the default re-check drops such a chunk.
+    server.responder = _bulk({("d1", "ann"), ("d2", "ann")})
+    odd = [Hit("c1", "t", 1.0, {"doc_id": ["d1", "d2"]}), Hit("c2", "t", 1.0, {"doc_id": 7})]
+    assert SpiceDBAuthorizer(server.url, group_subjects=False).check(ANN, odd) == [False, False]
+    assert server.requests == []
+
+
 def test_without_a_resource_field_chunks_are_resources_and_there_is_no_filter(server):
     server.responder = _bulk({("c2", "ann")})
     authz = SpiceDBAuthorizer(server.url, resource_field=None, group_subjects=False)

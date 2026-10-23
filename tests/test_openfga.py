@@ -68,6 +68,45 @@ def test_undecided_or_malformed_checks_fail_closed(fga, result):
         OpenFGAAuthorizer(fga.url, "s").check(BOB, [Hit("c1", "t", 1.0, {"doc_id": "a"})])
 
 
+@pytest.mark.parametrize(
+    "subject",
+    [
+        Subject("bob#manager"),  # user:bob#manager would be a userset
+        Subject("*"),  # user:* would be the wildcard
+        Subject("group:eng"),
+        Subject("bob smith"),
+        Subject("bob", ["eng#member"]),
+        Subject("bob", ["*"]),
+        Subject("bob", ["a:b"]),
+    ],
+)
+def test_ids_and_groups_that_openfga_would_read_as_something_else_are_refused(fga, subject):
+    fga.responder = _all_allowed
+    authz = OpenFGAAuthorizer(fga.url, "s")
+    with pytest.raises(AuthorizationError, match="cannot be sent to OpenFGA"):
+        authz.check(subject, [Hit("c1", "t", 1.0, {"doc_id": "a"})])
+    with pytest.raises(AuthorizationError, match="cannot be sent to OpenFGA"):
+        authz.filter_for(subject)
+    assert fga.requests == []
+    assert authz.check(Subject("ann@example.com", ["eng-team"]), [Hit("c1", "t", 1.0, {"doc_id": "a"})]) == [True]
+
+
+def test_a_resource_field_that_is_not_one_string_never_passes_check(fga):
+    # The In pre-filter matches a list by any element; check never allows such a chunk, so the
+    # default re-check drops it as a violation. With recheck=False the filter alone would decide.
+    def answer(path, payload):
+        return _all_allowed(path, payload) if path.endswith("/batch-check") else (200, {"objects": ["document:a"]})
+
+    fga.responder = answer
+    authz = OpenFGAAuthorizer(fga.url, "s")
+    odd = [Hit("c1", "t", 1.0, {"doc_id": ["a", "secret"]}), Hit("c2", "t", 1.0, {"doc_id": 7})]
+    assert authz.check(BOB, odd) == [False, False]
+    assert fga.requests == []  # nothing to ask about
+    docs = [Document("c1", "plan", {"doc_id": ["a", "secret"]}), Document("c2", "plan", {"doc_id": "a"})]
+    result = PermissionedRetriever(InMemoryBackend(docs), authz, strategy="prefilter").retrieve("plan", BOB)
+    assert [h.id for h in result.hits] == ["c2"] and result.violations == 1
+
+
 def test_http_errors_and_unknown_actions_fail_closed(fga):
     fga.responder = lambda path, payload: (500, {"code": "internal_error"})
     hit = Hit("c1", "t", 1.0, {"doc_id": "a"})

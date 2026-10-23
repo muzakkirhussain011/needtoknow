@@ -17,7 +17,11 @@ library.
   Supply caveat context with `caveat_context`.
 
 The resource id is `hit.metadata[resource_field]` (a document id shared by its chunks), or the chunk
-id when `resource_field` is None; a chunk without it is denied. SpiceDB object ids allow letters,
+id when `resource_field` is None; a chunk without it, or whose field is not one string, is denied.
+The `In` pre-filter matches a list field by any of its elements, which `check` never allows, so keep
+the field one string on every chunk: with `recheck=False` the retriever trusts the filter alone.
+Subject ids and group names travel as separate JSON fields, never inside a `type:id#relation`
+string, so a `:` or `#` in one cannot change its type or relation. SpiceDB object ids allow letters,
 digits and `/_|-=+`: store such an id in `resource_field` and use such subject ids, or requests fail,
 closed. Every failure raises `AuthorizationError`. Connections are reused, transient failures are
 retried once, and a `CircuitBreaker` can pause requests to a failing server; see
@@ -35,7 +39,7 @@ import ssl
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from wardowl.authorizers._http import CircuitBreaker, JsonClient
+from wardowl.authorizers._http import DEFAULT_MAX_RESPONSE_BYTES, CircuitBreaker, JsonClient
 from wardowl.authz import AuthorizationError
 from wardowl.filters import Filter, In
 from wardowl.types import Hit, Subject
@@ -60,8 +64,10 @@ class SpiceDBAuthorizer:
     SpiceDB permissions (default `{"read": "view"}`). Resources are `<resource_type>:<resource id>`
     and subjects `<subject_type>:<subject id>`, plus `<group_type>:<group>#<group_relation>` for
     each of the subject's groups when `group_subjects` is true. `caveat_context(subject)` returns
-    the context for caveated relationships. `retries`, `circuit_breaker` and `ssl_context` work as
-    in `OPAAuthorizer`. Every failure raises `AuthorizationError`.
+    the context for caveated relationships. `timeout`, `retries`, `circuit_breaker`, `ssl_context`,
+    `max_response_bytes` and `allow_insecure` work as in `OPAAuthorizer`: a `token` sent over
+    http:// to a host other than this machine needs `allow_insecure=True`. Every failure raises
+    `AuthorizationError`.
     """
 
     def __init__(
@@ -85,6 +91,8 @@ class SpiceDBAuthorizer:
         retries: int = 1,
         circuit_breaker: CircuitBreaker | None = None,
         ssl_context: ssl.SSLContext | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        allow_insecure: bool = False,
     ) -> None:
         if batch_size < 1 or lookup_limit < 1:
             raise ValueError("batch_size and lookup_limit must be positive")
@@ -97,6 +105,8 @@ class SpiceDBAuthorizer:
             retries=retries,
             breaker=circuit_breaker,
             ssl_context=ssl_context,
+            max_response_bytes=max_response_bytes,
+            allow_insecure=allow_insecure,
         )
         self.permissions = dict(permissions or {"read": "view"})
         self.resource_type = resource_type

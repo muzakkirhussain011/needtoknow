@@ -50,13 +50,26 @@ the same as `filter_to_dict`. The filter must select exactly what `decisions` al
 vector store applies the filter and `decisions` re-checks the results. If the two disagree, the
 re-check removes the extra hits and counts them as `violations`.
 
+With `PermissionedRetriever(recheck=False)` there is no re-check: a pre-filtered hit is only
+matched against the filter, so the filter alone decides. `In` matches a list field when any of its
+elements is among the values, and a single value when it is, even where your Rego treats a field of
+that shape differently. Every chunk must then store each field in the shape the policy assumes (a
+list for `allowed_groups`, one string for a document id); keep `recheck=True`, the default, unless
+that holds for every chunk.
+
 ## Failing closed
 
-Every failure raises `AuthorizationError`: an unreachable server, a timeout (`timeout=`, 2 seconds
-by default), a non-200 response, invalid JSON, an undefined decision, a list of the wrong length or
-type, or a malformed filter. An undefined decision is treated as a deny, never an allow.
+Every failure raises `AuthorizationError`: an unreachable server, a timeout, a non-200 response,
+invalid JSON, an answer larger than `max_response_bytes=` (10 MiB by default), an undefined
+decision, a list of the wrong length or type, or a malformed filter. An undefined decision is
+treated as a deny, never an allow. `timeout=` (2 seconds by default) bounds the whole call:
+connecting, sending, reading every byte of the answer, and any retry.
 
 `headers=` adds headers to every request, for example `{"Authorization": "Bearer ..."}` when OPA
-requires a token. Connections are reused and transient failures retried once (`retries=`); a
-`circuit_breaker=` pauses requests to a failing server, and `ssl_context=` sets your own CA or
-mutual TLS. See [resilience](../operations.md#resilience-of-remote-permission-services).
+requires a token. An `Authorization` header is refused with `ValueError` over `http://` unless the
+url names this machine (`localhost`, `127.0.0.1`, `::1`) and no proxy applies: use `https://`, or
+pass `allow_insecure=True` on a network you trust. Connections are reused and transient failures
+retried once (`retries=`); a `circuit_breaker=` pauses requests to a failing server, and
+`ssl_context=` sets your own CA or mutual TLS for an `https://` url (it is refused with `http://`,
+where it would not be used). A connection is never shared across `fork()`: a worker forked after a
+request opens its own. See [resilience](../operations.md#resilience-of-remote-permission-services).

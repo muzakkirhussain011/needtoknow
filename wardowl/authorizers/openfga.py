@@ -17,22 +17,30 @@ No extra dependency: it calls OpenFGA's HTTP API with the standard library.
 * The subject's groups (for example from your identity provider) are sent as contextual tuples
   (`user:<id> member group:<name>`), so they need not be synced into OpenFGA first.
 
+Subject ids and group names are written into OpenFGA's `type:id` strings, where `#` would make a
+userset, `*` a wildcard and `:` another type, so an id or group name that is empty or contains `:`,
+`#`, `*` or whitespace raises `AuthorizationError` instead of being sent.
+
 The resource id is `hit.metadata[resource_field]` (a document id shared by its chunks), or the
-chunk id when `resource_field` is None. A chunk without its resource id is denied. Pre-filtering
-needs `resource_field`. Every failure raises `AuthorizationError`. Connections are reused,
-transient failures are retried once, and a `CircuitBreaker` can pause requests to a failing
-server; see `wardowl.authorizers`.
+chunk id when `resource_field` is None. A chunk without its resource id, or whose field is not one
+string, is denied. Pre-filtering needs `resource_field`. The `In` pre-filter matches a list field by
+any of its elements, which `check` never allows, so keep the field one string on every chunk: with
+`recheck=False` the retriever trusts the filter alone.
+
+Every failure raises `AuthorizationError`. Connections are reused, transient failures are retried
+once, and a `CircuitBreaker` can pause requests to a failing server; see `wardowl.authorizers`.
 """
 
 from __future__ import annotations
 
+import re
 import ssl
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import quote
 
-from wardowl.authorizers._http import CircuitBreaker, JsonClient
+from wardowl.authorizers._http import DEFAULT_MAX_RESPONSE_BYTES, CircuitBreaker, JsonClient
 from wardowl.authz import AuthorizationError
 from wardowl.filters import Filter, In
 from wardowl.types import Hit, Subject
@@ -40,6 +48,14 @@ from wardowl.types import Hit, Subject
 __all__ = ["OpenFGAAuthorizer"]
 
 _CONSISTENCY = ("MINIMIZE_LATENCY", "HIGHER_CONSISTENCY")
+_NOT_IN_IDS = re.compile(r"[:#*\s]")  # would make "user:<id>" another type, a userset or a wildcard
+
+
+def _safe(kind: str, value: str) -> str:
+    """`value`, checked to stay one id inside OpenFGA's `type:id` strings."""
+    if not value or _NOT_IN_IDS.search(value):
+        raise AuthorizationError(f"{kind} {value!r} cannot be sent to OpenFGA: empty, or has ':', '#', '*' or a space")
+    return value
 
 
 class OpenFGAAuthorizer:
@@ -51,8 +67,9 @@ class OpenFGAAuthorizer:
     `"HIGHER_CONSISTENCY"`, `"MINIMIZE_LATENCY"` or None (the server's default).
     `list_objects_limit` and `list_objects_deadline` are the server's ListObjects result limit and
     deadline in seconds (None for a server without a deadline): an answer that reaches either may
-    be partial, so it gives no filter. `retries`, `circuit_breaker` and `ssl_context` work as in
-    `OPAAuthorizer`. Every failure raises `AuthorizationError`.
+    be partial, so it gives no filter. `timeout`, `retries`, `circuit_breaker`, `ssl_context`,
+    `max_response_bytes` and `allow_insecure` work as in `OPAAuthorizer`. Every failure raises
+    `AuthorizationError`.
     """
 
     def __init__(
@@ -77,6 +94,8 @@ class OpenFGAAuthorizer:
         retries: int = 1,
         circuit_breaker: CircuitBreaker | None = None,
         ssl_context: ssl.SSLContext | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        allow_insecure: bool = False,
     ) -> None:
         if batch_size < 1 or list_objects_limit < 1:
             raise ValueError("batch_size and list_objects_limit must be positive")
@@ -92,6 +111,8 @@ class OpenFGAAuthorizer:
             retries=retries,
             breaker=circuit_breaker,
             ssl_context=ssl_context,
+            max_response_bytes=max_response_bytes,
+            allow_insecure=allow_insecure,
         )
         self._store_path = f"/stores/{quote(store_id, safe='')}"
         self.base = self._client.url + self._store_path
@@ -127,14 +148,14 @@ class OpenFGAAuthorizer:
         return self.relations[action]
 
     def _user(self, subject: Subject) -> str:
-        return f"{self.user_type}:{subject.id}"
+        return f"{self.user_type}:{_safe('subject id', subject.id)}"
 
     def _context(self, subject: Subject) -> dict[str, Any]:
         if not self.contextual_groups or not subject.groups:
             return {}
         user = self._user(subject)
         keys = [
-            {"user": user, "relation": self.group_relation, "object": f"{self.group_type}:{g}"}
+            {"user": user, "relation": self.group_relation, "object": f"{self.group_type}:{_safe('group', g)}"}
             for g in sorted(subject.groups)
         ]
         return {"contextual_tuples": {"tuple_keys": keys}}
