@@ -43,6 +43,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from needtoknow.authz import AuthorizationError, Authorizer
 from needtoknow.events import Observer, RetrievalEvent, query_fingerprint
 from needtoknow.filters import And, Filter, In, Or, matches
+from needtoknow.redaction import RedactFunction, Redactor
 from needtoknow.types import Hit, Query, Subject
 
 __all__ = ["PermissionedRetriever", "Reranker", "RetrievalResult", "SearchBackend", "Strategy"]
@@ -179,6 +180,10 @@ class PermissionedRetriever:
     `reranker` reorders the result after the permission check: the retriever finds the top
     `rerank_depth` hits the subject may read (or k, if larger), the reranker orders them, and the
     first k are returned. The reranker never sees a chunk the subject may not read.
+
+    `redactor` (see `needtoknow.redaction`) hides parts of the permitted hits, after the check and
+    before the reranker: it may change a hit's text and metadata but must return the same hits in
+    the same order, and if it fails the retrieval raises `AuthorizationError`.
     """
 
     def __init__(
@@ -195,6 +200,7 @@ class PermissionedRetriever:
         audit_key: bytes | None = None,
         reranker: Reranker | RerankFunction | None = None,
         rerank_depth: int = 50,
+        redactor: Redactor | RedactFunction | None = None,
     ) -> None:
         if strategy not in ("auto", "prefilter", "postfilter"):
             raise ValueError(f"unknown strategy {strategy!r}")
@@ -208,6 +214,9 @@ class PermissionedRetriever:
             raise TypeError("reranker must have a rerank method or be a function")
         if rerank_depth < 1:
             raise ValueError("rerank_depth must be positive")
+        if redactor is not None and not (hasattr(redactor, "redact") or callable(redactor)):
+            raise TypeError("redactor must have a redact method or be a function")
+        self.redactor = redactor
         self.reranker = reranker
         self.rerank_depth = rerank_depth
         self.backend = backend
@@ -337,13 +346,26 @@ class PermissionedRetriever:
         if not isinstance(query, (str, Query)):
             raise TypeError(f"a query is a string or a Query, not {type(query).__name__}")
         if self.reranker is None:
-            return (yield from self._permitted(query, k))
-        result = yield from self._permitted(query, max(k, self.rerank_depth))
+            return self._redacted(subject, (yield from self._permitted(query, k)))
+        result = self._redacted(subject, (yield from self._permitted(query, max(k, self.rerank_depth))))
         if not result.hits:
             return result
         # Only hits that passed the check reach the reranker, which can only reorder, score or drop them.
         ranked: list[Hit] = yield _Rerank(query, result.hits)
         return dataclasses.replace(result, hits=ranked[:k])
+
+    def _redacted(self, subject: Subject, result: RetrievalResult) -> RetrievalResult:
+        """`result` with the redactor applied to its hits, which must stay the same hits in order."""
+        if self.redactor is None or not result.hits:
+            return result
+        redact: Any = getattr(self.redactor, "redact", self.redactor)
+        try:
+            hits = list(redact(subject, list(result.hits)))
+        except Exception as exc:
+            raise AuthorizationError(f"redaction failed: {exc}") from exc
+        if not all(isinstance(h, Hit) for h in hits) or [h.id for h in hits] != [h.id for h in result.hits]:
+            raise AuthorizationError("the redactor must return the same hits, in the same order")
+        return dataclasses.replace(result, hits=hits)
 
     def _permitted(self, query: str | Query, k: int) -> _Plan:
         """The top k hits the subject may read."""
