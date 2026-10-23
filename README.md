@@ -579,7 +579,7 @@ Cerbos authorizers, combined and multi-tenant authorizers, a permission cache sh
 replicas, OpenTelemetry metrics and a conformance kit. 1.3 added hybrid search, reranking after the
 permission check, searches with your own vectors, permission changes without re-embedding, an MCP
 search tool for AI agents, a Haystack component, and the MongoDB Atlas, Weaviate, Redis and LanceDB
-backends. 1.4 added keyword search on every store, the Cedar authorizer and permission sync from
+backends. 1.4 added keyword search on every store but Chroma, the Cedar authorizer and permission sync from
 Google Drive. Next, in rough order: permission sync from SharePoint and Confluence, and more vector
 stores. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
