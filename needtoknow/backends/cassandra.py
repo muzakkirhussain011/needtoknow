@@ -107,18 +107,20 @@ class CassandraBackend:
         similarity: str = "cosine",
         max_queries: int = 256,
         concurrency: int = 32,
+        write_concurrency: int = 4,
     ) -> None:
         _check_names(keyspace, table)
         if similarity not in ("cosine", "dot_product", "euclidean"):
             raise ValueError("similarity must be cosine, dot_product or euclidean")
-        if max_queries < 1 or concurrency < 1:
-            raise ValueError("max_queries and concurrency must be positive")
+        if min(max_queries, concurrency, write_concurrency) < 1:
+            raise ValueError("max_queries, concurrency and write_concurrency must be positive")
         self.session = session
         self.embed = embed
         self.name = f"{keyspace}.{table}"
         self.similarity = similarity
         self.max_queries = max_queries
         self.concurrency = concurrency
+        self.write_concurrency = write_concurrency
         self._prepared: dict[str, Any] = {}
         self._lock = threading.Lock()
 
@@ -128,15 +130,25 @@ class CassandraBackend:
                 self._prepared[cql] = self.session.prepare(cql)
             return self._prepared[cql]
 
-    def _run(self, cql: str, rows: Sequence[tuple[Any, ...]]) -> list[Any]:
+    def _run(self, cql: str, rows: Sequence[tuple[Any, ...]], *, write: bool = False) -> list[Any]:
         if not rows:
             return []
         from cassandra.concurrent import execute_concurrent_with_args
 
+        statement = self._statement(cql)
+        concurrency = self.write_concurrency if write else self.concurrency
         results = execute_concurrent_with_args(
-            self.session, self._statement(cql), rows, concurrency=self.concurrency, raise_on_first_error=True
+            self.session, statement, rows, concurrency=concurrency, raise_on_first_error=not write
         )
-        return [result for _, result in results]
+        out = []
+        for args, (ok, result) in zip(rows, results, strict=True):
+            if not ok:
+                # Cassandra 5.0's vector index refuses writes beyond a few at once per table (about one per
+                # core). Every write here is idempotent, so a refused one is sent again, alone; a second
+                # failure raises.
+                result = self.session.execute(statement, args)
+            out.append(result)
+        return out
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Store chunks, replacing any with the same id. `embeddings` gives their vectors, in order."""
@@ -151,12 +163,14 @@ class CassandraBackend:
             row = (doc.id, doc.text, json.dumps(dict(doc.metadata)), set(terms(doc.id, doc.metadata)))
             rows.append((*row, [float(x) for x in vectors[i]]))
         self._run(
-            f"INSERT INTO {self.name} (id, text, metadata, needtoknow_terms, embedding) VALUES (?, ?, ?, ?, ?)", rows
+            f"INSERT INTO {self.name} (id, text, metadata, needtoknow_terms, embedding) VALUES (?, ?, ?, ?, ?)",
+            rows,
+            write=True,
         )
 
     def delete(self, ids: Iterable[str]) -> None:
         """Remove chunks by id. Ids not stored are ignored."""
-        self._run(f"DELETE FROM {self.name} WHERE id = ?", [(i,) for i in sorted(set(ids))])
+        self._run(f"DELETE FROM {self.name} WHERE id = ?", [(i,) for i in sorted(set(ids))], write=True)
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
         """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
@@ -164,7 +178,7 @@ class CassandraBackend:
         A lightweight transaction (`IF EXISTS`) makes sure an id that is not stored creates no row.
         """
         rows = [(json.dumps(dict(new)), set(terms(i, new)), i) for i, new in metadata.items()]
-        self._run(f"UPDATE {self.name} SET metadata = ?, needtoknow_terms = ? WHERE id = ? IF EXISTS", rows)
+        self._run(f"UPDATE {self.name} SET metadata = ?, needtoknow_terms = ? WHERE id = ? IF EXISTS", rows, write=True)
 
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:

@@ -42,6 +42,9 @@ expands to more raises `ValueError`, so retrieval fails closed: raise the bound,
 - **Permission changes:** `set_metadata` updates the metadata and terms with a lightweight
   transaction (`IF EXISTS`), so an id that is not stored never creates a row.
 - **Limits:** Cassandra allows 1,000 rows per ANN query, so a search returns at most 1,000 hits.
+- **Concurrent writes:** Cassandra 5.0's vector index accepts only a few writes at once per table (about
+  one per core). The backend writes `write_concurrency` (4) rows at a time and sends a refused write
+  once more, alone; searches run `concurrency` (32) queries at a time.
 - **Similarity:** `similarity` must match the index (`create_table(..., similarity=...)`); scores
   are that function's values (`similarity_cosine` by default).
 - **No keyword search:** Cassandra 5.0 has no BM25, so the backend has vector search only.

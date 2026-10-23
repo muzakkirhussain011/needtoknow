@@ -89,7 +89,9 @@ def _factory(session, *, vectors=False):
             session.execute(f"DROP TABLE IF EXISTS needtoknow_test.{old}")
         _TABLES[:] = [f"chunks_{uuid.uuid4().hex[:12]}"]
         create_table(session, "needtoknow_test", _TABLES[0], EMBED.dim)
-        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], None if vectors else EMBED)
+        # The kit's random filters nest deep, so they expand to many ANN queries.
+        embed = None if vectors else EMBED
+        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], embed, max_queries=10_000)
         backend.add(docs, [EMBED(d.text) for d in docs] if vectors else None)
         return backend
 
