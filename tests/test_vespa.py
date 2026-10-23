@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import tag
 from wardowl.backends.vespa import TERMS_FIELD, VespaBackend, filter_to_yql, schema
 from wardowl.testing import QUERY, HashingEmbedder, check_backend
@@ -38,10 +39,11 @@ def test_hostile_values_become_hex_digits():
 
 
 def test_an_empty_in_matches_nothing():
-    assert filter_to_yql(In("team", [])) is None
-    assert filter_to_yql(And(In("a", ["x"]), In("b", []))) is None
+    # Never None: a query without the condition matches every document.
+    for nothing in (In("team", []), And(In("a", ["x"]), In("b", [])), Or(In("a", []))):
+        with pytest.raises(NothingMatches):
+            filter_to_yql(nothing)
     assert filter_to_yql(Or(In("a", []), In("b", ["y"]))) == f"{TERMS_FIELD} in ({_h('b', 'y')})"
-    assert filter_to_yql(Or(In("a", []))) is None
     with pytest.raises(ValueError):
         filter_to_yql(In("a\x1fb", ["x"]))
     with pytest.raises(TypeError):
@@ -136,6 +138,21 @@ def test_nothing_to_match_asks_nothing():
 def test_failed_or_malformed_searches_raise(reply, status):
     with pytest.raises(RuntimeError, match="Vespa"):
         Fake(reply, status).backend().search("q", 3)
+
+
+@pytest.mark.parametrize(
+    "coverage",
+    [
+        {"coverage": 50, "documents": 5, "full": False, "nodes": 1, "results": 1, "resultsFull": 0},
+        {"coverage": 100, "documents": 10, "degraded": {"timeout": True}, "nodes": 1, "results": 1, "resultsFull": 0},
+    ],
+)
+def test_partial_coverage_raises_instead_of_passing_for_complete_results(coverage):
+    reply = {"root": {"coverage": coverage, "children": [_hit("a")]}}
+    with pytest.raises(RuntimeError, match="partial results"):
+        Fake(reply).backend().search("q", 3)
+    full = {"coverage": 100, "documents": 10, "full": True, "nodes": 1, "results": 1, "resultsFull": 1}
+    assert [h.id for h in Fake({"root": {"coverage": full, "children": [_hit("a")]}}).backend().search("q", 3)] == ["a"]
 
 
 def test_failed_writes_raise_and_settings_are_checked():

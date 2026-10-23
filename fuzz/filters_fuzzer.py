@@ -26,6 +26,8 @@ from wardowl.filters import And, Filter, In, Or, filter_from_dict, filter_to_dic
 _PG_PARTS = re.compile(
     r"metadata @> %s::jsonb"
     r"|\(metadata -> %s = ANY\(%s::jsonb\[\]\) OR metadata -> %s @> ANY\(%s::jsonb\[\]\)\)"
+    r"|EXISTS \(SELECT 1 FROM jsonb_path_query\(metadata -> %s, 'lax \$\[\*\]'\) AS e\(v\)"
+    r" WHERE v::text = ANY\(%s::text\[\]\)\)"
     r"|TRUE|FALSE| OR | AND |[()]"
 )
 _LANCE_PARTS = re.compile(r"array_has_any\(wardowl_terms, \[('[0-9a-f]+'(, )?)+\]\)| AND | OR |[()]")
@@ -47,10 +49,9 @@ def check_filter(f: Filter) -> None:
     for translate, parts in ((lancedb_predicate, _LANCE_PARTS), (redis_query, _REDIS_PARTS)):
         try:
             text = translate(f)
-        except ValueError:  # a field name containing the term separator
+        except ValueError:  # a field name containing the term separator, or NothingMatches: no query at all
             continue
-        if text is not None:  # None: nothing can match, and the store is never asked
-            assert parts.sub("", text) == "", text
+        assert parts.sub("", text) == "", text
 
 
 def check_document(document: Any) -> None:

@@ -9,9 +9,13 @@ with permissions as they are. Filters address `metadata.<field>`; for list field
 any element matches, which is the reference semantics of `In`. Field names used in filters may not
 contain `.`, `[`, `]` or `"`, which Qdrant reads as path syntax.
 
-Qdrant point ids are unsigned integers or UUIDs. `add` derives a UUID from each document id (or uses
-the id itself when it is a UUID) and keeps the original id in the payload under `wardowl_id`;
-search results report that id, or the point id for points written by something else.
+Qdrant point ids are unsigned integers or UUIDs. `add` derives a UUID from the SHA-256 of each
+document id, whatever the id looks like, and keeps the original id in the payload under
+`wardowl_id`; search results report that id, or the point id for points written by something
+else. `set_metadata` and `delete` select points by a filter that also requires `wardowl_id` to be
+the id asked for, so they never change a point that belongs to another id. A point written by
+something else has no `wardowl_id`; it is reached by its own UUID, written exactly as results
+report it.
 
 Create the collection with cosine distance, and index the permission fields: `create_collection`
 does both. Without a payload index Qdrant still filters correctly, but slowly on large collections.
@@ -26,12 +30,13 @@ from __future__ import annotations
 
 import asyncio
 import re
-import uuid
 import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from wardowl.backends._errors import required
+from wardowl.backends._ids import canonical_uuid, hashed_uuid
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -57,7 +62,6 @@ ID_KEY = "wardowl_id"
 SPARSE_NAME = "wardowl_bm25"
 """The sparse vector holding each chunk's BM25 term weights, for `mode="keyword"`."""
 
-_NAMESPACE = uuid.UUID("5e3b1d7c-6b7a-4f0e-9a51-6f1d0c2b8e44")
 _PATH_SYNTAX = frozenset('.[]"')
 _BATCH = 256
 _WORDS = re.compile(r"\w+")
@@ -88,11 +92,35 @@ def _query_terms(text: str) -> tuple[list[int], list[float]]:
 
 
 def point_id(document_id: str) -> str:
-    """The Qdrant point id for a document id: the id itself if it is a UUID, otherwise a UUID derived from it."""
-    try:
-        return str(uuid.UUID(document_id))
-    except ValueError:
-        return str(uuid.uuid5(_NAMESPACE, document_id))
+    """The Qdrant point id `add` writes a document id to: a UUID derived from its SHA-256.
+
+    Every id is hashed, one that is already a UUID too, so no two document ids share a point.
+    """
+    return hashed_uuid(document_id, "wardowl qdrant point")
+
+
+def _addressed(ids: Sequence[str]) -> models.Filter:
+    """The points that hold these document ids: the point `add` writes each to, if its `wardowl_id`
+    is that id, and the point named by an id in canonical UUID form that has no `wardowl_id`."""
+    from qdrant_client import models
+
+    points: list[int | str] = [point_id(i) for i in ids]
+    own = models.Filter(
+        must=[
+            models.HasIdCondition(has_id=points),
+            models.FieldCondition(key=ID_KEY, match=models.MatchAny(any=list(ids))),
+        ]
+    )
+    foreign: list[int | str] = [i for i in ids if canonical_uuid(i)]
+    if not foreign:
+        return own
+    written_elsewhere = models.Filter(
+        must=[
+            models.HasIdCondition(has_id=foreign),
+            models.IsEmptyCondition(is_empty=models.PayloadField(key=ID_KEY)),
+        ]
+    )
+    return models.Filter(should=[own, written_elsewhere])
 
 
 def _key(metadata_key: str, field: str) -> str:
@@ -101,13 +129,19 @@ def _key(metadata_key: str, field: str) -> str:
     return f"{metadata_key}.{field}"
 
 
-def filter_to_qdrant(f: Filter, metadata_key: str = "metadata") -> models.Filter | None:
-    """Translate a filter into a Qdrant `Filter`, or `None` when nothing can match.
+def filter_to_qdrant(f: Filter, metadata_key: str = "metadata") -> models.Filter:
+    """Translate a filter into a Qdrant `Filter`. Raises `NothingMatches` when nothing can match.
 
     `In` becomes `MatchAny` on `metadata.<field>`, one condition per value type (strings and
     integers are never mixed in one list), joined with `should`. An `In` with no values matches
-    nothing; that is decided here instead of being left to Qdrant's handling of empty lists.
+    nothing; that is decided here instead of being left to Qdrant's handling of empty lists, and a
+    filter that can match nothing raises rather than return something Qdrant reads as no filter.
     """
+    return required(_filter(f, metadata_key))
+
+
+def _filter(f: Filter, metadata_key: str) -> models.Filter | None:
+    """The Qdrant `Filter`, or `None` when nothing can match."""
     from qdrant_client import models
 
     def condition(f: Filter) -> Any:
@@ -149,7 +183,9 @@ def create_collection(
     text_search: bool = False,
 ) -> None:
     """Create a cosine-distance collection if it does not exist, and keyword indexes on the
-    permission fields (`metadata.allowed_users` and `metadata.allowed_groups` by default).
+    permission fields (`metadata.allowed_users` and `metadata.allowed_groups` by default) and on
+    `wardowl_id`, which `set_metadata` and `delete` filter on (a collection in strict mode refuses
+    filtered updates on fields without an index).
 
     `text_search=True` also creates the sparse vector `wardowl_bm25` with Qdrant's IDF
     modifier, for `mode="keyword"`. Qdrant can add it to an existing collection only by recreating it.
@@ -164,6 +200,7 @@ def create_collection(
         client.create_collection(
             name, vectors_config=params if vector_name is None else {vector_name: params}, sparse_vectors_config=sparse
         )
+    client.create_payload_index(name, ID_KEY, field_schema=models.PayloadSchemaType.KEYWORD)
     for field in keyword_fields:
         client.create_payload_index(name, _key(metadata_key, field), field_schema=models.PayloadSchemaType.KEYWORD)
 
@@ -253,41 +290,40 @@ class QdrantBackend:
             self.client.upsert(self.collection, points=points[start : start + _BATCH], wait=True)
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        Each change sets only the metadata key of the payload (Qdrant replaces a top-level key's
+        whole value, so no key of the old metadata survives), on the points that hold that id. It
+        never writes the text back, and a point deleted meanwhile is not recreated.
+        """
         from qdrant_client import models
 
-        wanted = {point_id(i): dict(m) for i, m in metadata.items()}
-        selected: list[int | str | uuid.UUID] = list(wanted)
-        for start in range(0, len(selected), _BATCH):
-            found = self.client.retrieve(
-                self.collection, ids=selected[start : start + _BATCH], with_payload=True, with_vectors=False
+        operations: list[Any] = [
+            models.SetPayloadOperation(
+                set_payload=models.SetPayload(payload={self.metadata_key: dict(new)}, filter=_addressed([doc_id]))
             )
-            # The whole payload is rewritten with only the metadata replaced, so no key of the old
-            # metadata survives however the server would merge a partial update.
-            operations: list[Any] = [
-                models.OverwritePayloadOperation(
-                    overwrite_payload=models.SetPayload(
-                        payload={**(p.payload or {}), self.metadata_key: wanted[str(p.id)]}, points=[p.id]
-                    )
-                )
-                for p in found
-            ]
-            if operations:
-                self.client.batch_update_points(self.collection, update_operations=operations, wait=True)
+            for doc_id, new in metadata.items()
+        ]
+        for start in range(0, len(operations), _BATCH):
+            self.client.batch_update_points(
+                self.collection, update_operations=operations[start : start + _BATCH], wait=True
+            )
 
     def delete(self, ids: Iterable[str]) -> None:
+        """Remove chunks by id: the points holding each id, and no other. Ids not stored are ignored."""
         from qdrant_client import models
 
-        selected: list[int | str | uuid.UUID] = [point_id(i) for i in ids]
-        if selected:
-            self.client.delete(self.collection, points_selector=models.PointIdsList(points=selected), wait=True)
+        selected = list(dict.fromkeys(ids))
+        for start in range(0, len(selected), _BATCH):
+            chosen = models.FilterSelector(filter=_addressed(selected[start : start + _BATCH]))
+            self.client.delete(self.collection, points_selector=chosen, wait=True)
 
     # ---- searching ---------------------------------------------------------------------------
 
     def _request(self, query: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         query_filter = None
         if f is not None:
-            query_filter = filter_to_qdrant(f, self.metadata_key)
+            query_filter = _filter(f, self.metadata_key)
             if query_filter is None:
                 return None  # nothing can match
         search: Any

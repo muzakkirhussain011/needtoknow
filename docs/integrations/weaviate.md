@@ -46,9 +46,12 @@ fused with vector search on one collection, against Weaviate 1.39.12.
 
 ## Ids
 
-Weaviate object ids are UUIDs. `add` uses a document id that is already a UUID as it is, derives a
-UUID from any other id (`point_id`), and keeps the original in `wardowl_id`, which results
-report.
+Weaviate object ids are UUIDs. `add` derives one from the SHA-256 of every document id
+(`point_id`), a document id that is already a UUID included, and keeps the original in
+`wardowl_id`, which results report. `set_metadata` and `delete` act on an object only when its
+`wardowl_id` equals the id asked for, so they never change or remove an object that holds another
+id. An object written by another tool, without `wardowl_id`, is reached by its UUID written
+exactly as results report it (lower case, with hyphens).
 
 ## How permissions are indexed
 
@@ -62,7 +65,8 @@ metadata, so `1` and `"1"` stay apart, and booleans, floats, nested lists and ob
   and `"hr"` the same term. CI checks that `"hr "`, `"HR"` and `"hr"` stay apart on a real server.
 - A filter becomes `contains_any` conditions joined with `all_of` and `any_of`, built from the
   client's filter objects, so values are always data and never query syntax. An `In` with no values
-  matches nothing without a call to Weaviate.
+  matches nothing without a call to Weaviate; `filter_to_weaviate` raises `NothingMatches` for a
+  filter that can match nothing, since Weaviate reads a missing filter as "match everything".
 - The metadata is stored as JSON text and returned exactly as written, so the retriever's re-check
   sees the true permissions whatever their shape, and arbitrary metadata never changes the schema.
 

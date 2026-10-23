@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, tag, terms
 from wardowl.backends.weaviate import (
     ID_PROPERTY,
@@ -30,11 +31,13 @@ WEAVIATE_GRPC_PORT = int(os.environ.get("WARDOWL_TEST_WEAVIATE_GRPC_PORT", "5005
 # ---- ids, terms, translation (no server) -------------------------------------------------------
 
 
-def test_ids_are_uuids_derived_from_document_ids():
+def test_ids_are_uuids_derived_from_every_document_id():
     assert point_id("doc-1") == point_id("doc-1") != point_id("doc-2")
     assert str(uuid.UUID(point_id("doc-1"))) == point_id("doc-1")
-    existing = str(uuid.uuid4())
-    assert point_id(existing) == existing
+    existing = uuid.uuid4()
+    # A UUID is hashed too, so no spelling of one id stands for another.
+    spellings = [str(existing), str(existing).upper(), existing.hex, f"urn:uuid:{existing}"]
+    assert len({point_id(s) for s in spellings}) == len(spellings) and point_id(str(existing)) != str(existing)
 
 
 def test_terms_are_guarded_at_both_ends():
@@ -43,8 +46,11 @@ def test_terms_are_guarded_at_both_ends():
 
 def test_an_empty_in_matches_nothing_without_asking_weaviate():
     pytest.importorskip("weaviate")
-    assert filter_to_weaviate(In("team", [])) is None
-    assert filter_to_weaviate(And(In("a", ["x"]), In("b", []))) is None
+    # Never None: Weaviate reads filters=None as "no filter", which matches every object.
+    with pytest.raises(NothingMatches):
+        filter_to_weaviate(In("team", []))
+    with pytest.raises(NothingMatches):
+        filter_to_weaviate(And(In("a", ["x"]), In("b", [])))
     assert filter_to_weaviate(Or(In("a", []), In("b", ["y"]))) is not None
     client = FakeClient()
     assert WeaviateBackend(client, "Docs", EMBED).search("leave", 5, In("team", [])) == []
@@ -58,15 +64,32 @@ def test_names_containing_the_separator_are_refused():
 
 
 class FakeHandle:
-    def __init__(self, objects=(), errors=None):
+    def __init__(self, objects=(), errors=None, stored=None):
         self.objects, self.errors = list(objects), errors or {}
-        self.requests, self.inserted, self.deleted = [], [], []
-        self.query = SimpleNamespace(near_vector=self.near_vector)
-        self.data = SimpleNamespace(insert_many=self.insert_many, delete_many=self.delete_many)
+        self.stored = dict(stored or {})  # object id -> properties, for fetches by id
+        self.requests, self.inserted, self.deleted, self.updated = [], [], [], []
+        self.query = SimpleNamespace(
+            near_vector=self.near_vector, fetch_object_by_id=self.fetch_object_by_id, fetch_objects=self.fetch_objects
+        )
+        self.data = SimpleNamespace(insert_many=self.insert_many, delete_many=self.delete_many, update=self.update)
 
     def near_vector(self, **request):
         self.requests.append(request)
         return SimpleNamespace(objects=self.objects)
+
+    def _object(self, uid):
+        properties = self.stored.get(str(uid))
+        return None if properties is None else SimpleNamespace(uuid=uuid.UUID(str(uid)), properties=properties)
+
+    def fetch_object_by_id(self, uid, return_properties=None):
+        return self._object(uid)
+
+    def fetch_objects(self, filters, limit, return_properties=None):
+        found = [self._object(uid) for uid in filters.value]  # only by_id().contains_any(...) is sent
+        return SimpleNamespace(objects=[o for o in found if o is not None][:limit])
+
+    def update(self, uuid, properties):
+        self.updated.append((uuid, properties))
 
     def insert_many(self, objects):
         self.inserted.append(list(objects))
@@ -144,6 +167,36 @@ def test_delete_selects_by_object_id_and_skips_nothing_to_do():
     assert client.handle.deleted == []
     backend.delete(["a", "a", "b"])
     assert len(client.handle.deleted) == 1
+
+
+def test_set_metadata_changes_only_an_object_that_holds_the_id():
+    pytest.importorskip("weaviate")
+    other_tool = str(uuid.uuid4())
+    stored = {
+        point_id("mine"): {ID_PROPERTY: "mine"},
+        point_id("victim"): {ID_PROPERTY: "intruder"},  # a collision, or an object another tool wrote there
+        other_tool: {},  # written by another tool, without wardowl_id
+    }
+    client = FakeClient(stored=stored)
+    new = {"allowed_groups": ["*"]}
+    WeaviateBackend(client, "Docs", EMBED).set_metadata(
+        {"mine": new, "victim": new, "missing": new, other_tool: new, other_tool.upper(): new}
+    )
+    assert [uid for uid, _ in client.handle.updated] == [point_id("mine"), other_tool]
+    assert client.handle.updated[0][1] == {
+        "metadata_json": '{"allowed_groups": ["*"]}',
+        TERMS_FIELD: [f"\x1f{tag('allowed_groups', '*')}\x1f"],
+    }
+
+
+def test_delete_reaches_objects_of_other_tools_only_by_their_exact_uuid():
+    pytest.importorskip("weaviate")
+    other_tool = str(uuid.uuid4())
+    client = FakeClient(stored={other_tool: {}, point_id("a"): {ID_PROPERTY: "a"}})
+    WeaviateBackend(client, "Docs", EMBED).delete(["a", other_tool, other_tool.upper()])
+    # First the objects add wrote, where their wardowl_id matches; then the other tool's, by exact UUID.
+    _, others = client.handle.deleted
+    assert others.value == [other_tool]
 
 
 def test_wrong_configuration_is_rejected():
@@ -274,6 +327,34 @@ def test_delete_removes_chunks(client):
     hits = backend.search("leave policy salary", 5)
     client.collections.delete(name)
     assert [h.id for h in hits] == ["b"]
+
+
+def test_changes_reach_only_the_object_that_holds_the_id(client):
+    name = _new_collection(client)
+    backend = WeaviateBackend(client, name, EMBED)
+    backend.add([Document("mine", "leave policy", {"allowed_groups": ["hr"]})])
+    handle = client.collections.get(name)
+    # An object at victim's object id that holds another id: a collision, or a write by another tool.
+    intruder = {ID_PROPERTY: "intruder", "content": "board minutes", "metadata_json": '{"allowed_groups": ["board"]}'}
+    handle.data.insert(properties=intruder, uuid=point_id("victim"), vector={"embedding": EMBED("board minutes")})
+    other_tool = str(uuid.uuid4())
+    plain = {"content": "salary bands", "metadata_json": '{"allowed_groups": ["hr"]}'}
+    handle.data.insert(properties=plain, uuid=other_tool, vector={"embedding": EMBED("salary bands")})
+    try:
+        backend.set_metadata({"victim": {"allowed_groups": ["*"]}, other_tool.upper(): {"allowed_groups": ["*"]}})
+        backend.delete(["victim", other_tool.upper()])
+        found = {h.id: h.metadata for h in backend.search("leave board salary", 5)}
+        assert found == {
+            "mine": {"allowed_groups": ["hr"]},
+            "intruder": {"allowed_groups": ["board"]},
+            other_tool: {"allowed_groups": ["hr"]},
+        }
+        backend.set_metadata({other_tool: {"allowed_groups": ["*"]}})
+        assert {h.id: h.metadata for h in backend.search("salary", 5)}[other_tool] == {"allowed_groups": ["*"]}
+        backend.delete([other_tool, "mine"])
+        assert [h.id for h in backend.search("leave board salary", 5)] == ["intruder"]
+    finally:
+        client.collections.delete(name)
 
 
 def test_native_async_search_matches_sync(client):

@@ -27,6 +27,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from wardowl.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -54,8 +55,16 @@ def permission_terms(metadata: Mapping[str, Any]) -> str:
     return ",".join(_hex(t) for t in terms("metadata", metadata))
 
 
-def filter_to_query(f: Filter) -> str | None:
-    """Translate a filter into a Query Engine expression on the hex-encoded terms, or `None` when nothing can match."""
+def filter_to_query(f: Filter) -> str:
+    """Translate a filter into a Query Engine expression on the hex-encoded terms.
+
+    Raises `NothingMatches` when nothing can match, as a query without the expression matches everything.
+    """
+    return required(_expression(f))
+
+
+def _expression(f: Filter) -> str | None:
+    """The Query Engine expression, or `None` when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
@@ -64,12 +73,12 @@ def filter_to_query(f: Filter) -> str | None:
             return None
         return f"@{TERMS_FIELD}:{{{' | '.join(_hex(tag(f.field, v)) for v in values)}}}"
     if isinstance(f, And):
-        parts = [filter_to_query(c) for c in f.clauses]
+        parts = [_expression(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else " ".join(f"({p})" for p in parts)
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_query(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_expression(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else " | ".join(f"({p})" for p in kept)
@@ -222,7 +231,7 @@ class RedisBackend:
     def _command(self, query: Query, k: int, f: Filter | None) -> list[Any] | None:
         where = "*"
         if f is not None:
-            expression = filter_to_query(f)
+            expression = _expression(f)
             if expression is None:
                 return None  # nothing can match
             where = f"({expression})"
@@ -280,6 +289,12 @@ class RedisBackend:
     def _hits(self, reply: Any) -> list[Hit]:
         hits = []
         if isinstance(reply, Mapping):  # RESP3
+            # With the server's default timeout policy, a query that runs out of time returns what it
+            # found so far, with this warning: partial results, which must not pass for complete ones.
+            warnings = [_text(w) or "" for w in reply.get("warning", reply.get(b"warning")) or []]
+            timeouts = [w for w in warnings if "timeout" in w.lower()]
+            if timeouts:
+                raise RuntimeError(f"Redis returned partial results: {timeouts[0]}")
             for result in reply.get("results", reply.get(b"results", [])):
                 attributes = result.get("extra_attributes", result.get(b"extra_attributes", {}))
                 fields = {_text(name) or "": value for name, value in attributes.items()}

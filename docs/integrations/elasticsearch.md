@@ -71,10 +71,11 @@ chunk's metadata, scalars and list elements alike:
 
 (`␟` is the ASCII unit separator, `\x1f`; field names may not contain it.) A filter becomes a
 `terms` query on these tags, `And` a `bool` `filter`, `Or` a `bool` `should`, and an `In` with no
-values matches nothing without a call to the engine. The metadata itself is stored with
-`enabled: false`: kept in `_source` and returned exactly as written, so the retriever's re-check
-sees the true permissions, but never indexed, so arbitrary metadata cannot add mappings to the
-index. The index uses `dynamic: false` for the same reason.
+values matches nothing without a call to the engine. `filter_to_query` raises `NothingMatches` for
+a filter that can match nothing, since a search without a filter matches everything. The metadata
+itself is stored with `enabled: false`: kept in `_source` and returned exactly as written, so the
+retriever's re-check sees the true permissions, but never indexed, so arbitrary metadata cannot add
+mappings to the index. The index uses `dynamic: false` for the same reason.
 
 ## Indexes written by other tools
 
@@ -93,6 +94,7 @@ permissions, so the re-check denies it.
 
 ## Limits
 
-Both engines cap k at 10,000. A `terms` query holds at most `index.max_terms_count` values (65,536
-by default), which bounds how many groups a single subject's filter can name; see
-[Operations](../operations.md#subjects-in-very-many-groups).
+Both engines return at most 10,000 hits per search, so a search with `k` above 10,000 raises
+`ValueError` rather than return 10,000 hits as if no more matched. A `terms` query holds at most
+`index.max_terms_count` values (65,536 by default), which bounds how many groups a single
+subject's filter can name; see [Operations](../operations.md#subjects-in-very-many-groups).

@@ -51,10 +51,15 @@ filter_to_sql(In("allowed_groups", ["hr"]))
 A hex string holds only `0-9` and `a-f`, so no group name or user id is ever part of the SQL; CI
 checks that with quotes and SQL fragments as group names. Deletes match the hex-encoded id column
 for the same reason. `And` and `Or` become `AND` and `OR`, and an `In` with no values matches
-nothing without a query. `create_indexes` adds a `LABEL_LIST` index on the terms, the index type
-LanceDB uses for `array_has_any`; rows added later are found before they are indexed. The metadata
-is stored as JSON and returned exactly as written, so the retriever's re-check sees the true
-permissions.
+nothing without a query; `filter_to_sql` raises `NothingMatches` for a filter that can match
+nothing, since LanceDB reads a missing predicate as "match everything". `create_indexes` adds a
+`LABEL_LIST` index on the terms, the index type LanceDB uses for `array_has_any`; rows added later
+are found before they are indexed. The metadata is stored as JSON and returned exactly as written,
+so the retriever's re-check sees the true permissions.
+
+`set_metadata` is an update-only merge of the metadata and terms columns on `id`: an id that is not
+stored, or a chunk deleted meanwhile, gets no row, and the text and vector are never read and
+written back, so a concurrent `add` keeps its text.
 
 ## Rows written by other tools
 

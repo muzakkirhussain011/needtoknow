@@ -28,6 +28,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from wardowl.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -44,6 +45,7 @@ __all__ = [
 Embed = Callable[[str], Sequence[float]]
 
 ID_FIELD = "id"
+_BY_ID = f"{ID_FIELD} in {{ids}}"  # ids travel as a filter parameter, never in the expression text
 SPARSE_FIELD = "wardowl_sparse"
 """The BM25 sparse vector Milvus derives from the text, for `mode="keyword"`."""
 
@@ -71,13 +73,18 @@ def _prune(f: Filter) -> Filter | None:
     raise TypeError(f"not a filter: {f!r}")
 
 
-def filter_to_expression(f: Filter) -> tuple[str, dict[str, list[str]]] | None:
+def filter_to_expression(f: Filter) -> tuple[str, dict[str, list[str]]]:
     """Translate a filter into a Milvus filter template and its parameters.
 
-    Returns `(expression, params)` for `search(filter=expression, filter_params=params)`, or
-    `None` when nothing can match. Each `In` becomes `ARRAY_CONTAINS_ANY(wardowl_terms, {pN})`
-    with the tagged terms in `params["pN"]`.
+    Returns `(expression, params)` for `search(filter=expression, filter_params=params)`. Each `In`
+    becomes `ARRAY_CONTAINS_ANY(wardowl_terms, {pN})` with the tagged terms in `params["pN"]`.
+    Raises `NothingMatches` when nothing can match, as Milvus reads an empty filter as "match everything".
     """
+    return required(_expression(f))
+
+
+def _expression(f: Filter) -> tuple[str, dict[str, list[str]]] | None:
+    """The filter template and its parameters, or `None` when nothing can match."""
     pruned = _prune(f)
     if pruned is None:
         return None
@@ -232,27 +239,37 @@ class MilvusBackend:
             self.client.upsert(collection_name=self.collection, data=rows[start : start + _BATCH])
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
-        ids = list(metadata)
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        The rows found are changed with a partial update (Milvus 2.6.2 or newer) of the metadata and
+        terms alone, which replaces the value of each field it names: the text and vector are never
+        written back. A row deleted between the lookup and the update is not recreated, since Milvus
+        refuses to insert a row without its vector; the call then raises, and can be repeated.
+        """
+        changes: dict[str, dict[str, Any]] = {
+            i: {ID_FIELD: i, self.metadata_field: dict(m), TERMS_FIELD: terms(i, m)} for i, m in metadata.items()
+        }
+        ids = list(changes)
         for start in range(0, len(ids), _BATCH):
-            stored = self.client.get(
+            stored = self.client.query(
                 collection_name=self.collection,
-                ids=ids[start : start + _BATCH],
-                output_fields=[self.vector_field, self.content_field],
+                filter=_BY_ID,
+                filter_params={"ids": ids[start : start + _BATCH]},
+                output_fields=[ID_FIELD],
                 consistency_level="Strong",  # rows written just before must be found
             )
-            # Whole rows, read and written back: the result does not depend on how a partial update merges.
-            rows = [
-                self._row(Document(r[ID_FIELD], r[self.content_field], metadata[r[ID_FIELD]]), r[self.vector_field])
-                for r in stored
-            ]
+            rows = [changes[r[ID_FIELD]] for r in stored]
             if rows:
-                self.client.upsert(collection_name=self.collection, data=rows)
+                self.client.upsert(collection_name=self.collection, data=rows, partial_update=True)
 
     def delete(self, ids: Iterable[str]) -> None:
-        selected = list(ids)
-        if selected:
-            self.client.delete(collection_name=self.collection, ids=selected)
+        # A filter with the ids as a parameter: pymilvus's delete(ids=...) writes string ids into the
+        # expression between quotes, so an id containing a quote would change which rows it deletes.
+        selected = list(dict.fromkeys(ids))
+        for start in range(0, len(selected), _BATCH):
+            self.client.delete(
+                collection_name=self.collection, filter=_BY_ID, filter_params={"ids": selected[start : start + _BATCH]}
+            )
 
     # ---- searching ---------------------------------------------------------------------------
 
@@ -274,7 +291,7 @@ class MilvusBackend:
             request.update(data=[query.embedded(self.embed)], anns_field=self.vector_field)
             request["search_params"] = self.search_params or {"params": {"ef": max(self.ef, k)}}
         if f is not None:
-            compiled = filter_to_expression(f)
+            compiled = _expression(f)
             if compiled is None:
                 return None  # nothing can match
             request["filter"], request["filter_params"] = compiled

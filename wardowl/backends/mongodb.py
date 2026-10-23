@@ -32,6 +32,7 @@ from functools import partial
 from typing import Any
 
 from wardowl.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -62,41 +63,54 @@ def permission_terms(metadata: Mapping[str, Any]) -> list[str]:
     return terms("metadata", metadata)
 
 
-def filter_to_mongo(f: Filter) -> dict[str, Any] | None:
-    """Translate a filter into a `$vectorSearch` filter on the tagged terms, or `None` when nothing can match."""
+def filter_to_mongo(f: Filter) -> dict[str, Any]:
+    """Translate a filter into a `$vectorSearch` filter on the tagged terms.
+
+    Raises `NothingMatches` when nothing can match, as `$vectorSearch` reads a missing filter as "match everything".
+    """
+    return required(_vector_filter(f))
+
+
+def _vector_filter(f: Filter) -> dict[str, Any] | None:
+    """The `$vectorSearch` filter, or `None` when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
         values = _ordered(f.values)
         return {TERMS_FIELD: {"$in": [tag(f.field, v) for v in values]}} if values else None
     if isinstance(f, And):
-        parts = [filter_to_mongo(c) for c in f.clauses]
+        parts = [_vector_filter(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else {"$and": parts}
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_mongo(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_vector_filter(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else {"$or": kept}
     raise TypeError(f"not a filter: {f!r}")
 
 
-def filter_to_search(f: Filter) -> dict[str, Any] | None:
-    """Translate a filter into an Atlas Search operator on the tagged terms, for `$search`, or
-    `None` when nothing can match: `in` for each `In`, and `compound` for `And` and `Or`."""
+def filter_to_search(f: Filter) -> dict[str, Any]:
+    """Translate a filter into an Atlas Search operator on the tagged terms, for `$search`: `in` for
+    each `In`, and `compound` for `And` and `Or`. Raises `NothingMatches` when nothing can match."""
+    return required(_search_operator(f))
+
+
+def _search_operator(f: Filter) -> dict[str, Any] | None:
+    """The Atlas Search operator, or `None` when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
         values = _ordered(f.values)
         return {"in": {"path": TERMS_FIELD, "value": [tag(f.field, v) for v in values]}} if values else None
     if isinstance(f, And):
-        parts = [filter_to_search(c) for c in f.clauses]
+        parts = [_search_operator(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else {"compound": {"filter": parts}}
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_search(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_search_operator(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else {"compound": {"should": kept, "minimumShouldMatch": 1}}
@@ -374,18 +388,20 @@ class MongoDBBackend:
     def _pipeline(self, query: Query, k: int, f: Filter | None) -> list[dict[str, Any]] | None:
         if self.mode == "keyword":
             return self._keyword_pipeline(query, k, f)
+        if k > _MAX_CANDIDATES:  # Atlas would answer with 10,000 chunks, as if no more matched
+            raise ValueError(f"k={k} is more than one Atlas Vector Search returns ({_MAX_CANDIDATES:,})")
         stage: dict[str, Any] = {
             "index": self.index,
             "path": self.vector_field,
             "queryVector": query.embedded(self.embed),
-            "limit": min(k, _MAX_CANDIDATES),
+            "limit": k,
         }
         if self.exact:
             stage["exact"] = True
         else:
             stage["numCandidates"] = min(max(self.num_candidates, k), _MAX_CANDIDATES)
         if f is not None:
-            mongo_filter = filter_to_mongo(f)
+            mongo_filter = _vector_filter(f)
             if mongo_filter is None:
                 return None  # nothing can match
             stage["filter"] = mongo_filter
@@ -399,7 +415,7 @@ class MongoDBBackend:
         match = {"text": {"query": text, "path": self.content_field}}
         search: dict[str, Any] = {"index": self.text_index, **match}
         if f is not None:
-            operator = filter_to_search(f)
+            operator = _search_operator(f)
             if operator is None:
                 return None  # nothing can match
             search = {"index": self.text_index, "compound": {"must": [match], "filter": [operator]}}

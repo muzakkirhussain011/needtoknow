@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, tag, terms
 from wardowl.backends.milvus import (
     SPARSE_FIELD,
@@ -41,8 +42,11 @@ def test_values_never_reach_the_expression_text():
 
 
 def test_an_empty_in_matches_nothing_without_asking_milvus():
-    assert filter_to_expression(In("team", [])) is None
-    assert filter_to_expression(And(In("a", ["x"]), In("b", []))) is None
+    # Never None: Milvus reads an empty filter as "no filter", which matches every row.
+    with pytest.raises(NothingMatches):
+        filter_to_expression(In("team", []))
+    with pytest.raises(NothingMatches):
+        filter_to_expression(And(In("a", ["x"]), In("b", [])))
     assert filter_to_expression(Or(In("a", []), In("b", ["y"]))) == (CONTAINS % "p0", {"p0": [tag("b", "y")]})
     client = FakeClient()
     assert MilvusBackend(client, "c", EMBED).search("leave", 5, In("team", [])) == []
@@ -57,19 +61,24 @@ def test_names_containing_the_separator_are_refused():
 
 
 class FakeClient:
-    def __init__(self, results=None):
+    def __init__(self, results=None, stored=()):
         self.results = results if results is not None else [[]]
-        self.requests, self.upserts, self.deletes = [], [], []
+        self.stored = set(stored)  # ids a query finds
+        self.requests, self.upserts, self.deletes, self.queries = [], [], [], []
 
     def search(self, **request):
         self.requests.append(request)
         return self.results
 
-    def upsert(self, collection_name, data):
-        self.upserts.append((collection_name, list(data)))
+    def upsert(self, collection_name, data, **kwargs):
+        self.upserts.append((collection_name, list(data), kwargs))
 
-    def delete(self, collection_name, ids):
-        self.deletes.append((collection_name, list(ids)))
+    def query(self, **request):
+        self.queries.append(request)
+        return [{"id": i} for i in request["filter_params"]["ids"] if i in self.stored]
+
+    def delete(self, **request):
+        self.deletes.append(request)
 
 
 def test_requests_carry_the_filter_parameters_ef_and_consistency():
@@ -111,7 +120,7 @@ def test_add_writes_terms_in_batches_and_delete_skips_nothing_to_do():
     backend = MilvusBackend(client, "c", EMBED)
     docs = [Document(f"d{i}", "leave", {"allowed_groups": ["hr", i]}) for i in range(300)]
     backend.add(docs)
-    assert [len(rows) for _, rows in client.upserts] == [256, 44]
+    assert [len(rows) for _, rows, _ in client.upserts] == [256, 44]
     row = client.upserts[0][1][0]
     assert row["id"] == "d0" and row["content"] == "leave" and row["metadata"] == {"allowed_groups": ["hr", 0]}
     assert row[TERMS_FIELD] == terms("d0", docs[0].metadata) and len(row["embedding"]) == EMBED.dim
@@ -119,8 +128,30 @@ def test_add_writes_terms_in_batches_and_delete_skips_nothing_to_do():
     with pytest.raises(ValueError):
         backend.add(docs[:2], embeddings=[EMBED("x")])
     backend.delete([])
-    backend.delete(iter(["d1", "d2"]))
-    assert client.deletes == [("c", ["d1", "d2"])]
+    backend.delete(iter(["d1", "d2", "d1"]))
+    assert client.deletes == [{"collection_name": "c", "filter": "id in {ids}", "filter_params": {"ids": ["d1", "d2"]}}]
+
+
+def test_ids_with_quotes_reach_milvus_only_as_filter_parameters():
+    # pymilvus's get(ids=...) and delete(ids=...) write string ids into the expression between quotes.
+    hostile = ["x' or id != '", 'y" or id != "', "z'] or id in ['a"]
+    client = FakeClient(stored=hostile[:1])
+    backend = MilvusBackend(client, "c", EMBED)
+    backend.delete(hostile)
+    backend.set_metadata({i: {"allowed_groups": ["*"]} for i in hostile})
+    for request in [*client.deletes, *client.queries]:
+        assert request["filter"] == "id in {ids}" and request["filter_params"] == {"ids": hostile}
+    assert client.queries[0]["consistency_level"] == "Strong"
+
+
+def test_set_metadata_writes_only_the_metadata_of_rows_found():
+    client = FakeClient(stored=["a"])
+    MilvusBackend(client, "c", EMBED).set_metadata({"a": {"allowed_groups": ["hr"]}, "missing": {"team": "x"}})
+    ((collection, rows, kwargs),) = client.upserts
+    # A partial update: never the text or vector read earlier, and never a row for an id not stored.
+    assert collection == "c" and kwargs == {"partial_update": True}
+    assert rows == [{"id": "a", "metadata": {"allowed_groups": ["hr"]}, TERMS_FIELD: [tag("allowed_groups", "hr")]}]
+    MilvusBackend(FakeClient(), "c", EMBED).set_metadata({"missing": {}})  # nothing found, nothing written
 
 
 def test_keyword_requests_search_the_sparse_vector_with_the_text_and_the_same_filter():
@@ -274,6 +305,22 @@ def test_delete_removes_chunks():
     hits = backend.search("leave policy salary", 5)
     client.drop_collection(name)
     assert [h.id for h in hits] == ["b"]
+
+
+def test_ids_with_quotes_select_only_themselves():
+    client = _client()
+    name = _new_collection(client)
+    backend = MilvusBackend(client, name, EMBED)
+    odd = "a','b"  # written between quotes into "id in [...]", it would select a and b
+    backend.add([Document(i, "leave policy", {"allowed_groups": ["hr"]}) for i in ("a", "b", odd)])
+    backend.set_metadata({odd: {"allowed_groups": ["*"]}})
+    found = {h.id: (h.text, h.metadata) for h in backend.search("leave", 5)}
+    backend.delete([odd])
+    left = sorted(h.id for h in backend.search("leave", 5))
+    client.drop_collection(name)
+    hr = ("leave policy", {"allowed_groups": ["hr"]})
+    assert found == {"a": hr, "b": hr, odd: ("leave policy", {"allowed_groups": ["*"]})}
+    assert left == ["a", "b"]
 
 
 def test_native_async_search_matches_sync():

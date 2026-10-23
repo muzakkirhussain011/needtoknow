@@ -24,6 +24,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from wardowl.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -56,8 +57,16 @@ def permission_terms(metadata: Mapping[str, Any]) -> list[str]:
     return [_hex(t) for t in terms("metadata", metadata)]
 
 
-def filter_to_sql(f: Filter) -> str | None:
-    """Translate a filter into a `where` predicate on the hex-encoded terms, or `None` when nothing can match."""
+def filter_to_sql(f: Filter) -> str:
+    """Translate a filter into a `where` predicate on the hex-encoded terms.
+
+    Raises `NothingMatches` when nothing can match, as LanceDB reads a missing predicate as "match everything".
+    """
+    return required(_predicate(f))
+
+
+def _predicate(f: Filter) -> str | None:
+    """The `where` predicate on the hex-encoded terms, or `None` when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
@@ -67,12 +76,12 @@ def filter_to_sql(f: Filter) -> str | None:
         listed = ", ".join(f"'{_hex(tag(f.field, v))}'" for v in values)
         return f"array_has_any({TERMS_FIELD}, [{listed}])"
     if isinstance(f, And):
-        parts = [filter_to_sql(c) for c in f.clauses]
+        parts = [_predicate(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else " AND ".join(f"({p})" for p in parts)
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_sql(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_predicate(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else " OR ".join(f"({p})" for p in kept)
@@ -187,25 +196,29 @@ class LanceDBBackend:
             self.table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(rows)
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
-        keys = [_hex(i) for i in metadata]
-        for start in range(0, len(keys), _BATCH):
-            batch = keys[start : start + _BATCH]
-            listed = ", ".join(f"'{k}'" for k in batch)
-            stored = (
-                self.table.search()
-                .where(f"{KEY_FIELD} IN ({listed})")
-                .select(["id", self.content_field, self.vector_field])
-                .limit(len(batch))
-                .to_list()
-            )
-            # Whole rows written back: no metadata value is ever part of the SQL.
-            rows = [
-                self._row(Document(r["id"], r[self.content_field], metadata[r["id"]]), r[self.vector_field])
-                for r in stored
-            ]
-            if rows:
-                self.table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(rows)
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        An update-only merge of the metadata and terms columns: rows whose id is not stored are not
+        inserted, so a chunk deleted meanwhile is not recreated, and the text and vector are never
+        read and written back. No metadata value is ever part of the SQL.
+        """
+        rows = [
+            {
+                "id": doc_id,
+                self.metadata_field: json.dumps(dict(new)),
+                TERMS_FIELD: [_hex(t) for t in terms(doc_id, new)],
+            }
+            for doc_id, new in metadata.items()
+        ]
+        if not rows:
+            return
+        import pyarrow as pa
+
+        # Only these columns, typed as the table types them: a merge updates the columns it is given.
+        schema = pa.schema([self.table.schema.field(name) for name in ("id", self.metadata_field, TERMS_FIELD)])
+        for start in range(0, len(rows), _BATCH):
+            data = pa.Table.from_pylist(rows[start : start + _BATCH], schema=schema)
+            self.table.merge_insert("id").when_matched_update_all().execute(data)
 
     def delete(self, ids: Iterable[str]) -> None:
         keys = [_hex(i) for i in dict.fromkeys(ids)]
@@ -234,7 +247,7 @@ class LanceDBBackend:
             return []
         where = None
         if filter is not None:
-            where = filter_to_sql(filter)
+            where = _predicate(filter)
             if where is None:
                 return []  # nothing can match
         columns = ["id", self.content_field, self.metadata_field]

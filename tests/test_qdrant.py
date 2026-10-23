@@ -23,6 +23,7 @@ from wardowl import (  # noqa: E402
     RankFusion,
     Subject,
 )
+from wardowl.backends import NothingMatches  # noqa: E402
 from wardowl.backends.qdrant import (  # noqa: E402
     ID_KEY,
     QdrantBackend,
@@ -73,11 +74,16 @@ def test_in_becomes_one_match_any_per_value_type():
 
 
 def test_an_empty_in_matches_nothing_without_asking_qdrant():
-    assert filter_to_qdrant(In("team", [])) is None
-    assert filter_to_qdrant(And(In("team", ["a"]), In("level", []))) is None
+    # Never None: Qdrant reads a missing query_filter as "no filter", which matches every point.
+    with pytest.raises(NothingMatches):
+        filter_to_qdrant(In("team", []))
+    with pytest.raises(NothingMatches):
+        filter_to_qdrant(And(In("team", ["a"]), In("level", [])))
     # In an Or, the empty clause drops out and the rest still applies.
     only = filter_to_qdrant(Or(In("team", []), In("level", [1])))
     assert only == models.Filter(should=[models.FieldCondition(key="metadata.level", match=models.MatchAny(any=[1]))])
+    backend = QdrantBackend(qdrant_client.QdrantClient(":memory:"), "never-created", EMBED)
+    assert backend.search("leave", 5, In("team", [])) == []  # the collection does not exist: Qdrant was not asked
 
 
 @pytest.mark.parametrize("field", ["a.b", "tags[]", 'say"hi'])
@@ -86,11 +92,14 @@ def test_fields_that_look_like_qdrant_paths_are_refused(field):
         filter_to_qdrant(In(field, ["x"]))
 
 
-def test_point_ids_keep_uuids_and_derive_the_rest():
-    u = str(uuid.uuid4())
-    assert point_id(u) == u
+def test_every_document_id_is_hashed_to_its_own_point_id():
+    u = uuid.uuid4()
+    spellings = [str(u), str(u).upper(), u.hex, f"{{{u}}}", f"urn:uuid:{u}"]
+    # A UUID is hashed too, so no spelling of one id stands for another.
+    assert len({point_id(s) for s in spellings}) == len(spellings) and point_id(str(u)) != str(u)
     assert point_id("doc-1") == point_id("doc-1") != point_id("doc-2")
-    uuid.UUID(point_id("doc-1"))
+    parsed = uuid.UUID(point_id("doc-1"))
+    assert str(parsed) == point_id("doc-1") and parsed.version == 8
 
 
 # ---- local mode (no server) --------------------------------------------------------------------
@@ -135,6 +144,64 @@ def test_add_keeps_the_document_id_and_delete_removes_by_it():
     assert stored.payload[ID_KEY] == "doc-1"
     backend.delete(["doc-1"])
     assert [h.id for h in backend.search("leave policy salary", 5)] == ["doc-2"]
+
+
+def test_changes_reach_only_the_point_that_holds_the_id():
+    client = qdrant_client.QdrantClient(":memory:")
+    create_collection(client, "owned", EMBED.dim)
+    backend = QdrantBackend(client, "owned", EMBED)
+    u = str(uuid.uuid4())
+    backend.add([Document(u, "leave policy", {"allowed_groups": ["hr"]})])
+    # Another spelling of the same UUID is another document, with a point of its own.
+    backend.add([Document(u.upper(), "salary bands", {"allowed_groups": ["hr"]})])
+    # A point at victim's point id that holds another id: a collision, or a write by another tool.
+    payload = {ID_KEY: "intruder", "page_content": "board minutes", "metadata": {"allowed_groups": ["board"]}}
+    client.upsert("owned", points=[models.PointStruct(id=point_id("victim"), vector=EMBED("board"), payload=payload)])
+    backend.set_metadata({"victim": {"allowed_groups": ["*"]}, u.upper(): {"allowed_groups": ["*"]}})
+    backend.delete(["victim"])
+    (held,) = client.retrieve("owned", [point_id("victim")], with_payload=True)
+    assert held.payload == payload  # neither changed nor deleted
+    found = {h.id: h.metadata for h in backend.search("leave salary board", 5)}
+    hr, everyone = {"allowed_groups": ["hr"]}, {"allowed_groups": ["*"]}
+    assert found == {u: hr, u.upper(): everyone, "intruder": payload["metadata"]}
+    backend.delete([u.upper()])
+    assert {h.id for h in backend.search("leave salary board", 5)} == {u, "intruder"}
+
+
+def test_set_metadata_replaces_only_the_metadata_and_never_recreates_a_point():
+    client = qdrant_client.QdrantClient(":memory:")
+    create_collection(client, "meta", EMBED.dim)
+    backend = QdrantBackend(client, "meta", EMBED)
+    backend.add([Document("a", "leave policy", {"allowed_groups": ["hr"], "team": "x"})])
+    client.set_payload("meta", payload={"source": "drive"}, points=[point_id("a")])  # a key another tool wrote
+    backend.set_metadata({"a": {"allowed_groups": ["eng"]}})
+    (point,) = client.retrieve("meta", [point_id("a")], with_payload=True)
+    assert point.payload == {
+        ID_KEY: "a",
+        "page_content": "leave policy",
+        "metadata": {"allowed_groups": ["eng"]},  # no key of the old metadata survives
+        "source": "drive",
+    }
+    backend.delete(["a"])
+    backend.set_metadata({"a": {"allowed_groups": ["*"]}, "never-written": {"allowed_groups": ["*"]}})
+    assert client.count("meta").count == 0
+
+
+def test_points_written_by_another_tool_are_changed_by_their_exact_uuid():
+    client = qdrant_client.QdrantClient(":memory:")
+    create_collection(client, "lc2", EMBED.dim)
+    point = str(uuid.uuid4())
+    payload = {"page_content": "leave policy", "metadata": {"allowed_groups": ["hr"]}}
+    client.upsert("lc2", points=[models.PointStruct(id=point, vector=EMBED("leave policy"), payload=payload)])
+    backend = QdrantBackend(client, "lc2", EMBED)
+    backend.set_metadata({point.upper(): {"allowed_groups": ["*"]}})  # not the spelling results report
+    assert [h.metadata for h in backend.search("leave", 5)] == [{"allowed_groups": ["hr"]}]
+    backend.set_metadata({point: {"allowed_groups": ["*"]}})
+    assert [(h.id, h.metadata) for h in backend.search("leave", 5)] == [(point, {"allowed_groups": ["*"]})]
+    backend.delete([f"{{{point}}}"])
+    assert len(backend.search("leave", 5)) == 1
+    backend.delete([point])
+    assert backend.search("leave", 5) == []
 
 
 def test_named_vectors_and_search_params_are_passed_through():

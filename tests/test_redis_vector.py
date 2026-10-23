@@ -11,6 +11,7 @@ import uuid
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, tag, terms
 from wardowl.backends.redis import RedisBackend, create_index, filter_to_query, permission_terms
 from wardowl.testing import QUERY, HashingEmbedder, check_backend
@@ -39,8 +40,11 @@ def test_hostile_values_become_hex_digits():
 
 
 def test_an_empty_in_matches_nothing_without_asking_redis():
-    assert filter_to_query(In("team", [])) is None
-    assert filter_to_query(And(In("a", ["x"]), In("b", []))) is None
+    # Never None: a query without the expression matches every hash.
+    with pytest.raises(NothingMatches):
+        filter_to_query(In("team", []))
+    with pytest.raises(NothingMatches):
+        filter_to_query(And(In("a", ["x"]), In("b", [])))
     assert filter_to_query(Or(In("a", []), In("b", ["y"]))) == f"@{TERMS_FIELD}:{{{_h('b', 'y')}}}"
     client = FakeClient()
     assert RedisBackend(client, "idx", EMBED).search("leave", 5, In("team", [])) == []
@@ -111,6 +115,19 @@ def test_replies_become_hits_best_first_in_both_protocols():
     }
     (hit,) = RedisBackend(FakeClient(resp3), "idx", EMBED).search("leave", 1)
     assert hit.id == "c" and hit.score == pytest.approx(0.8)
+    assert len(RedisBackend(FakeClient(resp3 | {"warning": []}), "idx", EMBED).search("leave", 1)) == 1
+
+
+@pytest.mark.parametrize("key", ["warning", b"warning"])
+def test_partial_results_after_a_timeout_raise(key):
+    # Redis's default timeout policy returns what the query found so far, with a warning (RESP3).
+    reply = {
+        "total_results": 1,
+        "results": [{"id": "wardowl:c", "extra_attributes": {"wardowl_id": "c", "__wardowl_distance": "0.2"}}],
+        key: [b"Timeout limit was reached"],
+    }
+    with pytest.raises(RuntimeError, match="partial results: Timeout limit was reached"):
+        RedisBackend(FakeClient(reply), "idx", EMBED).search("leave", 5)
 
 
 def test_add_replaces_whole_hashes_with_hex_terms_and_exact_json():

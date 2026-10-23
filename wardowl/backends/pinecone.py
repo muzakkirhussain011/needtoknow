@@ -8,11 +8,13 @@ Each chunk is a record whose metadata holds its id, its text, its metadata as JS
 as written), and the tagged permission terms of `wardowl.backends._engines`, hex-encoded, as a
 list of strings. A filter becomes `$in` conditions on those terms joined with `$and` and `$or`,
 which Pinecone applies inside the search, so pre-filtering is exact; the terms keep `1` and `"1"`
-apart. Pinecone record ids are ASCII of at most 512 characters, so other chunk ids are stored under
-their SHA-256.
+apart. Pinecone record ids are ASCII of at most 512 characters, so other chunk ids, and ids that
+start with `sha256-`, are stored under their SHA-256: no two chunk ids share a record.
+`set_metadata` and `delete` first fetch the records and leave alone any that holds another chunk id.
 
-Pinecone's serverless indexes are eventually consistent. `wait=30.0` makes every write wait, up to
-that many seconds, until a search sees it; without it a write may take a few seconds to show.
+Pinecone's serverless indexes are eventually consistent. Every write waits, up to `wait` seconds
+(30 by default), until a search sees it, so a permission change or a deletion is in effect when the
+call returns; `wait=None` returns at once, and the change may then take a few seconds to show.
 """
 
 from __future__ import annotations
@@ -20,11 +22,13 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from urllib.parse import quote
 
 from wardowl.backends._engines import _SEP, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Embed, Hit, Query
@@ -39,6 +43,9 @@ API_VERSION = "2026-07"
 _MAX_IN = 10_000  # Pinecone's limit on the values of one $in
 _MAX_TOP_K = 10_000
 _BATCH = 100
+_HASHED = "sha256-"
+_FETCH_IDS = 100  # ids per fetch request
+_FETCH_URL = 6_000  # characters of encoded ids per fetch request, to keep its URL short
 
 
 def _hex(term: str) -> str:
@@ -46,14 +53,27 @@ def _hex(term: str) -> str:
 
 
 def record_id(doc_id: str) -> str:
-    """The Pinecone record id for a chunk id: itself when it is printable ASCII of 1 to 512 characters."""
-    if doc_id and len(doc_id) <= 512 and doc_id.isascii() and doc_id.isprintable():
+    """The Pinecone record id for a chunk id: itself when it is printable ASCII of 1 to 512
+    characters that does not start with `sha256-`, otherwise `sha256-` and its SHA-256.
+
+    No two chunk ids share a record id: one kept as it is never starts with `sha256-`, and a hashed
+    one always does.
+    """
+    if doc_id and len(doc_id) <= 512 and doc_id.isascii() and doc_id.isprintable() and not doc_id.startswith(_HASHED):
         return doc_id
-    return "sha256-" + hashlib.sha256(doc_id.encode()).hexdigest()
+    return _HASHED + hashlib.sha256(doc_id.encode()).hexdigest()
 
 
-def filter_to_pinecone(f: Filter) -> dict[str, Any] | None:
-    """Translate a filter into a Pinecone metadata filter on the hex-encoded terms, or None when nothing can match."""
+def filter_to_pinecone(f: Filter) -> dict[str, Any]:
+    """Translate a filter into a Pinecone metadata filter on the hex-encoded terms.
+
+    Raises `NothingMatches` when nothing can match: Pinecone reads a missing filter as "match everything".
+    """
+    return required(_where(f))
+
+
+def _where(f: Filter) -> dict[str, Any] | None:
+    """The Pinecone metadata filter, or None when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
@@ -63,16 +83,31 @@ def filter_to_pinecone(f: Filter) -> dict[str, Any] | None:
         parts = [{TERMS_FIELD: {"$in": values[i : i + _MAX_IN]}} for i in range(0, len(values), _MAX_IN)]
         return parts[0] if len(parts) == 1 else {"$or": parts}
     if isinstance(f, And):
-        found = [filter_to_pinecone(c) for c in f.clauses]
+        found = [_where(c) for c in f.clauses]
         if any(p is None for p in found):
             return None
         return found[0] if len(found) == 1 else {"$and": found}
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_pinecone(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_where(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else {"$or": kept}
     raise TypeError(f"not a filter: {f!r}")
+
+
+def _fetch_batches(ids: Sequence[str]) -> Iterator[list[str]]:
+    """The ids in groups that each fit one fetch request: at most 100, and a URL of moderate length."""
+    batch: list[str] = []
+    size = 0
+    for doc_id in ids:
+        cost = len(quote(record_id(doc_id), safe="")) + len("&ids=")
+        if batch and (len(batch) >= _FETCH_IDS or size + cost > _FETCH_URL):
+            yield batch
+            batch, size = [], 0
+        batch.append(doc_id)
+        size += cost
+    if batch:
+        yield batch
 
 
 def _httpx() -> Any:
@@ -94,7 +129,9 @@ class PineconeBackend:
 
     `host` is the index's host (from the console, or `describe_index`), and `api_key` a Pinecone API
     key, kept out of every message and representation. `namespace` keeps tenants or corpora apart.
-    Pass `client`, an `httpx.Client`, for proxies or custom TLS. Thread-safe.
+    `wait` is how many seconds `add`, `delete` and `set_metadata` wait for a search to see the
+    change (raising `TimeoutError` after that); None does not wait. Pass `client`, an
+    `httpx.Client`, for proxies or custom TLS. Thread-safe.
     """
 
     supports_filters = True
@@ -106,7 +143,7 @@ class PineconeBackend:
         embed: Embed | None,
         *,
         namespace: str = "",
-        wait: float | None = None,
+        wait: float | None = 30.0,
         client: Any = None,
         timeout: float = 10.0,
         concurrency: int = 8,
@@ -174,27 +211,49 @@ class PineconeBackend:
         self._settle(expected)
 
     def delete(self, ids: Iterable[str]) -> None:
-        """Remove chunks by id. Ids not stored are ignored."""
-        unique = sorted(set(ids))
+        """Remove chunks by id. Ids not stored are ignored, and so is a record that holds another id."""
+        unique = self._unclaimed(sorted(set(ids)))
         for i in range(0, len(unique), 1000):
             self._post("/vectors/delete", {"ids": [record_id(d) for d in unique[i : i + 1000]]}, "delete")
         self._settle(dict.fromkeys(unique))
+
+    def _unclaimed(self, ids: Sequence[str]) -> list[str]:
+        """The ids whose record holds no other chunk id, as a fetch of the records shows them.
+
+        Record ids are never shared by two chunk ids, so a record holding another id would have been
+        written by something else; a record not yet visible to the fetch is no evidence either way.
+        """
+        claimed: set[str] = set()
+        for batch in _fetch_batches(ids):
+            params = [("ids", record_id(i)) for i in batch]
+            if self.namespace:
+                params.append(("namespace", self.namespace))
+            response = self._client.get(f"{self.url}/vectors/fetch", params=params, headers=self._headers)
+            if response.status_code != 200:
+                raise RuntimeError(f"Pinecone fetch failed: HTTP {response.status_code}: {response.text[:300]}")
+            records = response.json().get("vectors") or {}
+            for doc_id in batch:
+                record = records.get(record_id(doc_id))
+                if isinstance(record, Mapping) and (record.get("metadata") or {}).get(ID_FIELD) != doc_id:
+                    claimed.add(doc_id)
+        return [i for i in ids if i not in claimed]
 
     def clear(self) -> None:
         """Remove every chunk in the backend's namespace."""
         self._post("/vectors/delete", {"deleteAll": True}, "delete", frozenset({200, 404}))  # 404: already empty
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are
+        ignored, and so is a record that holds another id."""
+        changes: dict[str, dict[str, Any]] = {
+            doc_id: {METADATA_FIELD: json.dumps(dict(new)), TERMS_FIELD: [_hex(t) for t in terms(doc_id, new)]}
+            for doc_id, new in metadata.items()
+        }
         updates: list[dict[str, Any]] = []
         expected: dict[str, str | None] = {}
-        for doc_id, new in metadata.items():
-            fields: dict[str, Any] = {
-                METADATA_FIELD: json.dumps(dict(new)),
-                TERMS_FIELD: [_hex(t) for t in terms(doc_id, new)],
-            }
-            updates.append({"id": record_id(doc_id), "setMetadata": fields})
-            expected[doc_id] = fields[METADATA_FIELD]
+        for doc_id in self._unclaimed(list(changes)):
+            updates.append({"id": record_id(doc_id), "setMetadata": changes[doc_id]})
+            expected[doc_id] = changes[doc_id][METADATA_FIELD]
         self._each(updates, lambda u: self._post("/vectors/update", u, "update"))
         self._settle(expected, only_stored=True)
 
@@ -237,14 +296,16 @@ class PineconeBackend:
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
+        if k > _MAX_TOP_K:  # a larger k would come back as 10,000 hits, as if no more matched
+            raise ValueError(f"k={k} is more than one Pinecone query returns ({_MAX_TOP_K:,})")
         where = None
         if filter is not None:
-            where = filter_to_pinecone(filter)
+            where = _where(filter)
             if where is None:
                 return []
         vector = Query.of(query).embedded(self.embed)
         hits = []
-        for match in self._query(vector, min(k, _MAX_TOP_K), where):
+        for match in self._query(vector, k, where):
             meta = match.get("metadata") or {}
             if not isinstance(meta.get(ID_FIELD), str):
                 raise RuntimeError(f"Pinecone returned a record without {ID_FIELD}: {match.get('id')!r}")

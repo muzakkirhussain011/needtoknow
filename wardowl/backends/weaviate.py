@@ -11,8 +11,11 @@ its case. A filter becomes `contains_any` conditions joined with `all_of` and `a
 the client's filter objects, so values are data, never query syntax. The metadata is stored as JSON
 text, unindexed, and returned exactly as written, for the retriever's re-check.
 
-Weaviate object ids are UUIDs: `add` derives one from each document id (`point_id`) and keeps the
-original id in the `wardowl_id` property. `create_collection` sets up the collection with a
+Weaviate object ids are UUIDs: `add` derives one from the SHA-256 of every document id
+(`point_id`) and keeps the original id in the `wardowl_id` property. `set_metadata` and `delete`
+act on an object only when its `wardowl_id` is the id asked for, so they never change an object
+that belongs to another id; an object written by another tool, without `wardowl_id`, is reached by
+its UUID written exactly as results report it. `create_collection` sets up the collection with a
 self-provided cosine vector.
 """
 
@@ -20,11 +23,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from wardowl.backends._engines import _SEP, TERMS_FIELD, tag, terms
+from wardowl.backends._errors import required
+from wardowl.backends._ids import canonical_uuid, hashed_uuid
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Hit, Query
@@ -44,7 +48,6 @@ Embed = Callable[[str], Sequence[float]]
 ID_PROPERTY = "wardowl_id"
 """Property holding the document id that `add` was given."""
 
-_NAMESPACE = uuid.UUID("0b6f3c52-8d1e-4a7b-9c35-2f4e8a1d6b90")
 _BATCH = 200
 
 
@@ -60,15 +63,20 @@ def permission_terms(metadata: Mapping[str, Any]) -> list[str]:
 
 
 def point_id(document_id: str) -> str:
-    """The Weaviate object id for a document id: the id itself if it is a UUID, otherwise one derived from it."""
-    try:
-        return str(uuid.UUID(document_id))
-    except ValueError:
-        return str(uuid.uuid5(_NAMESPACE, document_id))
+    """The Weaviate object id `add` writes a document id to: a UUID derived from its SHA-256.
+
+    Every id is hashed, one that is already a UUID too, so no two document ids share an object.
+    """
+    return hashed_uuid(document_id, "wardowl weaviate object")
 
 
 def filter_to_weaviate(f: Filter) -> Any:
-    """Translate a filter into a Weaviate filter on the tagged terms, or `None` when nothing can match."""
+    """Translate a filter into a Weaviate filter on the tagged terms. Raises `NothingMatches` when nothing can match."""
+    return required(_where(f))
+
+
+def _where(f: Filter) -> Any:
+    """The Weaviate filter on the tagged terms, or `None` when nothing can match."""
     from weaviate.classes.query import Filter as Where
 
     if isinstance(f, In):
@@ -79,12 +87,12 @@ def filter_to_weaviate(f: Filter) -> Any:
             return None
         return Where.by_property(TERMS_FIELD).contains_any([_guarded(tag(f.field, v)) for v in values])
     if isinstance(f, And):
-        parts = [filter_to_weaviate(c) for c in f.clauses]
+        parts = [_where(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else Where.all_of(parts)
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_weaviate(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_where(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else Where.any_of(kept)
@@ -207,25 +215,64 @@ class WeaviateBackend:
                 raise RuntimeError(f"Weaviate rejected {len(result.errors)} objects, for example: {first}")
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        An object is changed only when its `wardowl_id` is the id given, or, for an object written
+        by another tool, when it has no `wardowl_id` and the id is its UUID.
+        """
         handle = self.client.collections.get(self.collection)
         for doc_id, new in metadata.items():
-            uid = point_id(doc_id)
-            if handle.data.exists(uid):  # an update of a missing object would fail
-                # An update replaces the value of each property it names, and leaves the rest.
-                properties = {
-                    self.metadata_property: json.dumps(dict(new), sort_keys=True),
-                    TERMS_FIELD: [_guarded(t) for t in terms(doc_id, new)],
-                }
+            # An update replaces the value of each property it names, and leaves the rest. It fails
+            # for a missing object rather than create one.
+            properties = {
+                self.metadata_property: json.dumps(dict(new), sort_keys=True),
+                TERMS_FIELD: [_guarded(t) for t in terms(doc_id, new)],
+            }
+            for uid in self._holding(handle, doc_id):
                 handle.data.update(uuid=uid, properties=properties)
 
-    def delete(self, ids: Iterable[str]) -> None:
+    def _holding(self, handle: Any, doc_id: str) -> list[str]:
+        """The objects that hold `doc_id`: those `_written_by_others` finds, and the one `add`
+        writes it to, if its `wardowl_id` is that id."""
+        found = self._written_by_others(handle, [doc_id])
+        uid = point_id(doc_id)
+        stored = handle.query.fetch_object_by_id(uid, return_properties=[ID_PROPERTY])
+        if stored is not None and (stored.properties or {}).get(ID_PROPERTY) == doc_id:
+            found.append(uid)
+        return found
+
+    def _written_by_others(self, handle: Any, ids: Sequence[str]) -> list[str]:
+        """Of the ids that are UUIDs in canonical form, those of objects without a `wardowl_id`."""
         from weaviate.classes.query import Filter as Where
 
-        selected = [point_id(i) for i in dict.fromkeys(ids)]
-        if selected:
-            handle = self.client.collections.get(self.collection)
-            handle.data.delete_many(where=Where.by_id().contains_any(selected))
+        uuids = [i for i in ids if canonical_uuid(i)]
+        if not uuids:
+            return []
+        stored = handle.query.fetch_objects(
+            filters=Where.by_id().contains_any(uuids), limit=len(uuids), return_properties=[ID_PROPERTY]
+        )
+        return [str(o.uuid) for o in stored.objects if not (o.properties or {}).get(ID_PROPERTY)]
+
+    def delete(self, ids: Iterable[str]) -> None:
+        """Remove chunks by id: the objects holding each id, and no other. Ids not stored are ignored."""
+        from weaviate.classes.query import Filter as Where
+
+        selected = list(dict.fromkeys(ids))
+        if not selected:
+            return
+        handle = self.client.collections.get(self.collection)
+        for start in range(0, len(selected), _BATCH):
+            batch = selected[start : start + _BATCH]
+            owned = Where.all_of(
+                [
+                    Where.by_id().contains_any([point_id(i) for i in batch]),
+                    Where.by_property(ID_PROPERTY).contains_any(batch),
+                ]
+            )
+            handle.data.delete_many(where=owned)
+            others = self._written_by_others(handle, batch)
+            if others:
+                handle.data.delete_many(where=Where.by_id().contains_any(others))
 
     # ---- searching ---------------------------------------------------------------------------
 
@@ -234,7 +281,7 @@ class WeaviateBackend:
 
         where = None
         if f is not None:
-            where = filter_to_weaviate(f)
+            where = _where(f)
             if where is None:
                 return None  # nothing can match
         common = {
