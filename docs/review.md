@@ -112,10 +112,10 @@ published as advisory
 | October 2026 | An `invalidate()` of everyone reached other replicas within twice `local_ttl`, not `local_ttl` | 1.2.2, 1.3.3 |
 | October 2026 | Epochs stored as raw bytes broke shared caches whose Redis client decodes responses: every lookup went to the permission service | 1.2.2, 1.3.3 |
 | October 2026 | A retrieval event that could not be built replaced the retrieval's result or error | 1.3.3 |
-| October 2026 | A ListObjects answer cut short by OpenFGA's deadline was used as a complete pre-filter (results hidden, reported complete) | next release |
-| October 2026 | With `recheck=False`, a backend that ignored the filter could leak | next release |
-| October 2026 | A subject attribute named `groups` replaced the subject's groups in Cerbos decisions | next release |
-| October 2026 | A cancelled retrieval produced no audit event | next release |
+| October 2026 | A ListObjects answer cut short by OpenFGA's deadline was used as a complete pre-filter (results hidden, reported complete) | 1.4.0 |
+| October 2026 | With `recheck=False`, a backend that ignored the filter could leak | 1.4.0 |
+| October 2026 | A subject attribute named `groups` replaced the subject's groups in Cerbos decisions | 1.4.0 |
+| October 2026 | A cancelled retrieval produced no audit event | 1.4.0 |
 | October 2026 | The example gateway stored API keys as unsalted SHA-256 | the gateway example |
 
 ## Reporting

@@ -22,7 +22,7 @@ from needtoknow.redaction import PatternRedactor, Redactor, SpanRedactor
 from needtoknow.retriever import PermissionedRetriever, Reranker, RetrievalResult, SearchBackend, Strategy
 from needtoknow.types import Document, Hit, Query, Subject
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 __all__ = [
     "AllOf",
