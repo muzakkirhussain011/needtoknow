@@ -34,6 +34,26 @@ spans are replaced together, and the `redactions` field is removed from the meta
 it names who may read what. Write the spans at ingestion time, as you write the chunk's own
 permissions, and update them with `set_metadata`.
 
+**A chunk without the field is hidden whole.** Its text becomes `[REDACTED]`, because a list that
+was never written cannot be told apart from one lost on the way, for example by a `set_metadata`
+that replaced the metadata without it. Give every chunk the field, with `[]` when it has nothing to
+hide. `SpanRedactor(required=False)` shows chunks without the field in full instead, for corpora
+where most chunks have no spans and none is ever updated.
+
+**Spans can be tied to the text they protect.** Offsets are only right for the text they were
+computed on: if a chunk is edited and its spans are not, they hide the wrong characters. Give each
+span `sha256`, the digest of the text it covers, and a span whose text is no longer at its offsets
+hides the whole chunk:
+
+```python
+from wardowl.redaction import span_digest
+
+span = {"start": 11, "end": 38, "allowed_groups": ["hr"], "sha256": span_digest(text[11:38])}
+```
+
+When you change a chunk's permissions with `set_metadata`, which replaces the whole metadata, pass
+its spans again along with them (see [Operations](operations.md#changing-a-documents-permissions)).
+
 ## Patterns
 
 `PatternRedactor` hides text matching regular expressions, unless the subject belongs to a group
@@ -70,6 +90,9 @@ def redact(subject, hits):
   redactor that adds, drops or reorders hits makes the retrieval raise `AuthorizationError`.
 - A redactor that fails, including on malformed spans, makes the retrieval raise
   `AuthorizationError`: nothing is returned rather than an unredacted chunk.
+- `SpanRedactor` hides the whole text of a chunk whose spans are missing, or whose text no longer
+  matches a span's `sha256`.
+- `aretrieve` runs the redactor in a thread, so a slow one does not hold up the event loop.
 - Redaction changes the text after the search. Embeddings and keyword indexes were built from the
   full text, so a query can still match a chunk because of words in a hidden span, and the chunk's
   score can reflect them. When even that is too much, store the sensitive part as its own chunk

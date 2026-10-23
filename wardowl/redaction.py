@@ -16,13 +16,14 @@ Any object with a `redact(subject, hits)` method, or a function with that signat
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any, Protocol, runtime_checkable
 
 from wardowl.types import Hit, Subject
 
-__all__ = ["PatternRedactor", "RedactFunction", "Redactor", "SpanRedactor"]
+__all__ = ["PatternRedactor", "RedactFunction", "Redactor", "SpanRedactor", "span_digest"]
 
 
 @runtime_checkable
@@ -54,32 +55,48 @@ def _mask(text: str, hidden: Sequence[tuple[int, int]], replacement: str) -> str
     return "".join(out)
 
 
+def span_digest(text: str) -> str:
+    """The `sha256` a span may carry: the hex SHA-256 of the UTF-8 text it covers, `text[start:end]`."""
+    return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
+
+
 class SpanRedactor:
     """Hides spans of a chunk's text that the subject may not read.
 
-    Each chunk may carry, under `field` in its metadata, a list of spans:
+    Each chunk carries, under `field` in its metadata, a list of spans:
     `{"start": 120, "end": 340, "allowed_groups": ["hr"], "allowed_users": []}`, character offsets
     into the text. A span the subject may not read (not a listed user, not in a listed group, and
     `"*"` not listed) is replaced by `replacement`; overlapping spans are replaced together. The
     field itself is removed from the metadata returned, since it names who may read what. A
     malformed list of spans raises `ValueError`, which the retriever turns into
     `AuthorizationError`.
+
+    A chunk without the field is hidden whole, its text replaced by `replacement`: a list lost when
+    the metadata was replaced cannot be told from one never written. Store `[]` for a chunk with
+    nothing to hide, or pass `required=False` to show chunks without the field in full.
+
+    A span may also carry `sha256`, the `span_digest` of the text it covers. If the chunk's text no
+    longer has that text at those offsets, because it was edited after the spans were written, the
+    whole text is hidden: the offsets may no longer cover what they were written to protect.
     """
 
-    def __init__(self, field: str = "redactions", replacement: str = "[REDACTED]") -> None:
+    def __init__(self, field: str = "redactions", replacement: str = "[REDACTED]", *, required: bool = True) -> None:
         self.field = field
         self.replacement = replacement
+        self.required = required
 
     def redact(self, subject: Subject, hits: Sequence[Hit]) -> list[Hit]:
         return [self._redact(subject, hit) for hit in hits]
 
     def _redact(self, subject: Subject, hit: Hit) -> Hit:
         spans = hit.metadata.get(self.field)
+        metadata = {k: v for k, v in hit.metadata.items() if k != self.field}
         if spans is None:
-            return hit
+            return dataclasses.replace(hit, text=self.replacement, metadata=metadata) if self.required else hit
         if not isinstance(spans, list):
             raise ValueError(f"chunk {hit.id!r}: {self.field} must be a list of spans")
         hidden = []
+        stale = False
         for span in spans:
             if not isinstance(span, Mapping):
                 raise ValueError(f"chunk {hit.id!r}: each span must be a mapping")
@@ -88,10 +105,15 @@ class SpanRedactor:
                 raise ValueError(f"chunk {hit.id!r}: a span's start and end must be integers")
             if not 0 <= start < end <= len(hit.text):
                 raise ValueError(f"chunk {hit.id!r}: span {start}:{end} is outside its text")
+            digest = span.get("sha256")
+            if digest is not None and not isinstance(digest, str):
+                raise ValueError(f"chunk {hit.id!r}: a span's sha256 must be a hex string")
+            if digest is not None and digest != span_digest(hit.text[start:end]):
+                stale = True
             if not _may_read(subject, span.get("allowed_users", []), span.get("allowed_groups", [])):
                 hidden.append((start, end))
-        metadata = {k: v for k, v in hit.metadata.items() if k != self.field}
-        return dataclasses.replace(hit, text=_mask(hit.text, hidden, self.replacement), metadata=metadata)
+        text = self.replacement if stale else _mask(hit.text, hidden, self.replacement)
+        return dataclasses.replace(hit, text=text, metadata=metadata)
 
 
 class PatternRedactor:

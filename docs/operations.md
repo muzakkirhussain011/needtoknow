@@ -117,11 +117,14 @@ has to change before searches can see it. `set_metadata` replaces the metadata o
 without embedding them again:
 
 ```python
-backend.set_metadata({chunk_id: {"allowed_groups": ["hr"]} for chunk_id in chunk_ids})
+# `stored` is the metadata your ingestion wrote for each chunk: its tenant, source, redactions.
+backend.set_metadata({chunk_id: {**stored[chunk_id], "allowed_groups": ["hr"]} for chunk_id in chunk_ids})
 ```
 
-- The whole metadata is replaced: no key of the old permissions survives. Ids that are not stored
-  are ignored, so nothing is created from metadata alone.
+- The whole metadata is replaced: no key of the old permissions survives. Pass every field the
+  chunk keeps, not only the one that changed: a chunk written back without its `tenant` matches no
+  `TenantAuthorizer` filter, and one without its `redactions` is hidden whole by `SpanRedactor`. Ids
+  that are not stored are ignored, so nothing is created from metadata alone.
 - It returns once searches see the change, as `add` does for that store
   ([Choosing a store](integrations/index.md#choosing-a-store)); MongoDB waits for its search index.
 - Every built-in backend has it, and the [conformance kit](extending.md#test-it-with-the-conformance-kit)
