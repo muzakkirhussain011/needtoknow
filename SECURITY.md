@@ -16,11 +16,13 @@ are released as soon as they are ready, with credit to the reporter unless you p
 ## Supported versions
 
 The latest minor release gets every fix. The minor release before it gets security fixes, as patch
-releases, for six months after its successor came out. Older releases get none.
+releases, for six months after its successor came out. Older releases get none, except that a date
+already published below is kept.
 
 | Version | Security fixes | Until |
 |---|---|---|
-| 1.4.x | Yes (latest) | |
+| 1.5.x | Yes (latest) | |
+| 1.4.x | Yes | 2027-04-23, six months after 1.5.0 |
 | 1.3.x | Yes | 2027-04-22, six months after 1.4.0 |
 | 1.2.x and earlier | No | |
 
@@ -96,5 +98,5 @@ From 1.4.0, each release also carries SLSA build provenance (`needtoknow-<versio
 also stored as a GitHub attestation. With the GitHub CLI:
 
 ```bash
-gh attestation verify needtoknow-1.4.0-py3-none-any.whl --repo muzakkirhussain011/needtoknow
+gh attestation verify needtoknow-1.5.0-py3-none-any.whl --repo muzakkirhussain011/needtoknow
 ```
