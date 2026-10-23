@@ -41,9 +41,15 @@ Cassandra's ANN search is approximate in any case.
 
 - **Consistency:** reads and writes use the session's execution profile. `LOCAL_QUORUM` for both
   gives read-your-writes within a data center.
-- **Permission changes:** `set_metadata` updates the metadata and terms with a lightweight
-  transaction (`IF EXISTS`), so an id that is not stored never creates a row.
-- **Limits:** Cassandra allows 1,000 rows per ANN query, so a search returns at most 1,000 hits.
+- **Permission changes:** `set_metadata` looks the ids up and updates the metadata and terms of
+  the rows found, so an id that is not stored creates no row. Its writes are plain writes, like
+  those of `add` and `delete`, and use no lightweight transaction: Cassandra orders writes to a row
+  by timestamp, and a lightweight transaction takes its timestamp from Paxos rather than from the
+  client, so mixing the two could apply an older permission over a newer one. A chunk deleted
+  between the lookup and the update is left as a row with metadata and terms but no text and no
+  vector, which an ANN search never returns; a later `add` of that id replaces it.
+- **Limits:** Cassandra allows 1,000 rows per ANN query, so a search with `k` above 1,000 raises
+  `ValueError` rather than return 1,000 hits as if no more matched.
 - **Concurrent writes:** Cassandra 5.0's vector index accepts only a few writes at once per table (about
   one per core). The backend writes `write_concurrency` (4) rows at a time and sends a refused write
   once more, alone; searches run `concurrency` (32) queries at a time.
