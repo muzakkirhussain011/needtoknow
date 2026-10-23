@@ -41,12 +41,19 @@ whole process.
 
 ## Other frameworks
 
-The same three steps apply to any client that can send a header with streamable HTTP. Pydantic AI
-and CrewAI both connect to MCP servers; set the `Authorization` header through their MCP client
-options, which change between releases, so follow their current documentation:
+The same three steps apply to any client that can send a header with streamable HTTP. Set the
+`Authorization` header through each framework's MCP client options, which change between releases,
+so follow its current documentation:
 
 - [Pydantic AI: MCP client](https://pydantic.dev/docs/ai/mcp/client/)
 - [CrewAI: streamable HTTP MCP servers](https://docs.crewai.com/mcp/streamable-http)
+- [AutoGen: `StreamableHttpServerParams`](https://microsoft.github.io/autogen/stable/reference/python/autogen_ext.tools.mcp.html)
+  takes the URL and a `headers` dict, and `McpWorkbench` gives the server's tools to an agent.
+- [Semantic Kernel: MCP plugins](https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/adding-mcp-plugins)
+  (`pip install "semantic-kernel[mcp]"`): `MCPStreamableHttpPlugin` connects to a remote server.
+- [DSPy: MCP](https://dspy.ai/learn/programming/mcp): open the connection with the `mcp` package's
+  streamable HTTP client and a `ClientSession`, then wrap each tool with `dspy.Tool.from_mcp_tool`;
+  run the agent inside the session, since the tools call back into it.
 
 For LangChain and LangGraph, LlamaIndex and Haystack, needtoknow also has in-process integrations
 that bind the subject per session: [LangChain](langchain.md), [LlamaIndex](llamaindex.md),
