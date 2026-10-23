@@ -18,13 +18,15 @@ backend and authorizer passes them in wardowl's own CI.
 A failed check raises `ConformanceError` with the seed, the example number, the documents, the
 filter and what came back. The checks need no extra packages and no network; `HashingEmbedder`
 gives vector stores deterministic embeddings without a model. Call them from synchronous code:
-backends with an `asearch` are also checked through `asyncio.run`.
+the async paths (a backend's `asearch`, `aretrieve`, an authorizer's `acheck`, `afilter_for` and
+`ascope_for`) are checked too, through `asyncio.run`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import itertools
 import json
 import math
@@ -35,6 +37,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from wardowl.authz import Authorizer, MetadataACLAuthorizer
+from wardowl.caching import CachingAuthorizer
 from wardowl.filters import And, Filter, In, Or, filter_to_dict, matches
 from wardowl.retriever import PermissionedRetriever, SearchBackend, Strategy
 from wardowl.types import Document, Hit, Query, Subject
@@ -52,12 +55,18 @@ __all__ = [
 QUERY = "doc"
 """Every generated document contains this word, so keyword backends score each one above zero."""
 
-_FIELDS = ("team", "level", "allowed_users", "allowed_groups", "tags")
-_STRINGS = ("a", "b", "c")
+# Field names a query language may treat as syntax: a dot is a path in Qdrant, MongoDB and
+# Elasticsearch, and "team.name" must not reach {"team": {"name": ...}}, which documents also hold.
+# A store may refuse to filter on these (ValueError); it may not answer wrongly.
+_ODD_FIELDS = ("team.name", "größe-x")
+_FIELDS = ("team", "level", "allowed_users", "allowed_groups", "tags", *_ODD_FIELDS)
+# "1" next to 1, "A" next to "a", and "é" next to "é" (one letter, composed and decomposed):
+# equal only for a store that converts types, folds case or normalises Unicode, which a filter must not.
+_STRINGS = ("a", "b", "c", "1", "A", "é", "é")
 _INTS = (1, 2, 3)
 _WORDS = ("policy", "leave", "salary", "incident", "deploy", "vendor", "budget", "report")
-_USERS = ("alice", "bob", "carol", "dave")
-_GROUPS = ("eng", "hr", "sales", "legal")
+_USERS = ("alice", "bob", "carol", "dave", "Bob", "zoë", "zoë")
+_GROUPS = ("eng", "hr", "sales", "legal", "Eng", "1")
 # Values no generated document holds, for filters and subjects with hundreds of values.
 _MANY: list[str | int] = [*(f"other-{i}" for i in range(150)), *range(1000, 1150)]
 
@@ -107,7 +116,7 @@ def _value(rng: random.Random) -> Any:
         return rng.sample(_INTS, rng.randint(0, len(_INTS)))
     if kind == 5:
         return [rng.sample(_STRINGS, 1)]  # a nested list: its inner values never match
-    return {"value": rng.choice(_STRINGS)}  # an object: never matched either
+    return {"name": rng.choice(_STRINGS)}  # an object: never matched either, not even by "team.name"
 
 
 def random_documents(rng: random.Random, n: int) -> list[Document]:
@@ -227,6 +236,68 @@ def _problems(hits: Sequence[Hit], k: int, expected: set[str], by_id: Mapping[st
 # ---- checks --------------------------------------------------------------------------------------
 
 
+def _differences(hits: Sequence[Hit], async_hits: Sequence[Hit]) -> list[str]:
+    """How `asearch`'s hits differ from `search`'s for the same search: in nothing, for a conforming backend."""
+    if [h.id for h in async_hits] != [h.id for h in hits]:
+        return ["the same search returned different hits"]
+    problems: list[str] = []
+    for mine, theirs in zip(hits, async_hits, strict=True):
+        if theirs.text != mine.text:
+            problems.append(f"{mine.id}: text {theirs.text!r} instead of {mine.text!r}")
+        stored, returned = _json(dict(mine.metadata)), _json(dict(theirs.metadata))
+        if returned != stored:
+            problems.append(f"{mine.id}: metadata {returned} instead of {stored}")
+        score: Any = theirs.score
+        if not isinstance(score, (int, float)) or not math.isclose(score, mine.score, rel_tol=1e-6, abs_tol=1e-9):
+            problems.append(f"{mine.id}: score {score!r} instead of {mine.score!r}")
+    return problems
+
+
+def _compare_asearch(
+    backend: SearchBackend,
+    example: _Example,
+    query: str | Query,
+    k: int,
+    f: Filter | None,
+    hits: Sequence[Hit],
+    **details: Any,
+) -> None:
+    """Check that `asearch`, if the backend has one, returns what `search` returned: `hits`."""
+    asearch = getattr(backend, "asearch", None)
+    if asearch is None:
+        return
+    async_hits = asyncio.run(asearch(query, k, f))
+    problems = _differences(hits, async_hits)
+    if problems:
+        if f is not None:
+            details["filter"] = _json(filter_to_dict(f))
+        raise example.failure(
+            "asearch and search disagree",
+            problems,
+            **details,
+            k=k,
+            search=[h.id for h in hits],
+            asearch=[h.id for h in async_hits],
+        )
+
+
+def _names_odd_field(f: Filter) -> bool:
+    if isinstance(f, In):
+        return f.field in _ODD_FIELDS
+    return any(_names_odd_field(c) for c in f.clauses)
+
+
+def _filtered(backend: SearchBackend, query: str | Query, k: int, f: Filter) -> list[Hit] | None:
+    """The backend's hits for a search with `f`, or None if it refused `f` because it names a field
+    the store cannot filter on (dots, for example): that raises, so nothing is returned."""
+    try:
+        return list(backend.search(query, k, f))
+    except ValueError:
+        if not _names_odd_field(f):
+            raise
+        return None
+
+
 def check_backend(
     factory: BackendFactory,
     *,
@@ -245,14 +316,21 @@ def check_backend(
     * a search without a filter returns stored documents only, min(k, stored) of them for k up to
       the whole corpus, best first, with text and metadata exactly as stored;
     * a search with a filter (when `supports_filters` is true) returns only documents `matches`
-      selects, and min(k, matching) of them, for `filters_per_example` random nested filters; and
-      `asearch`, if the backend has one, returns the same ids in the same order;
-    * retrieval through `PermissionedRetriever` with `MetadataACLAuthorizer` never returns a
-      document the subject may not read, reports no violations, and returns as many readable
-      documents as were asked for (with `"prefilter"` and `"postfilter"` where available);
+      selects, and min(k, matching) of them, for `filters_per_example` random nested filters;
+    * `asearch`, if the backend has one, returns the same hits as `search` for every one of these
+      searches, with and without a filter: the same ids in the same order, with the same text,
+      metadata and scores;
+    * retrieval through `PermissionedRetriever` with `MetadataACLAuthorizer`, through `retrieve`
+      and `aretrieve` alike, never returns a document the subject may not read, reports no
+      violations, and returns as many readable documents as were asked for (with `"prefilter"`
+      and `"postfilter"` where available);
     * if the backend has `set_metadata`, replacing the metadata of some documents (and of an id
       that is not stored) leaves their text as it was, changes what filters select as `matches`
       says it should, keeps no key of the old metadata, and stores nothing new.
+
+    The data holds the values stores tend to confuse: 1 and "1", "a" and "A", one letter composed and
+    decomposed, and field names with a dot or letters outside ASCII. A backend may refuse a filter on
+    such a field name by raising `ValueError`, which returns nothing; it may not return wrong hits.
 
     `exact=False` suits approximate indexes, which may miss matching documents: results must
     still never include a document that does not match, but may contain fewer than expected.
@@ -277,14 +355,17 @@ def check_backend(
             problems = _problems(hits, k, set(by_id), by_id, exact)
             if problems:
                 raise example.failure("search without a filter", problems, k=k, returned=[h.id for h in hits])
+            _compare_asearch(backend, example, query, k, None, hits)
 
         if backend.supports_filters:
             for _ in range(filters_per_example):
                 f = random_filter(rng)
                 expected = {d.id for d in docs if matches(f, d.metadata)}
                 k = everything if rng.random() < 0.5 else rng.randint(1, everything)
-                hits = backend.search(query, k, f)
-                problems = _problems(hits, k, expected, by_id, exact)
+                found = _filtered(backend, query, k, f)
+                if found is None:
+                    continue
+                problems = _problems(found, k, expected, by_id, exact)
                 if problems:
                     raise example.failure(
                         "search with a filter",
@@ -292,19 +373,9 @@ def check_backend(
                         filter=_json(filter_to_dict(f)),
                         k=k,
                         expected=sorted(expected),
-                        returned=[h.id for h in hits],
+                        returned=[h.id for h in found],
                     )
-                asearch = getattr(backend, "asearch", None)
-                if asearch is not None:
-                    async_hits = asyncio.run(asearch(query, k, f))
-                    if [h.id for h in async_hits] != [h.id for h in hits]:
-                        raise example.failure(
-                            "asearch and search disagree",
-                            ["the same search returned different hits"],
-                            filter=_json(filter_to_dict(f)),
-                            search=[h.id for h in hits],
-                            asearch=[h.id for h in async_hits],
-                        )
+                _compare_asearch(backend, example, query, k, f, found)
 
         set_metadata = getattr(backend, "set_metadata", None)
         if set_metadata is not None and docs:
@@ -334,13 +405,16 @@ def _check_set_metadata(
     problems = _problems(hits, len(updated), set(by_id), by_id, exact)
     if problems:
         raise example.failure("search after set_metadata", problems, **details, returned=[h.id for h in hits])
+    _compare_asearch(backend, example, query, len(updated), None, hits, **details)
     if not backend.supports_filters:
         return
     for _ in range(max(1, filters)):
         f = random_filter(rng)
         expected = {d.id for d in updated if matches(f, d.metadata)}
-        hits = backend.search(query, len(updated), f)
-        problems = _problems(hits, len(updated), expected, by_id, exact)
+        found = _filtered(backend, query, len(updated), f)
+        if found is None:
+            continue
+        problems = _problems(found, len(updated), expected, by_id, exact)
         if problems:
             raise example.failure(
                 "search with a filter after set_metadata",
@@ -348,8 +422,9 @@ def _check_set_metadata(
                 **details,
                 filter=_json(filter_to_dict(f)),
                 expected=sorted(expected),
-                returned=[h.id for h in hits],
+                returned=[h.id for h in found],
             )
+        _compare_asearch(backend, example, query, len(updated), f, found, **details)
 
 
 def _check_retrieval(
@@ -365,25 +440,54 @@ def _check_retrieval(
         readable = {d.id for d in docs if _may_read(subject, d.metadata)}
         for strategy in strategies:
             retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy=strategy)
-            result = retriever.retrieve(query, subject, k)
-            ids = [h.id for h in result.hits]
-            problems: list[str] = []
-            leaked = [i for i in ids if i not in readable]
-            if leaked:
-                problems.append(f"returned documents the subject may not read: {leaked}")
-            if result.violations:
-                problems.append(f"{result.violations} pre-filtered hits failed the re-check")
-            if exact and len(ids) < min(k, len(readable)):
-                problems.append(f"returned {len(ids)} of the {min(k, len(readable))} readable documents asked for")
-            if problems:
-                raise example.failure(
-                    f"retrieval with strategy={strategy!r}",
-                    problems,
-                    subject=f"{subject.id}, groups {sorted(subject.groups)}",
-                    k=k,
-                    readable=sorted(readable),
-                    returned=ids,
-                )
+            # Both drivers: the async one runs asearch, which may translate filters on its own.
+            results = {"retrieve": retriever.retrieve(query, subject, k)}
+            results["aretrieve"] = asyncio.run(retriever.aretrieve(query, subject, k))
+            expected_ids = [h.id for h in results["retrieve"].hits]
+            for call, result in results.items():
+                ids = [h.id for h in result.hits]
+                problems: list[str] = []
+                leaked = [i for i in ids if i not in readable]
+                if leaked:
+                    problems.append(f"returned documents the subject may not read: {leaked}")
+                if result.violations:
+                    problems.append(f"{result.violations} pre-filtered hits failed the re-check")
+                if exact and len(ids) < min(k, len(readable)):
+                    problems.append(f"returned {len(ids)} of the {min(k, len(readable))} readable documents asked for")
+                if ids != expected_ids:
+                    problems.append(f"returned {ids}, where retrieve returned {expected_ids}")
+                if problems:
+                    raise example.failure(
+                        f"{call} with strategy={strategy!r}",
+                        problems,
+                        subject=f"{subject.id}, groups {sorted(subject.groups)}",
+                        k=k,
+                        readable=sorted(readable),
+                        returned=ids,
+                    )
+
+
+def _clear_caches(authorizer: Any) -> None:
+    """Drop the answers of every `CachingAuthorizer` in `authorizer`, so its next answer is decided again."""
+    if isinstance(authorizer, CachingAuthorizer):
+        authorizer.invalidate()
+        _clear_caches(authorizer.authorizer)
+    parts = getattr(authorizer, "authorizers", None)
+    if isinstance(parts, (list, tuple)):
+        for part in parts:
+            _clear_caches(part)
+
+
+async def _awaited(answer: Any) -> Any:
+    return await answer
+
+
+def _fresh(authorizer: Any, method: str, *args: Any) -> Any:
+    """`authorizer.<method>(*args)`, awaited if it is async, with every cache in it emptied first: a
+    cached answer would hide whether the authorizer behind it depends on the batch or the order."""
+    _clear_caches(authorizer)
+    answer = getattr(authorizer, method)(*args)
+    return asyncio.run(_awaited(answer)) if inspect.isawaitable(answer) else answer
 
 
 def check_authorizer(
@@ -400,13 +504,16 @@ def check_authorizer(
     metadata are used, which suits authorizers that read permissions from the chunks
     (`MetadataACLAuthorizer`, a `FunctionAuthorizer` over metadata, `CachingAuthorizer` around
     them). For an authorizer backed by a service, pass subjects and hits from your test data.
+    Every `CachingAuthorizer` in it is emptied before each call, so the authorizer it wraps answers.
     For every subject it checks that:
 
     * `check` returns one boolean per hit, and `[]` for no hits;
     * the answer for a hit does not depend on the other hits or their order;
     * when `filter_for` returns a filter, `check` agrees with `matches(filter, hit.metadata)` for
       every hit. If they differ, pre-filtered and post-filtered results differ, and the re-check
-      of pre-filtered hits reports violations.
+      of pre-filtered hits reports violations;
+    * `acheck`, `afilter_for` and `ascope_for`, where it has them, give the same answers as
+      `check`, `filter_for` and `scope_for`: `aretrieve` uses them.
     """
     rng = random.Random(seed)
     if subjects is None:
@@ -416,19 +523,37 @@ def check_authorizer(
     example = _Example(seed, 0, [Document(h.id, h.text, h.metadata) for h in hits])
     for subject in subjects:
         who = f"{subject.id}, groups {sorted(subject.groups)}"
-        if authorizer.check(subject, [], action) != []:
+        if _fresh(authorizer, "check", subject, [], action) != []:
             raise example.failure("check with no hits", ["did not return []"], subject=who)
-        together = authorizer.check(subject, list(hits), action)
+        together = _fresh(authorizer, "check", subject, list(hits), action)
         if len(together) != len(hits) or not all(isinstance(d, bool) for d in together):
             raise example.failure("check", [f"returned {together!r} for {len(hits)} hits"], subject=who)
-        alone = [authorizer.check(subject, [h], action)[0] for h in hits]
-        backwards = list(reversed(authorizer.check(subject, list(reversed(hits)), action)))
+        alone = [_fresh(authorizer, "check", subject, [h], action)[0] for h in hits]
+        backwards = list(reversed(_fresh(authorizer, "check", subject, list(reversed(hits)), action)))
         if together != alone or together != backwards:
             changed = [h.id for h, a, b, c in zip(hits, together, alone, backwards, strict=True) if not a == b == c]
             raise example.failure(
                 "check", ["a hit's answer depended on the other hits or their order"], subject=who, hits=changed
             )
-        f = authorizer.filter_for(subject, action)
+        if hasattr(authorizer, "acheck"):
+            answer = list(_fresh(authorizer, "acheck", subject, list(hits), action))
+            if answer != together:
+                changed = [h.id for h, a, b in zip(hits, together, answer, strict=False) if a != b]
+                raise example.failure(
+                    "acheck and check disagree", [f"acheck returned {answer!r}"], subject=who, hits=changed
+                )
+        f = _fresh(authorizer, "filter_for", subject, action)
+        for sync, native in (("filter_for", "afilter_for"), ("scope_for", "ascope_for")):
+            if not (hasattr(authorizer, sync) and hasattr(authorizer, native)):
+                continue
+            mine = f if sync == "filter_for" else _fresh(authorizer, sync, subject, action)
+            theirs = _fresh(authorizer, native, subject, action)
+            if theirs != mine:
+                raise example.failure(
+                    f"{native} and {sync} disagree",
+                    [f"{native} returned {theirs!r}, {sync} {mine!r}"],
+                    subject=who,
+                )
         if f is None:
             continue
         disagree = [h.id for h, ok in zip(hits, together, strict=True) if ok != matches(f, h.metadata)]
