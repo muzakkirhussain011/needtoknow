@@ -20,7 +20,7 @@ from wardowl.filters import And, Filter, In, Or, filter_from_dict, filter_to_dic
 from wardowl.fusion import RankFusion
 from wardowl.redaction import PatternRedactor, Redactor, SpanRedactor
 from wardowl.retriever import PermissionedRetriever, Reranker, RetrievalResult, SearchBackend, Strategy
-from wardowl.types import Document, Hit, Query, Subject
+from wardowl.types import Document, Hit, InvalidQuery, Query, Subject
 
 __version__ = "2.0.1"
 
@@ -37,6 +37,7 @@ __all__ = [
     "Hit",
     "In",
     "InMemoryBackend",
+    "InvalidQuery",
     "JsonLinesAudit",
     "MetadataACLAuthorizer",
     "Or",

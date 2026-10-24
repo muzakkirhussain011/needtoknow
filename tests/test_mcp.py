@@ -123,6 +123,23 @@ def test_a_permission_service_failure_returns_nothing_and_reveals_nothing():
     assert "opa.internal" not in str(failure.value)
 
 
+def test_a_permission_failure_naming_a_password_reaches_the_model_without_it():
+    def leaks(subject, hits, action):
+        raise ConnectionError("could not reach opa.internal:8181 as svc-wardowl (password hunter2)")
+
+    retriever = PermissionedRetriever(InMemoryBackend(DOCS), FunctionAuthorizer(leaks))
+
+    async def over_the_protocol():
+        async with Client(_server_with(retriever, Subject("bob", ["eng"]))) as client:
+            return await client.call_tool("search", {"query": "leave"})
+
+    result = asyncio.run(over_the_protocol())
+    text = " ".join(getattr(part, "text", "") for part in result.content)
+    assert result.is_error and not result.structured_content
+    assert "permission check could not be completed" in text
+    assert "hunter2" not in text and "opa.internal" not in text
+
+
 def test_subject_functions_may_be_async_and_must_return_a_subject():
     async def lookup(access: AccessToken) -> Subject:
         return from_claims(access)

@@ -60,7 +60,8 @@ class RetrievalEvent:
     cause: str | None = None
     """The type of the exception behind `error`, when there is one: for an `AuthorizationError`,
     what the call to the permission service raised, such as "TimeoutError" or
-    "ConnectionRefusedError". None when the error has no cause, as for a malformed answer."""
+    "ConnectionRefusedError", or "CircuitOpenError" when an open `CircuitBreaker` refused the call.
+    None when the error has no cause, as for a malformed answer."""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

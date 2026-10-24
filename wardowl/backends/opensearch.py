@@ -66,10 +66,11 @@ class OpenSearchBackend(EngineBackend):
     `embed` turns text into a vector; without it, search with `Query(vector=...)` and pass
     `embeddings` to `add`. Scores are OpenSearch's: `(1 + cosine) / 2` for a `cosinesimil` field.
     `refresh` is passed to bulk writes (`"wait_for"` by default, so written chunks are searchable
-    when `add` returns). `num_candidates` is not used by OpenSearch's `knn` query; set `ef_search`
-    in the index settings instead. `mode="keyword"` searches the text with
-    BM25 instead, under the same permission filter, for hybrid search with `RankFusion`; `embed`
-    may then be None.
+    when `add` returns). `num_candidates` is not used by OpenSearch's `knn` query. With the Lucene
+    engine (the default), the query's `k` sets how widely the graph is searched; the index setting
+    `index.knn.algo_param.ef_search` applies to the Faiss engine only. `mode="keyword"` searches the
+    text with BM25 instead, under the same permission filter, for hybrid search with `RankFusion`;
+    `embed` may then be None.
     """
 
     _engine = "OpenSearch"

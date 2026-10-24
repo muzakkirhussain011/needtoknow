@@ -181,7 +181,7 @@ class CedarAuthorizer:
         try:
             attrs = _record(subject.attributes)
         except _Unrepresentable as exc:
-            raise AuthorizationError(f"a subject attribute holds {exc}, which Cedar cannot hold") from exc
+            raise AuthorizationError("a subject attribute has a key or value Cedar cannot hold") from exc
         attrs["id"] = subject.id
         attrs["groups"] = groups
         principal = {
@@ -195,7 +195,7 @@ class CedarAuthorizer:
         try:
             extra = list(self.entities(subject) if callable(self.entities) else self.entities)
         except Exception as exc:
-            raise AuthorizationError(f"entities failed: {exc}") from exc
+            raise AuthorizationError("entities failed") from exc
         for entity in extra:  # a group described here, with its parents, replaces the empty one
             entities[_key(entity)] = entity
         return [principal, *entities.values()]
@@ -252,7 +252,7 @@ class CedarAuthorizer:
             except AuthorizationError:
                 raise
             except Exception as exc:
-                raise AuthorizationError(f"Cedar failed: {exc}") from exc
+                raise AuthorizationError("Cedar failed") from exc
             decisions += allowed
         if denied:
             _log.warning(

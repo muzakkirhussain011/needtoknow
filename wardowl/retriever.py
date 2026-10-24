@@ -17,6 +17,8 @@ auto (default)
 Guarantees
 ----------
 * Fail closed: if the authorizer errors, `AuthorizationError` is raised and nothing is returned.
+  Its message is fixed, without the text of the exception behind it, which is kept as its
+  `__cause__`: agent frameworks show tool errors to the model.
 * Defence in depth: pre-filtered results are checked again with the authorizer (`recheck=True`).
   A backend that ignored the filter cannot leak; the rejected hits are counted in `violations`.
   With `recheck=False` there is no second call to the authorizer, but each pre-filtered hit is
@@ -44,7 +46,7 @@ from wardowl.authz import AuthorizationError, Authorizer
 from wardowl.events import Observer, RetrievalEvent, query_fingerprint
 from wardowl.filters import And, Filter, In, Or, matches
 from wardowl.redaction import RedactFunction, Redactor
-from wardowl.types import Hit, Query, Subject
+from wardowl.types import Hit, InvalidQuery, Query, Subject
 
 __all__ = ["PermissionedRetriever", "Reranker", "RetrievalResult", "SearchBackend", "Strategy"]
 
@@ -252,7 +254,8 @@ class PermissionedRetriever:
 
         `query` is text, or a `Query` carrying a vector you computed. Raises `AuthorizationError`
         when the authorizer fails or gives a malformed answer, and `ValueError` or `TypeError`
-        for invalid arguments. Nothing is returned in any of these cases.
+        for invalid arguments: `InvalidQuery`, a `ValueError`, when the query or `k` is at fault
+        rather than the configuration. Nothing is returned in any of these cases.
         """
         started, clock, timings = time.time(), time.perf_counter(), _Timings()
         try:
@@ -358,9 +361,9 @@ class PermissionedRetriever:
 
     def _plan(self, query: str | Query, subject: Subject, k: int) -> _Plan:
         if k < 1:
-            raise ValueError("k must be at least 1")
+            raise InvalidQuery("k must be at least 1")
         if k > self.max_candidates:
-            raise ValueError(f"k={k} is more than max_candidates={self.max_candidates}")
+            raise InvalidQuery(f"k={k} is more than max_candidates={self.max_candidates}")
         if not isinstance(query, (str, Query)):
             raise TypeError(f"a query is a string or a Query, not {type(query).__name__}")
         if self.reranker is None:
@@ -455,7 +458,7 @@ class PermissionedRetriever:
         try:
             return list(redact(subject, list(hits)))
         except Exception as exc:
-            raise AuthorizationError(f"redaction failed: {exc}") from exc
+            raise AuthorizationError("redaction failed") from exc
 
     def _run(self, op: _Op, subject: Subject) -> Any:
         if isinstance(op, _Search):
@@ -474,7 +477,9 @@ class PermissionedRetriever:
         except AuthorizationError:
             raise
         except Exception as exc:  # fail closed: any authorizer failure means no results
-            raise AuthorizationError(f"authorizer failed: {exc}") from exc
+            # A fixed message: the exception's text can name hosts or credentials, and an agent
+            # framework shows the message to the model. It stays in __cause__, for the logs.
+            raise AuthorizationError("authorizer failed") from exc
 
     async def _arun(self, op: _Op, subject: Subject) -> Any:
         if isinstance(op, _Search):
@@ -508,7 +513,7 @@ class PermissionedRetriever:
         except AuthorizationError:
             raise
         except Exception as exc:
-            raise AuthorizationError(f"authorizer failed: {exc}") from exc
+            raise AuthorizationError("authorizer failed") from exc
 
     @staticmethod
     def _filter(value: Any) -> Filter | None:

@@ -70,9 +70,9 @@ result = retriever.retrieve(Query(text=question, vector=embed(question)), subjec
 | Backend | Text query | `Query(vector=...)` | `Query(text=..., vector=...)` |
 |---|---|---|---|
 | pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, Elasticsearch, OpenSearch, LanceDB, Vespa, FAISS, Cassandra, Pinecone | embedded with `embed` | the vector | the vector |
-| The same in `mode="keyword"` (all but FAISS, Cassandra and Pinecone, which search vectors only) | the text | `ValueError` | the text |
+| The same in `mode="keyword"` (all but FAISS, Cassandra and Pinecone, which search vectors only) | the text | `InvalidQuery` (a `ValueError`) | the text |
 | Chroma | `embed`, or the collection's embedding function | the vector | the vector |
-| `InMemoryBackend` (word matching) | the text | `ValueError` | the text |
+| `InMemoryBackend` (word matching) | the text | `InvalidQuery` | the text |
 | `LangChainVectorStoreBackend` | `similarity_search` | `similarity_search_by_vector` | `similarity_search_by_vector` |
 | `LlamaIndexBackend` | the index embeds it | a `QueryBundle` with the embedding | a `QueryBundle` with both |
 | `RankFusion` | passed to every backend | passed to every backend | passed to every backend |
@@ -80,6 +80,12 @@ result = retriever.retrieve(Query(text=question, vector=embed(question)), subjec
 The framework integrations pass vectors on too: the Haystack component has a `query_embedding`
 input for a text embedder's output, and the LlamaIndex retriever forwards a `QueryBundle`'s
 embedding when one is set.
+
+`InvalidQuery` is a `ValueError` that says the query, not the system, is at fault: only a vector
+for keyword search, only text for a backend without an embed function, or `k` beyond
+`max_candidates`. `FaissBackend` raises it for a query vector whose length is not its `dim`; other
+stores report a vector of the wrong length with their own errors. The
+[HTTP service](integrations/http.md#the-api) answers it with 422.
 
 ## Audit fingerprints
 
@@ -106,6 +112,8 @@ class MyBackend:
         ...
 ```
 
-`q.keywords()` gives the text for keyword search and raises `ValueError` for a vector-only query.
+`q.keywords()` gives the text for keyword search and raises `InvalidQuery` for a vector-only query;
+raise `InvalidQuery` yourself for other queries your store cannot search, such as a vector of the
+wrong length.
 `check_backend(factory, query=Query(vector=...))` runs the [conformance kit](extending.md) with
 vector queries.

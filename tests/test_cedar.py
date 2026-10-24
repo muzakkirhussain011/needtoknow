@@ -140,8 +140,9 @@ def test_chunks_cedar_cannot_hold_are_denied_without_asking_cedar():
 
 
 def test_a_subject_attribute_cedar_cannot_hold_raises():
-    with pytest.raises(AuthorizationError, match="cannot hold"):
+    with pytest.raises(AuthorizationError, match="cannot hold") as failure:
         CedarAuthorizer(ACL).check(Subject("ann", ["eng"], {"clearance": 2.5}), [hit("a")])
+    assert "2.5" not in str(failure.value) and "2.5" in str(failure.value.__cause__)  # the value stays out
     subject = Subject("ann", ["eng"], {"clearance": 2.0})
     assert CedarAuthorizer(ACL).check(subject, [hit("a", allowed_groups=["eng"])]) == [True]
 
@@ -170,8 +171,9 @@ def test_a_forbid_sees_keys_that_start_with_two_underscores_and_reserved_keys_de
         assert CedarAuthorizer(policy).check(ANN, hits) == [False, True, False, False, False, False, False, True]
     assert "5 of 8 chunks" in caplog.text
     for attributes in (root, {"team": {"__extn": {"fn": "ip", "arg": "10.0.0.1"}}}, {7: "x"}):
-        with pytest.raises(AuthorizationError, match="the key"):
+        with pytest.raises(AuthorizationError, match="key or value Cedar cannot hold") as failure:
             CedarAuthorizer(policy).check(Subject("ann", ["eng"], attributes), [hits[-1]])
+        assert "the key" in str(failure.value.__cause__)  # which one, for the logs
     assert CedarAuthorizer(policy).check(Subject("ann", ["eng"], {"__team": "eng"}), [hits[-1]]) == [True]
 
 
@@ -238,8 +240,9 @@ def test_failing_or_malformed_entities_raise():
     def broken(subject):
         raise RuntimeError("directory down")
 
-    with pytest.raises(AuthorizationError, match="entities failed"):
+    with pytest.raises(AuthorizationError, match="entities failed") as failure:
         CedarAuthorizer(ACL, entities=broken).check(ANN, [hit("a")])
+    assert "directory down" not in str(failure.value) and "directory down" in str(failure.value.__cause__)
     with pytest.raises(AuthorizationError, match="Cedar"):
         CedarAuthorizer(ACL, entities=[{"uid": "nonsense"}]).check(ANN, [hit("a")])
 
@@ -269,5 +272,6 @@ def test_a_failing_or_inconsistent_engine_raises(answer, message):
 
     authz = CedarAuthorizer(ACL)
     authz._cedar = SimpleNamespace(Decision=cedarpy.Decision, is_authorized_batch=batch)
-    with pytest.raises(AuthorizationError, match=message):
+    with pytest.raises(AuthorizationError, match=message) as failure:
         authz.check(ANN, [hit("a")])
+    assert "engine crashed" not in str(failure.value)  # an engine's text stays in the cause

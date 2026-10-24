@@ -52,17 +52,28 @@ id breaks the rule is denied without being sent, since SpiceDB would refuse the 
 every retrieval that found the chunk would return nothing. A subject id or group name SpiceDB
 rejects makes the request fail, so retrieval fails closed.
 
-## Groups from your identity provider
+## Groups
 
-By default the subject's groups are checked as subject sets, `group:<name>#member`, as well as the
-user itself. A document shared with `group:eng#member` is then readable by anyone whose `Subject`
-lists `eng`, without syncing group memberships into SpiceDB. If memberships do live in SpiceDB,
-pass `group_subjects=False` so only the user is checked.
+By default only the user is checked (`group_subjects=False`), and SpiceDB follows the group
+memberships it stores: write `group:eng#member@user:ann` relationships, and a document shared with
+`group:eng#member` is readable by ann. SpiceDB then applies every part of the permission to ann
+herself, exclusions and intersections included.
 
-Each group subject set is checked against the whole permission on its own, as SpiceDB checks any
-subject, and the chunk is allowed if the user or any of the groups has the permission. That is
-right for a permission that is a union, like `view = viewer` above, and wrong for one with an
-intersection or an exclusion. Take a document readable only inside its tenant:
+When memberships live only in your identity provider, `group_subjects=True` also checks each of the
+subject's groups as a subject set, `group:<name>#member`, and allows a chunk if the user or any of
+the groups has the permission. A document shared with `group:eng#member` is then readable by anyone
+whose `Subject` lists `eng`, without syncing memberships into SpiceDB. The groups are trusted as
+given, so they must come from the verified token.
+
+**Do not use `group_subjects=True` with a permission that excludes or intersects.** Each group is
+asked about on its own, as if it were the reader:
+
+- With an exclusion, such as `permission view = viewer - banned`, a banned user still reads a
+  document shared with their group, because the group is not banned.
+- With an intersection, such as `permission view = viewer & org->member`, a grant through a group
+  can be refused, because the group is not itself a member of the organisation.
+
+For example, a document readable only inside its tenant:
 
 ```text
 definition organization {
@@ -76,17 +87,17 @@ definition document {
 }
 ```
 
-`group:eng#member` is a viewer, but not a member of the organization, which lists users, so it
-lacks `view`; and `user:alice` is not a viewer, since her membership of `eng` is not in SpiceDB.
-Every document granted to a group is then denied. An exclusion fails the other way: under
-`view = viewer - banned`, the group subject set is not banned, so it has `view`, and a banned user
-in that group keeps reading, whether or not memberships live in SpiceDB.
+With `group_subjects=True` and memberships only in the token, `group:eng#member` is a viewer but not
+a member of the organization, which lists users, so it lacks `view`; and `user:alice` is not a
+viewer, since her membership of `eng` is not in SpiceDB. Every document granted to a group is then
+denied.
 
-With such a schema, either write group memberships into SpiceDB and pass `group_subjects=False`, so
-that SpiceDB evaluates the whole permission for the user; or keep the permission wardowl asks about
-a plain union, as in [the schema above](#the-schema), and apply the other conditions outside
-SpiceDB, such as the tenant with `AllOf(TenantAuthorizer(), SpiceDBAuthorizer(...))`
-([Combining](../combining.md#tenant-isolation)).
+With such a schema, either store the memberships in SpiceDB and keep the default,
+`group_subjects=False`, so that SpiceDB evaluates the whole permission for the user; or keep the
+permission wardowl asks about a plain union, as in [the schema above](#the-schema), and apply the
+other conditions outside SpiceDB, such as the tenant with
+`AllOf(TenantAuthorizer(), SpiceDBAuthorizer(...))` ([Combining](../combining.md#tenant-isolation)).
+CI checks, against a real SpiceDB, that a banned member of a permitted group is denied by default.
 
 ## Checks
 
@@ -98,7 +109,8 @@ not a decision and raises `AuthorizationError`; supply caveat context with
 
 ## Pre-filtering
 
-`filter_for` calls LookupResources for the user and for each group subject, and turns the union of
+`filter_for` calls LookupResources for the user (and, with `group_subjects=True`, for each group
+subject), and turns the union of
 the documents found into `In("doc_id", ...)`, so the vector store filters inside the search. If a
 lookup returns `lookup_limit` documents (1000 by default) the list may be truncated, so no filter
 is returned and the retriever post-filters instead; it does the same when a lookup result is

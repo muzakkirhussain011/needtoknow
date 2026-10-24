@@ -8,10 +8,14 @@ library.
 * `filter_for` asks LookupResources for every document the user may view and turns the answer into
   an `In` filter, so the vector store pre-filters. If the answer reaches `lookup_limit` it may be
   truncated, so no filter is returned and the retriever post-filters instead.
-* The subject's groups (for example from your identity provider) are also checked as subject sets,
-  `group:<name>#member`, so a document shared with a group is readable by the group's members
-  without syncing memberships into SpiceDB. Pass `group_subjects=False` when memberships live in
-  SpiceDB.
+* Only the user is checked by default (`group_subjects=False`): SpiceDB follows the group
+  memberships it stores, and applies exclusions (`viewer - banned`) and intersections to them.
+  With `group_subjects=True` the subject's groups (from your identity provider, say) are also
+  checked as subject sets, `group:<name>#member`, and a chunk is allowed if the user or any group
+  has the permission, for memberships that live only in the token. Each group is then asked about
+  on its own, so a permission that excludes or intersects is wrong: a banned user still reads what
+  their group may read, and a grant that needs two conditions together can be refused. Do not use
+  it with such permissions.
 * A conditional answer (a caveat whose context was not supplied) is not a decision: `check` raises
   `AuthorizationError`, and `filter_for` returns no filter so the chunks are checked one by one.
   Supply caveat context with `caveat_context`.
@@ -67,11 +71,12 @@ class SpiceDBAuthorizer:
     `token` is SpiceDB's preshared key (sent as a bearer token). `permissions` maps actions to
     SpiceDB permissions (default `{"read": "view"}`). Resources are `<resource_type>:<resource id>`
     and subjects `<subject_type>:<subject id>`, plus `<group_type>:<group>#<group_relation>` for
-    each of the subject's groups when `group_subjects` is true. `caveat_context(subject)` returns
-    the context for caveated relationships. `timeout`, `retries`, `circuit_breaker`, `ssl_context`,
-    `max_response_bytes` and `allow_insecure` work as in `OPAAuthorizer`: a `token` sent over
-    http:// to a host other than this machine needs `allow_insecure=True`. Every failure raises
-    `AuthorizationError`.
+    each of the subject's groups when `group_subjects` is true (False by default; never with a
+    permission that excludes or intersects, as the module docstring explains).
+    `caveat_context(subject)` returns the context for caveated relationships. `timeout`,
+    `retries`, `circuit_breaker`, `ssl_context`, `max_response_bytes` and `allow_insecure` work as
+    in `OPAAuthorizer`: a `token` sent over http:// to a host other than this machine needs
+    `allow_insecure=True`. Every failure raises `AuthorizationError`.
     """
 
     def __init__(
@@ -85,7 +90,7 @@ class SpiceDBAuthorizer:
         resource_field: str | None = "doc_id",
         group_type: str = "group",
         group_relation: str = "member",
-        group_subjects: bool = True,
+        group_subjects: bool = False,
         consistency: Mapping[str, Any] | None = None,
         caveat_context: Callable[[Subject], Mapping[str, Any]] | None = None,
         lookup_limit: int = 1000,
@@ -146,7 +151,7 @@ class SpiceDBAuthorizer:
         try:
             return {"context": dict(self.caveat_context(subject))}
         except Exception as exc:
-            raise AuthorizationError(f"caveat_context failed: {exc}") from exc
+            raise AuthorizationError("caveat_context failed") from exc
 
     def _resource(self, hit: Hit) -> str | None:
         """The chunk's resource id, or None (the chunk is denied without asking) when it is missing,

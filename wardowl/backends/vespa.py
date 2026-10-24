@@ -243,10 +243,8 @@ class VespaBackend:
             clause = f"{{targetHits: {k}, approximate: {str(self.approximate).lower()}}}nearestNeighbor(embedding, q)"
             body: dict[str, Any] = {"ranking.profile": "wardowl", "input.query(q)": [float(x) for x in vector]}
         else:
-            if query.text is None:
-                raise ValueError("keyword search needs the query's text")
             clause = '({defaultIndex: "text", grammar: "any"}userInput(@query))'
-            body = {"ranking.profile": "wardowl_bm25", "query": query.text}
+            body = {"ranking.profile": "wardowl_bm25", "query": query.keywords()}
         yql = f"select * from {self.schema} where {clause}" + (f" and {where}" if where else "")
         return {**body, "yql": yql, "hits": k, "timeout": f"{self.timeout}s"}
 

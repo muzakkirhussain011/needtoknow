@@ -27,7 +27,9 @@
   header is refused over http:// unless the url names this machine (`localhost`, `127.0.0.1`,
   `::1`) and no proxy applies, or `allow_insecure=True` is passed.
 
-Whatever still fails raises `AuthorizationError`, so retrieval fails closed.
+Whatever still fails raises `AuthorizationError`, so retrieval fails closed. Its message names the
+request and the kind of failure, never the text of the exception behind it, which can name hosts
+and is kept as its `__cause__`.
 """
 
 from __future__ import annotations
@@ -49,7 +51,7 @@ from urllib.parse import SplitResult, urlsplit
 
 from wardowl.authz import AuthorizationError
 
-__all__ = ["DEFAULT_MAX_RESPONSE_BYTES", "CircuitBreaker", "JsonClient"]
+__all__ = ["DEFAULT_MAX_RESPONSE_BYTES", "CircuitBreaker", "CircuitOpenError", "JsonClient"]
 
 _RETRY_STATUS = frozenset({502, 503, 504})
 
@@ -59,15 +61,21 @@ DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 _deadline = threading.local()  # `at`: when the request in flight on this thread must be answered
 
 
+class CircuitOpenError(Exception):
+    """The cause of the `AuthorizationError` an open `CircuitBreaker` raises: the request was refused
+    without contacting the service. `RetrievalEvent.cause` is then "CircuitOpenError"."""
+
+
 class CircuitBreaker:
     """Pauses requests to a permission service that keeps failing.
 
     After `failures` consecutive failed requests the breaker opens, and every call raises
-    `AuthorizationError` at once, without contacting the service, for `reset_after` seconds. Then
-    one request is let through as a probe: if it succeeds the breaker closes, if it fails the
-    breaker opens again. A failure is a request that got no HTTP response, or a 5xx one; any other
-    response shows that the service is up. Retrieval fails closed while the breaker is open, as it
-    would if every request failed, but a struggling service is not flooded with requests.
+    `AuthorizationError`, caused by `CircuitOpenError`, at once, without contacting the service,
+    for `reset_after` seconds. Then one request is let through as a probe: if it succeeds the
+    breaker closes, if it fails the breaker opens again. A failure is a request that got no HTTP
+    response, or a 5xx one; any other response shows that the service is up. Retrieval fails closed
+    while the breaker is open, as it would if every request failed, but a struggling service is not
+    flooded with requests.
 
     One breaker can be shared by several authorizers that call the same service.
     """
@@ -97,7 +105,10 @@ class CircuitBreaker:
             if self._opened_at is None:
                 return
             if self._probing or self._clock() - self._opened_at < self.reset_after:
-                raise AuthorizationError("the permission service keeps failing; requests are paused (circuit open)")
+                # A cause of its own, so monitoring can tell a paused service from a malformed answer.
+                raise AuthorizationError(
+                    "the permission service keeps failing; requests are paused (circuit open)"
+                ) from CircuitOpenError("requests are paused")
             self._probing = True
 
     def record(self, ok: bool) -> None:
@@ -295,7 +306,7 @@ class JsonClient:
         try:
             body = json.dumps(payload).encode()
         except (TypeError, ValueError) as exc:
-            raise AuthorizationError(f"{what}: the input is not JSON-serialisable: {exc}") from exc
+            raise AuthorizationError(f"{what}: the input is not JSON-serialisable") from exc
         if self.breaker is not None:
             self.breaker.allow()
         deadline = time.monotonic() + self.timeout
@@ -309,12 +320,13 @@ class JsonClient:
                 except TimeoutError as exc:
                     raise AuthorizationError(f"{what} timed out after {self.timeout} s") from exc
                 except ssl.SSLCertVerificationError as exc:
-                    raise AuthorizationError(f"{what}: TLS certificate verification failed: {exc}") from exc
+                    raise AuthorizationError(f"{what}: TLS certificate verification failed") from exc
                 except _TooLarge as exc:
                     reachable = True  # the service answered; the answer is what is wrong
                     raise AuthorizationError(f"{what} answered with more than {self.max_response_bytes} bytes") from exc
                 except (OSError, http.client.HTTPException) as exc:
-                    failure, last = f"{type(exc).__name__}: {exc}", exc
+                    # The type only: the text can name hosts, and it stays in the cause.
+                    failure, last = type(exc).__name__, exc
                 else:
                     if status not in _RETRY_STATUS:
                         reachable = status < 500

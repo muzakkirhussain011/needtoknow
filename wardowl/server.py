@@ -22,7 +22,9 @@ How it holds:
 1. The subject comes from the verified bearer token alone. The request body cannot name a user,
    a group or a tenant: unknown fields are refused with 422.
 2. A missing or invalid token answers 401. A permission check that fails answers 503 with no
-   details (they go to the `wardowl` logger), and nothing is returned.
+   details (they go to the `wardowl` logger), and nothing is returned. A query the backend cannot
+   search as sent (`InvalidQuery`: a vector of the wrong length, say) answers 422, echoing nothing;
+   any other failure is a server fault and answers 500.
 3. Hits carry no metadata unless a field is listed in `metadata_fields`.
 4. `k`, the query's length and the vector's length are bounded, the vector holds finite numbers
    only, a body over `max_body_bytes` is refused with 413 before it is parsed, and the query text
@@ -38,6 +40,7 @@ import http.client
 import inspect
 import logging
 import math
+import ssl
 import threading
 import time
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
@@ -45,7 +48,7 @@ from typing import Annotated, Any
 
 from wardowl.authz import AuthorizationError
 from wardowl.retriever import PermissionedRetriever
-from wardowl.types import Query, Subject
+from wardowl.types import InvalidQuery, Query, Subject
 
 try:
     import jwt
@@ -86,6 +89,9 @@ class OIDCAuthenticator:
     the set fetches it again, at most once every `cooldown` seconds; until then such a token is
     invalid at once. A key endpoint that cannot be reached, or that returns no usable keys, raises
     `AuthorizationError`. Calls are synchronous: `create_app` runs them in a worker thread.
+
+    The key set is fetched over HTTPS with the system's trust store; `ssl_context` replaces it, for
+    an identity provider whose certificate a private CA signed.
     """
 
     def __init__(
@@ -101,6 +107,7 @@ class OIDCAuthenticator:
         lifespan: float = 300,
         cooldown: float = 30,
         timeout: float = 5,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
         if not jwks_url.startswith("https://"):
             raise ValueError("jwks_url must be an https:// URL")
@@ -118,7 +125,9 @@ class OIDCAuthenticator:
         self.cooldown = cooldown
         # The key set is cached here, not by PyJWKClient: its per-key cache never expires, and
         # older releases refetch the whole set for every unknown key id.
-        self._client = jwt.PyJWKClient(jwks_url, cache_keys=False, cache_jwk_set=False, timeout=timeout)
+        self._client = jwt.PyJWKClient(
+            jwks_url, cache_keys=False, cache_jwk_set=False, timeout=timeout, ssl_context=ssl_context
+        )
         self._clock: Callable[[], float] = time.monotonic
         self._lock = threading.Lock()
         self._keys: dict[str, jwt.PyJWK] = {}
@@ -174,7 +183,7 @@ class OIDCAuthenticator:
         try:
             published = self._client.get_signing_keys(refresh=True)
         except (jwt.PyJWTError, OSError, ValueError, http.client.HTTPException) as exc:
-            raise AuthorizationError(f"the identity provider's keys could not be fetched: {exc}") from exc
+            raise AuthorizationError("the identity provider's keys could not be fetched") from exc
         keys: dict[str, jwt.PyJWK] = {}
         for key in published:
             kid = key.key_id
@@ -323,6 +332,13 @@ def create_app(
         except AuthorizationError:
             _log.exception("wardowl's permission check failed; nothing was returned")
             raise HTTPException(503, "the permission check could not be completed, so nothing was returned") from None
+        except InvalidQuery:
+            # The request's own fault: k beyond the retriever's limit, a vector of the wrong length, or
+            # text or a vector the backend cannot search with. Any other ValueError is the server's,
+            # and answers 500. The message echoes nothing from the request or the backend.
+            raise HTTPException(
+                422, "this query cannot be searched here; check k, the vector's length, or send text"
+            ) from None
         hits = [
             Hit(
                 id=h.id,

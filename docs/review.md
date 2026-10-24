@@ -63,7 +63,9 @@ separate deployment with its
 - `FunctionAuthorizer` with a `filter_for` broader than its `check`: the re-check catches it (as
   violations); `recheck=False` does not.
 - `OpenFGAAuthorizer(contextual_groups=True)` and `SpiceDBAuthorizer(group_subjects=True)`: the
-  subject's groups are trusted as given.
+  subject's groups are trusted as given. With SpiceDB, each group is also asked about on its own,
+  which is wrong for a permission that excludes (`viewer - banned`) or intersects; the default,
+  `group_subjects=False`, leaves memberships to SpiceDB.
 - `SpiceDBAuthorizer`'s default consistency, `minimizeLatency`, and OpenFGA's default,
   `MINIMIZE_LATENCY`: answers can trail a write.
 - `Subject.attributes`: part of every cache key, and the tenant's source for `TenantAuthorizer`; it

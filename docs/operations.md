@@ -184,7 +184,15 @@ authorizer = OpenFGAAuthorizer(
 `CircuitBreaker(failures=5, reset_after=30)` opens after five consecutive failed requests (no
 response, or a 5xx one), rejects calls at once for 30 seconds, then lets one probe through: success
 closes it, failure opens it again. `breaker.is_open` is there for monitoring, and one breaker can be
-shared by every authorizer that calls the same service.
+shared by every authorizer that calls the same service. A call it rejects raises `AuthorizationError`
+caused by `wardowl.authorizers.CircuitOpenError`, so `RetrievalEvent.cause` says
+`"CircuitOpenError"`.
+
+Every `AuthorizationError` carries a fixed message, such as "authorizer failed" or "OPA decision
+failed: ConnectionRefusedError", never the text of the exception behind it: that text can name
+hosts, users or credentials, and agent frameworks show a tool's error to the model. The exception
+itself is the error's `__cause__`, so a log that records the traceback (`logging.exception`, or the
+HTTP service's log) keeps the details, and `RetrievalEvent.cause` names its type.
 
 ## Subjects in very many groups
 
@@ -307,7 +315,7 @@ either.
 | Incomplete results | Share of `wardowl.outcome = incomplete` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
 | Slow permission checks | `wardowl.authorize.duration` p99 | The permission service, or the network to it, is slowing retrieval down. `CachingAuthorizer` helps. |
 | Probing | `denied` per call, by subject, in the audit log | Unusually high values can mean a user is probing for documents they may not read. |
-| Which part is failing | `error.type = AuthorizationError` by `RetrievalEvent.cause` (or the span's `wardowl.error.cause`) | `TimeoutError` points at a slow permission service, `ConnectionRefusedError` and other `OSError`s at one that cannot be reached, and no cause at an error status (HTTP 503) or an answer in the wrong shape. |
+| Which part is failing | `error.type = AuthorizationError` by `RetrievalEvent.cause` (or the span's `wardowl.error.cause`) | `TimeoutError` points at a slow permission service, `ConnectionRefusedError` and other `OSError`s at one that cannot be reached, `CircuitOpenError` at a circuit breaker that is open (the service was not called; earlier failures opened it), and no cause at an error status (HTTP 503) or an answer in the wrong shape. |
 | Shared cache failing | `CachingAuthorizer.stats().shared_failures` rising, or `wardowl shared cache` warnings in the log | Every replica is asking the permission service directly; answers stay correct, but load and latency rise. |
 | Cache not helping | Hit rate, `(hits + shared_hits) / (hits + shared_hits + misses)`, falling | `ttl` too short for the traffic, `maxsize` too small, or subjects whose groups or attributes change on every request (each change is a new cache key). |
 | Paused permission service | `CircuitBreaker.is_open` | Requests are being refused without calling the service, for `reset_after` seconds. |

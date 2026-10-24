@@ -80,6 +80,14 @@ def test_group_subjects_allow_a_chunk_granted_to_one_of_the_groups(server):
     assert len(server.requests) == 3  # six tuples (user, eng, ops for each chunk) in batches of two
 
 
+def test_the_default_batch_is_no_larger_than_ketos_default_limit(server):
+    # Keto refuses more than limit.max_batch_check_size tuples (10 unless configured) in one request.
+    server.responder = granting({("doc-3", "ann")})
+    hits = [hit(f"c{i}", f"doc-{i}") for i in range(25)]
+    assert KetoAuthorizer(server.url).check(ANN, hits) == [i == 3 for i in range(25)]
+    assert [len(payload["tuples"]) for _, payload in server.requests] == [10, 10, 5]
+
+
 def test_no_chunks_and_no_objects_mean_no_request(server):
     authz = KetoAuthorizer(server.url)
     assert authz.check(ANN, []) == [] and authz.check(ANN, [hit("c1")]) == [False]
@@ -163,6 +171,23 @@ def test_a_real_keto_follows_direct_and_group_relationships(keto):
     assert grouped.check(Subject("zed", ["wo-hr"]), hits) == [False, True, False]  # groups from the token
 
 
+def many_hits():
+    """25 chunks, more than one batch check holds with Keto's default limit of 10 tuples."""
+    objects = ["wo-plan", "wo-pay", *(f"wo-none-{i}" for i in range(23))]
+    return [hit(f"c{i}", obj) for i, obj in enumerate(objects)]
+
+
+@needs_keto
+def test_a_real_keto_checks_more_chunks_than_one_batch_holds_with_the_defaults(keto):
+    # Keto's limit.max_batch_check_size is at its default in CI (examples/keto/keto.yml).
+    hits = many_hits()
+    assert KetoAuthorizer(keto).check(Subject("ann"), hits) == [i == 0 for i in range(25)]
+    grouped = KetoAuthorizer(keto, group_subjects=True)  # 75 tuples: the user and two groups per chunk
+    assert grouped.check(Subject("zed", ["wo-hr", "eng"]), hits) == [i == 1 for i in range(25)]
+
+
 @needs_keto
 def test_a_real_keto_passes_the_conformance_kit(keto):
-    check_authorizer(KetoAuthorizer(keto))
+    subjects = [Subject("ann"), Subject("hana"), Subject("zed", ["wo-hr"]), Subject("nobody")]
+    check_authorizer(KetoAuthorizer(keto), subjects, many_hits())
+    check_authorizer(KetoAuthorizer(keto, group_subjects=True), subjects, many_hits())

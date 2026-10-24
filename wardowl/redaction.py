@@ -69,15 +69,18 @@ class SpanRedactor:
     `"*"` not listed) is replaced by `replacement`; overlapping spans are replaced together. The
     field itself is removed from the metadata returned, since it names who may read what. A
     malformed list of spans raises `ValueError`, which the retriever turns into
-    `AuthorizationError`.
+    `AuthorizationError`: a field that is not a list, a span that is not a mapping, offsets that are
+    not two integers with `0 <= start < end`, a `sha256` that is not a string, or readers that are
+    not lists of strings. Those are wrong whatever the text.
 
     A chunk without the field is hidden whole, its text replaced by `replacement`: a list lost when
     the metadata was replaced cannot be told from one never written. Store `[]` for a chunk with
     nothing to hide, or pass `required=False` to show chunks without the field in full.
 
-    A span may also carry `sha256`, the `span_digest` of the text it covers. If the chunk's text no
-    longer has that text at those offsets, because it was edited after the spans were written, the
-    whole text is hidden: the offsets may no longer cover what they were written to protect.
+    A chunk whose spans no longer fit its text is hidden whole too: a span that ends past the text,
+    because the text was shortened after the spans were written, or a span whose `sha256` (the
+    `span_digest` of the text it covers) no longer matches the text at its offsets. The offsets may
+    no longer cover what they were written to protect.
     """
 
     def __init__(self, field: str = "redactions", replacement: str = "[REDACTED]", *, required: bool = True) -> None:
@@ -103,12 +106,14 @@ class SpanRedactor:
             start, end = span.get("start"), span.get("end")
             if type(start) is not int or type(end) is not int:  # True and False are ints, but not offsets
                 raise ValueError(f"chunk {hit.id!r}: a span's start and end must be integers")
-            if not 0 <= start < end <= len(hit.text):
-                raise ValueError(f"chunk {hit.id!r}: span {start}:{end} is outside its text")
+            if not 0 <= start < end:  # wrong for any text: the span was written wrongly
+                raise ValueError(f"chunk {hit.id!r}: span {start}:{end} is not a range of characters")
             digest = span.get("sha256")
             if digest is not None and not isinstance(digest, str):
                 raise ValueError(f"chunk {hit.id!r}: a span's sha256 must be a hex string")
-            if digest is not None and digest != span_digest(hit.text[start:end]):
+            if end > len(hit.text):
+                stale = True  # the text was shortened after its spans were written
+            elif digest is not None and digest != span_digest(hit.text[start:end]):
                 stale = True
             if not _may_read(subject, span.get("allowed_users", []), span.get("allowed_groups", [])):
                 hidden.append((start, end))

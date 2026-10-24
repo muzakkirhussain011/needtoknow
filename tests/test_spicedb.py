@@ -73,9 +73,17 @@ def _lookup(*lines):
 # ---- scripted server -------------------------------------------------------------------------
 
 
+def test_by_default_only_the_user_is_asked_about(server):
+    # SpiceDB follows the memberships it stores, and applies exclusions and intersections to them.
+    server.responder = _bulk({("d1", "eng#member"), ("d2", "ann")})
+    assert SpiceDBAuthorizer(server.url).check(ANN, HITS) == [False, True, False]
+    asked = {i["subject"]["object"]["objectType"] for _, p, _ in server.requests for i in p["items"]}
+    assert asked == {"user"}
+
+
 def test_check_asks_for_the_user_and_each_group_and_matches_answers_by_request(server):
     server.responder = _bulk({("d1", "eng#member")})
-    authz = SpiceDBAuthorizer(server.url, "secret", consistency={"fullyConsistent": True})
+    authz = SpiceDBAuthorizer(server.url, "secret", consistency={"fullyConsistent": True}, group_subjects=True)
     assert authz.check(ANN, HITS) == [True, False, False]  # c3 has no doc_id: denied without asking
     path, payload, headers = server.requests[0]
     assert path == "/v1/permissions/checkbulk" and headers["Authorization"] == "Bearer secret"
@@ -125,15 +133,19 @@ def test_caveat_context_is_sent_with_every_question(server):
     authz.check(ANN, HITS[:1])
     assert server.requests[0][1]["items"][0]["context"] == {"region": "eu"}
     broken = SpiceDBAuthorizer(server.url, caveat_context=lambda s: 1 / 0)
-    with pytest.raises(AuthorizationError, match="caveat_context"):
+    with pytest.raises(AuthorizationError, match="caveat_context") as failure:
         broken.check(ANN, HITS[:1])
+    assert "division" not in str(failure.value) and isinstance(failure.value.__cause__, ZeroDivisionError)
 
 
 def test_filter_for_reads_the_lookup_stream(server):
     has = "LOOKUP_PERMISSIONSHIP_HAS_PERMISSION"
     server.responder = _lookup({"result": {"resourceObjectId": "d1", "permissionship": has}})
     assert SpiceDBAuthorizer(server.url).filter_for(ANN) == In("doc_id", ["d1"])
-    # One lookup for the user and one for each group, merged.
+    assert [p["subject"]["object"]["objectId"] for _, p, _ in server.requests] == ["ann"]
+    # With group_subjects=True, one lookup for the user and one for each group, merged.
+    server.requests.clear()
+    assert SpiceDBAuthorizer(server.url, group_subjects=True).filter_for(ANN) == In("doc_id", ["d1"])
     assert [p["subject"]["object"]["objectId"] for _, p, _ in server.requests] == ["ann", "eng"]
     assert server.requests[0][1]["optionalLimit"] == 1000
 
@@ -258,8 +270,11 @@ def _relationships_for(docs):
         _api("/v1/relationships/write", {"updates": updates[i : i + 100]})
 
 
-def _authorizer():
-    return SpiceDBAuthorizer(SPICEDB_URL, SPICEDB_TOKEN, consistency={"fullyConsistent": True})
+def _authorizer(**options):
+    # The reference oracle reads groups from the subject, and these schemas exclude nothing, so the
+    # groups are checked as subject sets: memberships are not stored in SpiceDB here.
+    options = {"group_subjects": True, **options}
+    return SpiceDBAuthorizer(SPICEDB_URL, SPICEDB_TOKEN, consistency={"fullyConsistent": True}, **options)
 
 
 @needs_spicedb
@@ -292,3 +307,53 @@ def test_spicedb_passes_the_conformance_kit():
     hits = [Hit(d.id, d.text, 1.0, {**d.metadata, "doc_id": d.id}) for d in docs]
     people = [Subject("alice"), Subject("bob", ["hr"]), Subject("carol", ["eng", "hr"]), Subject("dave")]
     check_authorizer(_authorizer(), people, hits)
+
+
+EXCLUSION = SCHEMA.replace(
+    "    permission view = viewer\n", "    relation banned: user\n    permission view = viewer - banned\n"
+)
+
+
+def _touch(resource_type, resource_id, relation, subject):
+    resource = {"objectType": resource_type, "objectId": resource_id}
+    return {
+        "operation": "OPERATION_TOUCH",
+        "relationship": {"resource": resource, "relation": relation, "subject": subject},
+    }
+
+
+def _user(name):
+    return {"object": {"objectType": "user", "objectId": name}}
+
+
+@needs_spicedb
+def test_a_banned_member_of_a_permitted_group_is_denied_by_default():
+    # view = viewer - banned, and the document is shared with a group mallory belongs to. With the
+    # memberships stored in SpiceDB, it applies the exclusion to mallory, whatever the group may do.
+    assert "viewer - banned" in EXCLUSION
+    eng = {"object": {"objectType": "group", "objectId": "wo-eng"}, "optionalRelation": "member"}
+    _api("/v1/schema/write", {"schema": EXCLUSION})
+    try:
+        _api("/v1/relationships/delete", {"relationshipFilter": {"resourceType": "document"}})
+        updates = [
+            _touch("group", "wo-eng", "member", _user("ann")),
+            _touch("group", "wo-eng", "member", _user("mallory")),
+            _touch("document", "wo-plan", "viewer", eng),
+            _touch("document", "wo-plan", "banned", _user("mallory")),
+        ]
+        _api("/v1/relationships/write", {"updates": updates})
+        hits = [Hit("c1", "t", 1.0, {"doc_id": "wo-plan"})]
+        default = SpiceDBAuthorizer(SPICEDB_URL, SPICEDB_TOKEN, consistency={"fullyConsistent": True})
+        mallory, ann = Subject("mallory", ["wo-eng"]), Subject("ann", ["wo-eng"])
+        assert default.check(ann, hits) == [True] and default.check(mallory, hits) == [False]
+        backend = InMemoryBackend([Document("c1", "launch plan", {"doc_id": "wo-plan"})])
+        for strategy in ("prefilter", "postfilter"):  # LookupResources applies the exclusion too
+            retriever = PermissionedRetriever(backend, default, strategy=strategy)
+            assert retriever.retrieve("plan", mallory).hits == []
+            assert [h.id for h in retriever.retrieve("plan", ann).hits] == ["c1"]
+        # The hazard the documentation warns of: the group, asked about on its own, is not banned.
+        assert _authorizer().check(mallory, hits) == [True]
+    finally:  # the other tests write SCHEMA, which SpiceDB refuses while banned relationships exist
+        _api("/v1/relationships/delete", {"relationshipFilter": {"resourceType": "document"}})
+        _api("/v1/relationships/delete", {"relationshipFilter": {"resourceType": "group"}})
+        _api("/v1/schema/write", {"schema": SCHEMA})

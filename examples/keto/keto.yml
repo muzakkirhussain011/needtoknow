@@ -1,6 +1,7 @@
 # Ory Keto configuration for wardowl's tests and the KetoAuthorizer guide: an in-memory store
 # with the namespaces in namespaces.ts (a Document's `view` relation lists users and the members of
-# groups). Not for production: data lives in memory.
+# groups). Not for production: data lives in memory. `limit.max_batch_check_size` is left at Keto's
+# default of 10 on purpose: the tests check that KetoAuthorizer's defaults work against it.
 dsn: memory
 
 namespaces:

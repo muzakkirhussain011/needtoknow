@@ -183,7 +183,7 @@ class CerbosAuthorizer:
         try:
             roles = list(self.roles(subject) if callable(self.roles) else self.roles)
         except Exception as exc:
-            raise AuthorizationError(f"roles failed: {exc}") from exc
+            raise AuthorizationError("roles failed") from exc
         if not roles or not all(isinstance(r, str) and r for r in roles):
             raise AuthorizationError("a Cerbos principal needs at least one role")
         attributes = dict(subject.attributes)

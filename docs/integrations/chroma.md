@@ -23,6 +23,13 @@ embedding function. Scores are `1 - distance`, so create the collection with cos
 scores between -1 and 1. `add(documents, embeddings=None)` upserts by id and `delete(ids)` removes
 chunks.
 
+Chroma refuses a write of more records than its maximum batch size (about 5,400 for a local
+client), so `add`, `delete` and `set_metadata` send at most `batch_size` records per call. It
+defaults to the client's own maximum (`client.get_max_batch_size()`), or 1,000 when the collection
+does not report one; pass `ChromaBackend(collection, batch_size=500)` to choose. Each write is
+checked whole before its first batch is sent, but the batches are separate calls: one that fails
+part way leaves the batches before it written, so repeat the call.
+
 ## How metadata is stored
 
 wardowl does not use Chroma's array metadata, and the reason is a real leak. In chromadb 1.5.x

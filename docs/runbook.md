@@ -74,11 +74,14 @@ get errors; nothing is exposed.
 
 1. Find which part is failing. From 1.4.0, `RetrievalEvent.cause` (or the span attribute
    `wardowl.error.cause`) names the underlying error: `TimeoutError` for a slow permission
-   service, `ConnectionRefusedError` or another `OSError` for one that cannot be reached, and none
-   for an error status (HTTP 503) or an answer in the wrong shape, which the service's own logs
-   explain.
+   service, `ConnectionRefusedError` or another `OSError` for one that cannot be reached,
+   `CircuitOpenError` for calls an open circuit breaker refused, and none for an error status
+   (HTTP 503) or an answer in the wrong shape, which the service's own logs explain. The error's
+   message is fixed; the text of the underlying exception is in its `__cause__`, in tracebacks
+   your logs record.
 2. Check the circuit breaker: while `CircuitBreaker.is_open`, calls are refused without contacting
-   the service, for `reset_after` seconds, then one probe goes through.
+   the service, for `reset_after` seconds, then one probe goes through. The causes of the failures
+   before it opened say why it opened.
 3. Restore the permission service. Do not work around it with an authorizer that allows on error, by
    removing the authorizer, or with a fallback that grants access: that turns an outage into an
    exposure.

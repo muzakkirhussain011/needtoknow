@@ -2,8 +2,11 @@
 
 import asyncio
 import base64
+import ssl
 import threading
 import time
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -19,9 +22,13 @@ from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError, PyJWKSe
 from wardowl import (  # noqa: E402
     AuthorizationError,
     Document,
+    FunctionAuthorizer,
+    Hit,
     InMemoryBackend,
+    InvalidQuery,
     MetadataACLAuthorizer,
     PermissionedRetriever,
+    Query,
     Subject,
 )
 from wardowl.server import InvalidToken, OIDCAuthenticator, _BodyLimit, create_app  # noqa: E402
@@ -187,6 +194,55 @@ class Failing:
 def test_a_failing_permission_check_returns_nothing_and_no_details():
     response = ask(client(authorizer=Failing()), {"query": "launch"})
     assert response.status_code == 503 and "opa.internal" not in response.text
+
+
+class Dimensioned:
+    """A vector store that knows its vectors' length, as FaissBackend does."""
+
+    supports_filters = False
+
+    def search(self, query, k, filter=None):
+        q = Query.of(query)
+        if q.vector is not None and len(q.vector) != 2:
+            raise InvalidQuery(f"the query vector has {len(q.vector)} dimensions, not 2")
+        return [Hit("all-hands", "the launch date for everyone", 1.0, {"allowed_groups": ["*"]})]
+
+
+def test_a_query_the_service_cannot_search_is_a_422_that_echoes_nothing():
+    words_only = ask(client(), {"vector": [0.1, 0.2]})  # InMemoryBackend matches words: it needs text
+    assert words_only.status_code == 422 and "only a vector" not in words_only.text
+    sized = TestClient(create_app(PermissionedRetriever(Dimensioned(), MetadataACLAuthorizer()), tokens))
+    assert ask(sized, {"query": "launch", "vector": [0.1, 0.2]}).status_code == 200
+    wrong = ask(sized, {"query": "launch", "vector": [0.1, 0.2, 0.3]})
+    assert wrong.status_code == 422 and "dimensions" not in wrong.text
+    capped = PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), max_candidates=3)
+    assert ask(TestClient(create_app(capped, tokens)), {"query": "launch", "k": 4}).status_code == 422
+    assert ask(TestClient(create_app(capped, tokens)), {"query": "launch", "k": 3}).status_code == 200
+
+
+class Misconfigured:
+    """A store whose own error, a ValueError naming its host, is no fault of the request."""
+
+    supports_filters = True
+
+    def search(self, query, k, filter=None):
+        raise ValueError("field 'team.name' cannot be filtered on db.internal")
+
+
+@pytest.mark.parametrize(
+    "retriever",
+    [
+        PermissionedRetriever(Misconfigured(), MetadataACLAuthorizer()),
+        # Pre-filtering with an authorizer that gives no filter: the configuration is wrong.
+        PermissionedRetriever(
+            InMemoryBackend(DOCS), FunctionAuthorizer(lambda s, hits, a: [True] * len(hits)), strategy="prefilter"
+        ),
+    ],
+    ids=["store", "strategy"],
+)
+def test_a_server_fault_is_a_500_not_a_422(retriever):
+    response = ask(TestClient(create_app(retriever, tokens), raise_server_exceptions=False), {"query": "launch"})
+    assert response.status_code == 500 and "db.internal" not in response.text and "prefilter" not in response.text
 
 
 def test_an_authenticator_may_be_async():
@@ -431,6 +487,30 @@ def test_the_key_endpoint_is_asked_with_a_short_timeout_and_no_unbounded_cache()
     authenticate = OIDCAuthenticator(ISSUER, AUDIENCE, "https://login.example.com/jwks.json")
     assert authenticate._client.timeout == 5 and authenticate._client.jwk_set_cache is None
     assert OIDCAuthenticator(ISSUER, AUDIENCE, "https://x.example/jwks", timeout=2)._client.timeout == 2
+
+
+def test_the_keys_are_fetched_with_the_ssl_context_given(monkeypatch):
+    # An identity provider behind a private CA: its trust, not the process-wide SSL_CERT_FILE.
+    tls, used = ssl.create_default_context(), []
+
+    class Opener:
+        def open(self, request, timeout=None):
+            raise urllib.error.URLError("login.internal: certificate verify failed")
+
+    def build_opener(*handlers):
+        used.extend(h._context for h in handlers if isinstance(h, urllib.request.HTTPSHandler))
+        return Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
+    authenticate = OIDCAuthenticator(ISSUER, AUDIENCE, "https://login.internal/jwks.json", ssl_context=tls)
+    with pytest.raises(AuthorizationError) as failure:
+        authenticate(token())
+    assert used == [tls]
+    assert "login.internal" not in str(failure.value) and "login.internal" in str(failure.value.__cause__)
+    default = OIDCAuthenticator(ISSUER, AUDIENCE, "https://login.internal/jwks.json")
+    with pytest.raises(AuthorizationError):
+        default(token())
+    assert used == [tls]  # no context given: urllib's default HTTPS handler and the system's trust store
 
 
 @pytest.mark.parametrize(
