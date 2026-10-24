@@ -155,3 +155,34 @@ jobs:
             opa openfga spicedb cerbos keto keycloak; do
             echo "::group::$c"; docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
           done
+
+  gateway:
+    # The example gateway, brought up with Docker Compose as its README says, and used by its demo
+    # principals. A job of its own: its stack publishes ports the scenarios job already uses.
+    if: ${{ hashFiles('acceptance/s08_gateway.py') != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      RAMPART_DEMO: "1"
+      WARDOWL_GATEWAY_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Bring the stack up
+        working-directory: examples/gateway
+        run: |
+          docker compose --profile local-llm up -d --build postgres opa ollama gateway
+          # A small model stands in for the policy's approved model on a CPU runner.
+          docker compose exec -T ollama ollama pull embeddinggemma
+          docker compose exec -T ollama ollama pull qwen2.5:1.5b
+          docker compose exec -T ollama ollama cp qwen2.5:1.5b gemma4:e2b
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12" }
+      - name: Install the scenario's tools, by hash
+        run: python -m pip install --require-hashes --no-deps -r acceptance/requirements.txt
+      - name: The gateway's users
+        run: python acceptance/s08_gateway.py
+      - name: Stack logs, when the scenario failed
+        if: ${{ failure() }}
+        working-directory: examples/gateway
+        run: docker compose logs --tail 120
