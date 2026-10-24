@@ -1,6 +1,8 @@
-{#- The home-screen icon on every page; structured data for search engines on the front page. -#}
+{#- The home-screen icon on every page; on the front page, search engines' ownership checks and
+    structured data. -#}
 <link rel="apple-touch-icon" href="{{ pathto('_static/brand/apple-touch-icon.png', 1) }}">
 {%- if pagename == root_doc %}
+<meta name="google-site-verification" content="KozTGiaVvIyswMdudx9vwPOwzaXgtPq7QoE1VOm7IzQ">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
