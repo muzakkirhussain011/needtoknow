@@ -1,0 +1,190 @@
+name: Acceptance
+
+# Real-world scenarios: the applications a company would build with wardowl, run against real
+# servers, a real identity provider and real embedding models, and checked against an independent
+# oracle of who may read what (acceptance/enterprise.py). See acceptance/README.md.
+#
+# Weekly and by hand, the published package from PyPI is tested, as users install it. A push to
+# an acceptance/** branch tests that branch's code instead, so a fix is checked before release.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    branches: ["acceptance/**"]
+    paths-ignore: ["acceptance/kaggle/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WARDOWL_ACCEPTANCE_RESULTS: ${{ github.workspace }}/acceptance-results.jsonl
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
+      WARDOWL_PG_URL: postgresql://test:test@localhost:5432/test
+      WARDOWL_REDIS_URL: redis://127.0.0.1:6379/0
+      WARDOWL_ES_URL: http://127.0.0.1:9200
+      WARDOWL_OPENSEARCH_URL: http://127.0.0.1:9201
+      WARDOWL_QDRANT_URL: http://127.0.0.1:6333
+      WARDOWL_MILVUS_URL: http://127.0.0.1:19530
+      WARDOWL_MONGODB_URL: mongodb://127.0.0.1:27017/?directConnection=true
+      WARDOWL_WEAVIATE_URL: http://127.0.0.1:8079
+      WARDOWL_WEAVIATE_GRPC_PORT: "50051"
+      WARDOWL_VESPA_URL: http://127.0.0.1:8090
+      WARDOWL_VESPA_CONFIG_URL: http://127.0.0.1:19071
+      WARDOWL_CASSANDRA_HOST: 127.0.0.1
+      WARDOWL_OPA_URL: http://127.0.0.1:8181
+      WARDOWL_OPENFGA_URL: http://127.0.0.1:8080
+      WARDOWL_SPICEDB_URL: http://127.0.0.1:8443
+      WARDOWL_SPICEDB_TOKEN: acceptance
+      WARDOWL_CERBOS_URL: http://127.0.0.1:3592
+      WARDOWL_KETO_READ_URL: http://127.0.0.1:4466
+      WARDOWL_KETO_WRITE_URL: http://127.0.0.1:4467
+      WARDOWL_KEYCLOAK_URL: http://127.0.0.1:8180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # Every server runs as a named container, so the outage scenarios can stop and start it.
+      - name: Start the stores
+        run: |
+          docker run -d --name postgres -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test \
+            -e POSTGRES_DB=test pgvector/pgvector:pg17
+          docker run -d --name redis -p 6379:6379 redis:8.10.2-alpine
+          docker run -d --name elasticsearch -p 9200:9200 -e discovery.type=single-node \
+            -e xpack.security.enabled=false -e ES_JAVA_OPTS="-Xms512m -Xmx512m" \
+            docker.elastic.co/elasticsearch/elasticsearch:9.5.5
+          docker run -d --name opensearch -p 9201:9200 -e discovery.type=single-node \
+            -e DISABLE_SECURITY_PLUGIN=true -e DISABLE_INSTALL_DEMO_CONFIG=true \
+            -e OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m" opensearchproject/opensearch:3.9.0
+          mkdir -p "$RUNNER_TEMP/milvus"
+          printf '%s\n' 'listen-client-urls: http://0.0.0.0:2379' 'advertise-client-urls: http://0.0.0.0:2379' \
+            'quota-backend-bytes: 4294967296' 'auto-compaction-mode: revision' "auto-compaction-retention: '1000'" \
+            > "$RUNNER_TEMP/milvus/embedEtcd.yaml"
+          touch "$RUNNER_TEMP/milvus/user.yaml"
+          docker run -d --name milvus --security-opt seccomp:unconfined -p 19530:19530 -p 9091:9091 \
+            -e ETCD_USE_EMBED=true -e ETCD_DATA_DIR=/var/lib/milvus/etcd \
+            -e ETCD_CONFIG_PATH=/milvus/configs/embedEtcd.yaml -e COMMON_STORAGETYPE=local -e DEPLOY_MODE=STANDALONE \
+            -v "$RUNNER_TEMP/milvus/embedEtcd.yaml:/milvus/configs/embedEtcd.yaml" \
+            -v "$RUNNER_TEMP/milvus/user.yaml:/milvus/configs/user.yaml" \
+            milvusdb/milvus:v3.0.2 milvus run standalone
+          docker run -d --name mongodb -p 27017:27017 mongodb/mongodb-atlas-local:8.0.30
+          docker run -d --name weaviate -p 8079:8080 -p 50051:50051 -e AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
+            -e PERSISTENCE_DATA_PATH=/var/lib/weaviate -e DEFAULT_VECTORIZER_MODULE=none -e CLUSTER_HOSTNAME=node1 \
+            cr.weaviate.io/semitechnologies/weaviate:1.39.12
+          docker run -d --name qdrant -p 6333:6333 qdrant/qdrant:v1.19.2
+          docker run -d --name cassandra -p 9042:9042 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=200M cassandra:5.0.9
+          docker run -d --name vespa --hostname vespa-container -p 8090:8080 -p 19071:19071 vespaengine/vespa:8.763.13
+      - name: Start the permission services and the identity provider
+        run: |
+          docker run -d --name opa -p 8181:8181 openpolicyagent/opa:1.21.2-static run --server --addr=0.0.0.0:8181
+          docker run -d --name openfga -p 8080:8080 openfga/openfga:v1.22.0 run
+          docker run -d --name spicedb -p 8443:8443 authzed/spicedb:v1.56.2 serve \
+            --grpc-preshared-key "$WARDOWL_SPICEDB_TOKEN" --http-enabled --datastore-engine memory
+          # Cerbos and Keto read their policies at startup, from the scenario's files.
+          if [ -d acceptance/policies/cerbos ]; then
+            docker run -d --name cerbos -p 3592:3592 -v "$PWD/acceptance/policies/cerbos:/policies:ro" \
+              ghcr.io/cerbos/cerbos:0.56.0
+          fi
+          if [ -f acceptance/policies/keto/keto.yml ]; then
+            docker run -d --name keto -p 4466:4466 -p 4467:4467 -v "$PWD/acceptance/policies/keto:/config:ro" \
+              oryd/keto:v26.2.0 serve -c /config/keto.yml
+          fi
+          docker run -d --name keycloak -p 8180:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.8.0 start-dev
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12" }
+      - name: Install wardowl as a user would, by hash
+        run: |
+          python -m pip install --require-hashes --no-deps -r acceptance/requirements.txt
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            # An acceptance branch tests its own code: the same dependencies, this checkout's wardowl,
+            # built into a wheel and installed from it, as a release would be.
+            python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/dist" .
+            python -m pip install --no-deps --force-reinstall "$RUNNER_TEMP"/dist/wardowl-*.whl
+          fi
+          python -c "import wardowl; print('wardowl', wardowl.__version__)"
+      - name: Wait until every server answers
+        run: |
+          wait_for() { for i in $(seq 1 "$2"); do eval "$1" > /dev/null 2>&1 && return 0; sleep 2; done; echo "not ready: $1"; return 1; }
+          wait_for "docker exec postgres pg_isready -U test" 60
+          wait_for "docker exec redis redis-cli ping" 60
+          wait_for "curl -sf $WARDOWL_ES_URL/_cluster/health?wait_for_status=yellow" 90
+          wait_for "curl -sf $WARDOWL_OPENSEARCH_URL/_cluster/health?wait_for_status=yellow" 90
+          wait_for "curl -sf http://127.0.0.1:9091/healthz" 120
+          wait_for "docker exec mongodb mongosh --quiet --eval 'db.runCommand({ping: 1})'" 120
+          wait_for "curl -sf $WARDOWL_WEAVIATE_URL/v1/.well-known/ready" 60
+          wait_for "curl -sf $WARDOWL_QDRANT_URL/readyz" 60
+          wait_for "docker exec cassandra cqlsh -e 'describe keyspaces'" 120
+          wait_for "curl -sf $WARDOWL_VESPA_CONFIG_URL/state/v1/health | grep -q '\"up\"'" 90
+          wait_for "curl -sf $WARDOWL_OPA_URL/health" 60
+          wait_for "curl -sf $WARDOWL_OPENFGA_URL/healthz" 60
+          wait_for "curl -s -o /dev/null $WARDOWL_SPICEDB_URL/" 60
+          if [ -d acceptance/policies/cerbos ]; then wait_for "curl -sf $WARDOWL_CERBOS_URL/_cerbos/health" 60; fi
+          if [ -f acceptance/policies/keto/keto.yml ]; then wait_for "curl -sf $WARDOWL_KETO_READ_URL/health/ready" 60; fi
+          wait_for "curl -sf $WARDOWL_KEYCLOAK_URL/realms/master" 120
+      - name: Every vector store
+        if: ${{ !cancelled() && hashFiles('acceptance/s01_stores.py') != '' }}
+        run: python acceptance/s01_stores.py
+      - name: Permission systems
+        if: ${{ !cancelled() && hashFiles('acceptance/s02_permission_systems.py') != '' }}
+        run: python acceptance/s02_permission_systems.py
+      - name: Frameworks and agents
+        if: ${{ !cancelled() && hashFiles('acceptance/s03_frameworks_and_agents.py') != '' }}
+        run: python acceptance/s03_frameworks_and_agents.py
+      - name: HTTP service with Keycloak
+        if: ${{ !cancelled() && hashFiles('acceptance/s04_http_service.py') != '' }}
+        run: python acceptance/s04_http_service.py
+      - name: Day-2 operations
+        if: ${{ !cancelled() && hashFiles('acceptance/s05_operations.py') != '' }}
+        run: python acceptance/s05_operations.py
+      - name: Content controls
+        if: ${{ !cancelled() && hashFiles('acceptance/s06_content_controls.py') != '' }}
+        run: python acceptance/s06_content_controls.py
+      - name: The team's own store and policy
+        if: ${{ !cancelled() && hashFiles('acceptance/s07_extending.py') != '' }}
+        run: python acceptance/s07_extending.py
+      - name: Server logs, when a scenario failed
+        if: ${{ failure() }}
+        run: |
+          for c in postgres redis elasticsearch opensearch milvus mongodb weaviate qdrant cassandra vespa \
+            opa openfga spicedb cerbos keto keycloak; do
+            echo "::group::$c"; docker logs --tail 60 "$c" 2>&1 || true; echo "::endgroup::"
+          done
+
+  gateway:
+    # The example gateway, brought up with Docker Compose as its README says, and used by its demo
+    # principals. A job of its own: its stack publishes ports the scenarios job already uses.
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      RAMPART_DEMO: "1"
+      WARDOWL_GATEWAY_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Bring the stack up
+        working-directory: examples/gateway
+        run: |
+          docker compose --profile local-llm up -d --build postgres opa ollama gateway
+          # A small model stands in for the policy's approved model on a CPU runner.
+          docker compose exec -T ollama ollama pull embeddinggemma
+          docker compose exec -T ollama ollama pull qwen2.5:1.5b
+          docker compose exec -T ollama ollama cp qwen2.5:1.5b gemma4:e2b
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12" }
+      - name: Install the scenario's tools, by hash
+        run: python -m pip install --require-hashes --no-deps -r acceptance/requirements.txt
+      - name: The gateway's users
+        run: python acceptance/s08_gateway.py
+      - name: Stack logs, when the scenario failed
+        if: ${{ failure() }}
+        working-directory: examples/gateway
+        run: docker compose logs --tail 120

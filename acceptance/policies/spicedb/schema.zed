@@ -1,0 +1,21 @@
+// The company's reading rule as a SpiceDB schema, for wardowl's SpiceDBAuthorizer.
+//
+// Group memberships live in SpiceDB, under ids that name the tenant ("northwind/hr"), and a
+// document is viewable only by a reader who is also a member of the document's tenant. The
+// scenario replaces the "acme" prefix with one unique to the run before writing the schema.
+
+definition acme/user {}
+
+definition acme/tenant {
+	relation member: acme/user
+}
+
+definition acme/group {
+	relation member: acme/user
+}
+
+definition acme/document {
+	relation tenant: acme/tenant
+	relation reader: acme/user | acme/group#member
+	permission view = reader & tenant->member
+}

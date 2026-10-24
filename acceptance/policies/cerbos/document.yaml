@@ -1,0 +1,29 @@
+# The company's reading rule as a Cerbos resource policy, for wardowl's CerbosAuthorizer.
+#
+# wardowl sends each chunk as a `document` whose attributes are the chunk's metadata (`tenant`,
+# `allowed_users`, `allowed_groups`), and the subject as the principal, with its groups and its
+# tenant as attributes. Every condition is one wardowl translates into a filter, so the vector store
+# can pre-filter from Cerbos's query plan.
+#
+# Cerbos reads this directory at startup (mounted read-only at /policies):
+#   docker run -d --name cerbos -p 3592:3592 -v "$PWD/acceptance/policies/cerbos:/policies:ro" \
+#     ghcr.io/cerbos/cerbos:0.56.0
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: default
+  resource: document
+  rules:
+    - actions: ["read"]
+      effect: EFFECT_ALLOW
+      roles: ["*"]
+      condition:
+        match:
+          all:
+            of:
+              # Never across tenants.
+              - expr: request.resource.attr.tenant == request.principal.attr.tenant
+              # Shared with the reader by name, or with one of the reader's groups.
+              - any:
+                  of:
+                    - expr: request.principal.id in request.resource.attr.allowed_users
+                    - expr: hasIntersection(request.resource.attr.allowed_groups, request.principal.attr.groups)

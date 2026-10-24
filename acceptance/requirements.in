@@ -1,0 +1,13 @@
+# What a team running wardowl in production would install, plus the tools the scenarios need.
+# Compiled with hashes into requirements.txt:
+#   uv pip compile acceptance/requirements.in --generate-hashes --python-version 3.12 \
+#     --python-platform x86_64-manylinux_2_28 -o acceptance/requirements.txt
+wardowl[pgvector,chroma,elasticsearch,opensearch,qdrant,milvus,mongodb,weaviate,redis,lancedb,langchain,llamaindex,haystack,mcp,otel,cedar,faiss,casbin,vespa,pinecone,cassandra,server]
+fastembed
+opentelemetry-sdk
+uvicorn
+httpx
+elasticsearch[async]
+opensearch-py[async]
+# The build backend, to install this checkout without fetching unpinned build tools.
+hatchling

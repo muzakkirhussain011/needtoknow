@@ -1,0 +1,21 @@
+# Ory Keto for the permission-systems scenario (acceptance/s02_permission_systems.py): an in-memory
+# store with the namespaces in namespaces.ts. Everything else is Keto's default, including
+# limit.max_batch_check_size (10 tuples per batch check). Not for production: data lives in memory.
+#
+#   docker run -d --name keto -p 4466:4466 -p 4467:4467 -v "$PWD/acceptance/policies/keto:/config:ro" \
+#     oryd/keto:v26.2.0 serve -c /config/keto.yml
+dsn: memory
+
+namespaces:
+  location: file:///config/namespaces.ts
+
+serve:
+  read:
+    host: 0.0.0.0
+    port: 4466
+  write:
+    host: 0.0.0.0
+    port: 4467
+
+log:
+  level: warn
