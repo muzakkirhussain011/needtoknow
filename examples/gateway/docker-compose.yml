@@ -5,7 +5,7 @@
 #        -d '{"question": "How many days of annual leave do I get?"}'
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.7-pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
     environment:
       POSTGRES_USER: rampart
       POSTGRES_PASSWORD: rampart-dev-only
@@ -17,7 +17,7 @@ services:
       retries: 20
 
   opa:
-    image: openpolicyagent/opa:1.21.2-static
+    image: openpolicyagent/opa:1.21.2-static@sha256:0843d2adce51655422e8b95a803629ab9f424803c4bd27876e7f44cce9a2b84d
     command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-level=error", "--ignore=*_test.rego", "/policies"]
     volumes: ["./policies:/policies:ro"]
 

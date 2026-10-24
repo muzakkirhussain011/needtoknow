@@ -11,4 +11,4 @@
   phone number starts only where a number starts, so digits glued to a preceding digit or `+` are
   no longer read as one, and the rule's address starts only where a run of address characters
   starts, with at most 64 characters before the `@` and 63 in the domain label. Compose pins
-  `ollama/ollama` to 0.40.6 and its multi-arch index digest instead of `latest`.
+  every image by digest (`ollama/ollama` was `latest`), and Dependabot keeps those pins current.

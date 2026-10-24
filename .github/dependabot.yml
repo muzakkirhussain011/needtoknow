@@ -19,6 +19,11 @@ updates:
     directory: /examples/gateway
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+  # The images Compose runs next to the gateway, pinned by digest in docker-compose.yml.
+  - package-ecosystem: docker-compose
+    directory: /examples/gateway
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   - package-ecosystem: docker
     directory: /.clusterfuzzlite
     schedule: { interval: weekly }
