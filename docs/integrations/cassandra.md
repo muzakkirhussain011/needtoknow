@@ -31,6 +31,9 @@ AND becomes one ANN query whose `WHERE` requires its terms with `wardowl_terms C
 queries run concurrently and the best `k` hits of their union are returned. A subject in the groups
 `eng` and `sales` costs two ANN queries.
 
+The vector index is approximate, so a search can now and then return fewer than `k` hits when more
+match. The filter is exact: no hit is ever a chunk the filter excludes.
+
 `max_queries` (256 by default) bounds how many ANN queries one search sends; ANDs that another AND
 implies are dropped first.
 

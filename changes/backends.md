@@ -38,3 +38,6 @@
   default), that the search can then return fewer than `k` hits, or none, though more chunks match,
   with nothing in the result saying so, and how to avoid it: raise `max_queries`, send fewer groups,
   or put a term every match needs, such as a tenant, in the filter.
+- The Cassandra page says the vector index is approximate, so a search can now and then return
+  fewer than `k` hits when more match, and the conformance tests check Cassandra as an approximate
+  index. The filter stays exact.
