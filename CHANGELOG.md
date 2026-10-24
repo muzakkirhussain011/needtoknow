@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-24
+
+The wardowl logo arrives, on PyPI, in the README and in 3D on the documentation's front page, and
+the build tools in the lock file move past seven advisories.
+
 ### Documentation
 
 - The README, PyPI page and documentation carry the wardowl logo, a midnight and gold owl guarding a
@@ -13,6 +18,15 @@ All notable changes are recorded here. The format follows
   watches, and every ten seconds the redaction bar on its document lifts for a grant or stays for a
   denial. The model loads after the page, from a 1.5 MB file, and the still image stays for reduced
   motion, saved data or browsers without WebGL.
+- The security policy, the upgrade guide and the changelog describe needtoknow as it now is on
+  PyPI: archived, with a last release that only installs wardowl.
+
+### Security
+
+- The lock file moves filelock to 4.2.4 and setuptools to 84.2.1, past GHSA-2g95-wg33-c5x2,
+  GHSA-567q-5qvw-pf92, GHSA-9vhv-jxww-xfm5, GHSA-crv4-6mhj-j5jh, GHSA-jqc4-5cvw-7w85,
+  GHSA-v4x8-3wr5-3wq8 and GHSA-xmj3-9gf7-h52w. Both are build and test tools; the package does not
+  depend on them.
 
 ## [2.0.0] - 2026-10-24
 
@@ -30,7 +44,8 @@ release because several of those fixes change behaviour that 1.x code may rely o
   variables (`NEEDTOKNOW_*` is now `WARDOWL_*`), the default cache namespace and metric names, and the
   field names the backends store (`needtoknow_terms`, `needtoknow_id` and `needtoknow_metadata` are
   now `wardowl_terms`, `wardowl_id` and `wardowl_metadata`), so collections written by needtoknow
-  must be indexed again. needtoknow 1.6.0 remains on PyPI and gets no further releases.
+  must be indexed again. needtoknow is archived on PyPI; its last release, needtoknow 2.0.0,
+  has no code and only installs wardowl.
 
 - Shared-cache keys changed, so entries written by an earlier version are not read after an
   upgrade, and during a rolling upgrade an `invalidate()` made by one version does not clear the
@@ -1056,7 +1071,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `wardowl`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.4.0...v1.5.0

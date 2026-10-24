@@ -63,5 +63,6 @@ confuse, such as `"1"` next to `1`, so it can find problems the 1.x kit missed.
 
 ## needtoknow on PyPI
 
-needtoknow 1.6.0 stays on PyPI so existing installs keep working, but it gets no further releases,
-security fixes included. The fixes are in wardowl 2.0.0.
+needtoknow is archived on PyPI. Its last release, 2.0.0, has no code: it installs wardowl, and
+`import needtoknow` raises an error that points here. A requirement below 2.0 still installs
+needtoknow 1.6.0, which gets no security fixes; the fixes are in wardowl 2.0.0.
