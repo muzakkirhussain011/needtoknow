@@ -94,9 +94,10 @@ provider vouches for.
 
 - Never read the subject from the request body or from query parameters the client controls.
 - Never let a language model choose it. In an agent, bind the subject when the tool is created for
-  the session (for example `WardowlRetriever(...).for_subject(subject)` in LangChain, or
-  `BoundWardowlRetriever` in Haystack, whose subject comes from a function); do not expose it as a
-  tool argument the model fills in.
+  the session (for example `WardowlRetriever(...).for_subject(subject)` in LangChain), or give it
+  to the tool from the application's side (in Haystack, from the agent's state with
+  `inputs_from_state`, or with `BoundWardowlRetriever`, whose subject comes from a function); do
+  not expose it as a tool argument the model fills in.
 - Group memberships sent as OpenFGA contextual tuples are trusted as given, so they too must come
   from your identity provider, not from the client.
 

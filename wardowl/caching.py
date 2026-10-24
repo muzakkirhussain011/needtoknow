@@ -386,7 +386,8 @@ class CachingAuthorizer:
             expires, payload = float(entry["expires"]), entry["value"]
             if entry["epoch"] != epoch:
                 return _MISS, 0.0  # written before an invalidate(), perhaps by a call still in flight
-        except (ValueError, TypeError, KeyError, RecursionError):  # nested too deep to decode: a miss
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            # OverflowError: an integer expiry too large for a float. RecursionError: nested too deep to decode.
             return _MISS, 0.0
         if not math.isfinite(expires):  # JSON can carry NaN and Infinity, and NaN never compares as expired
             return _MISS, 0.0

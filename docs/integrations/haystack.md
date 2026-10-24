@@ -24,16 +24,49 @@ result = pipeline.run({"retriever": {"query": question, "subject": subject}})
 ## The subject is a run input
 
 One pipeline serves every user: the application passes the authenticated user as `subject` on
-each run, and the component refuses to run without a wardowl `Subject`. Build it from your
-session, the user id and groups your identity provider vouches for, never from the request body or
-from a model's output ([security model](../security.md#the-subject-must-come-from-authentication)).
+each run, as a wardowl `Subject` or a function that returns one, and the component refuses to run
+with anything else. Build it from your session, the user id and groups your identity provider
+vouches for, never from the request body or from a model's output
+([security model](../security.md#the-subject-must-come-from-authentication)).
 
-## In an agent: `BoundWardowlRetriever`
+The `subject` input accepts any type, so that a value a model sends for it stays plain JSON (see
+below). A component output typed `Subject` connects to it. Name the sockets when you connect to the
+component, as in `pipeline.connect("embedder.embedding", "retriever.query_embedding")`: a
+connection by component name alone is ambiguous.
 
-An agent's model fills in the inputs of the tools it calls, and `ComponentTool` offers it every
-input of the component, `subject` included: with `WardowlRetriever` as a tool, a prompt could
-search as anyone. Agents, and any pipeline whose inputs a model sets, must use
-`BoundWardowlRetriever`, which takes the subject from a function and has no `subject` input:
+## In an agent
+
+An agent's model fills in the inputs of the tools it calls, so it must never be able to fill in
+`subject`. `ComponentTool` leaves `WardowlRetriever`'s `subject` out of the tool's parameters,
+because the input's type includes a function. Haystack still passes on any argument a model sends,
+even one the tool does not offer, and in an agent a model's value wins over the state's. Such a
+value reaches the component as the JSON it is, never as a `Subject`, so the call fails with nothing
+retrieved.
+
+Give the tool the subject from the agent's state:
+
+```python
+from haystack.components.agents import Agent
+from haystack.tools import ComponentTool
+
+from wardowl import Subject
+from wardowl.haystack import WardowlRetriever
+
+search = ComponentTool(
+    component=WardowlRetriever(PermissionedRetriever(backend, authorizer)),
+    name="search_documents",
+    description="Search the company documents the current user may read.",
+    inputs_from_state={"subject": "subject"},
+)
+agent = Agent(chat_generator=chat_generator, tools=[search], state_schema={"subject": {"type": Subject}})
+
+result = agent.run(messages=messages, subject=subject)  # the authenticated user, from your session
+```
+
+### `BoundWardowlRetriever`
+
+`BoundWardowlRetriever` takes the subject from a function instead and has no `subject` input at
+all, for when your web layer sets the user in a contextvar for each request:
 
 ```python
 import contextvars
@@ -61,7 +94,7 @@ the run with nothing returned.
 | | Name | Meaning |
 |---|---|---|
 | Input | `query` | The question to search for |
-| Input | `subject` | The authenticated user (`wardowl.Subject`); `WardowlRetriever` only |
+| Input | `subject` | The authenticated user: a `wardowl.Subject`, or a function returning one; `WardowlRetriever` only |
 | Input | `top_k` | Optional; overrides the component's `top_k` for this run |
 | Input | `query_embedding` | Optional; a vector to search with instead of embedding `query` (connect a text embedder's `embedding`). `query` may then be empty. See [Your own vectors](../vectors.md) |
 | Output | `documents` | Haystack `Document`s: the chunk id, text and score, best first, with the metadata keys named in `metadata_fields` |

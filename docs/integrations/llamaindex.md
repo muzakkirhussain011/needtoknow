@@ -43,6 +43,12 @@ It post-filters, so it can return fewer nodes than were retrieved; `WardowlRetri
 pre-filtering backend does not have that problem. Like the retriever, it fails closed: an
 authorizer error, a missing decision or a non-boolean decision raises `AuthorizationError`.
 
+The authorizer sees each node's full metadata, but the nodes the postprocessor keeps carry only the
+metadata named in `metadata_fields`, none by default, in their relationships too:
+`PermissionNodePostprocessor(authorizer=authorizer, subject=subject, metadata_fields=["title"])`.
+LlamaIndex puts a node's metadata into the prompt by default, so permission fields would otherwise
+reach the model and traces. The kept nodes are copies; the nodes passed in are not changed.
+
 ## Any LlamaIndex index as a backend
 
 ```python

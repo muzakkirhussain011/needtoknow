@@ -225,6 +225,10 @@ class PermissionedRetriever:
             raise ValueError("rerank_depth must be positive")
         if redactor is not None and not (hasattr(redactor, "redact") or callable(redactor)):
             raise TypeError("redactor must have a redact method or be a function")
+        key: Any = audit_key
+        if key is not None and not isinstance(key, (bytes, bytearray)):
+            # hmac needs bytes: a string would fail inside every event, and observers would hear nothing.
+            raise TypeError(f"audit_key must be bytes, such as secrets.token_bytes(32), not {type(key).__name__}")
         if audit_key is not None and len(audit_key) < 16:
             # As for RedisCache's signing_key: a short key makes the fingerprints of short queries guessable.
             raise ValueError("audit_key should be at least 16 random bytes")

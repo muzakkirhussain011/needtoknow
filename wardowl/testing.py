@@ -281,6 +281,27 @@ def _compare_asearch(
         )
 
 
+def _compare_arefusal(
+    backend: SearchBackend, example: _Example, query: str | Query, k: int, f: Filter, **details: Any
+) -> None:
+    """Check that `asearch`, if the backend has one, refuses `f` with `ValueError`, as `search` did."""
+    asearch = getattr(backend, "asearch", None)
+    if asearch is None:
+        return
+    try:
+        async_hits = asyncio.run(asearch(query, k, f))
+    except ValueError:
+        return
+    raise example.failure(
+        "asearch and search disagree",
+        ["search refused the filter with ValueError, but asearch did not"],
+        **details,
+        filter=_json(filter_to_dict(f)),
+        k=k,
+        asearch=[h.id for h in async_hits],
+    )
+
+
 def _names_odd_field(f: Filter) -> bool:
     if isinstance(f, In):
         return f.field in _ODD_FIELDS
@@ -319,7 +340,7 @@ def check_backend(
       selects, and min(k, matching) of them, for `filters_per_example` random nested filters;
     * `asearch`, if the backend has one, returns the same hits as `search` for every one of these
       searches, with and without a filter: the same ids in the same order, with the same text,
-      metadata and scores;
+      metadata and scores, and refuses with `ValueError` every filter that `search` refuses;
     * retrieval through `PermissionedRetriever` with `MetadataACLAuthorizer`, through `retrieve`
       and `aretrieve` alike, never returns a document the subject may not read, reports no
       violations, and returns as many readable documents as were asked for (with `"prefilter"`
@@ -330,7 +351,8 @@ def check_backend(
 
     The data holds the values stores tend to confuse: 1 and "1", "a" and "A", one letter composed and
     decomposed, and field names with a dot or letters outside ASCII. A backend may refuse a filter on
-    such a field name by raising `ValueError`, which returns nothing; it may not return wrong hits.
+    such a field name by raising `ValueError`, which returns nothing, from `search` and `asearch`
+    alike; it may not return wrong hits.
 
     `exact=False` suits approximate indexes, which may miss matching documents: results must
     still never include a document that does not match, but may contain fewer than expected.
@@ -364,6 +386,7 @@ def check_backend(
                 k = everything if rng.random() < 0.5 else rng.randint(1, everything)
                 found = _filtered(backend, query, k, f)
                 if found is None:
+                    _compare_arefusal(backend, example, query, k, f)
                     continue
                 problems = _problems(found, k, expected, by_id, exact)
                 if problems:
@@ -413,6 +436,7 @@ def _check_set_metadata(
         expected = {d.id for d in updated if matches(f, d.metadata)}
         found = _filtered(backend, query, len(updated), f)
         if found is None:
+            _compare_arefusal(backend, example, query, len(updated), f, **details)
             continue
         problems = _problems(found, len(updated), expected, by_id, exact)
         if problems:

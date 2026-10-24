@@ -285,6 +285,10 @@ def test_an_expiry_that_is_not_a_finite_number_is_a_miss(expires):
         b'{"expires": "soon", "epoch": [null, null], "value": true}',
         b'{"expires": 1e12, "epoch": [null, null], "value": "yes"}',
         b'{"expires": 1e12, "value": true}',  # no epoch: written by an older version, or planted
+        # An integer too large for a float: float() raises OverflowError, which used to escape the read.
+        pytest.param(
+            b'{"expires": 1' + b"0" * 400 + b', "epoch": [null, null], "value": true}', id="expires-too-large"
+        ),
         # Nested too deep for the JSON decoder. A short id: pytest puts the test id in an environment
         # variable, and Windows refuses one longer than 32767 characters.
         pytest.param(b"[" * 100_000 + b"]" * 100_000, id="nested-too-deep"),
