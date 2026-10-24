@@ -11,7 +11,7 @@
   "Pinned-Dependencies": 10,
   "SAST": 10,
   "Security-Policy": 10,
-  "Signed-Releases": 8,
+  "Signed-Releases": 10,
   "Token-Permissions": 10,
   "Vulnerabilities": 10
 }
