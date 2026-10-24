@@ -48,6 +48,26 @@ matches every chunk.
 Scores are cosine similarities (`cos(distance(field, embedding))` with the angular metric), or BM25
 scores in keyword mode.
 
+## Schemas, namespaces and tenants
+
+`schema=` (`wardowl` by default) is the schema the backend writes to and searches;
+`schema(dim, name=...)` writes a schema of that name. `namespace=` (`wardowl` by default) is only
+the namespace part of each document's path, `/document/v1/<namespace>/<schema>/docid/<id>`, which
+`add`, `set_metadata` and `delete` use. A search selects from the whole schema
+(`select * from <schema>`), whatever its namespace. Two backends with different namespaces on one
+schema therefore search each other's chunks, and both report a chunk by the id it was added with,
+so an id written in both is returned twice under one name.
+
+To keep tenants apart in one schema, filter by tenant: put the tenant on every chunk and use
+`AllOf(TenantAuthorizer(), ...)` ([Combining](../combining.md#tenant-isolation)). Or give each tenant
+its own schema, listed under the content cluster's `<documents>` in `services.xml` (as
+`<document type="acme" mode="index"/>`):
+
+```python
+Path("app/schemas/acme.sd").write_text(schema(768, name="acme"))  # then deploy the package
+acme = VespaBackend("http://localhost:8080", embed, schema="acme")
+```
+
 ## Production notes
 
 - **Vespa Cloud and TLS:** pass `client=httpx.Client(cert=..., headers=...)` for client certificates,

@@ -54,6 +54,15 @@ span = {"start": 11, "end": 38, "allowed_groups": ["hr"], "sha256": span_digest(
 When you change a chunk's permissions with `set_metadata`, which replaces the whole metadata, pass
 its spans again along with them (see [Operations](operations.md#changing-a-documents-permissions)).
 
+**Keep the spans away from callers.** A span's `sha256` is a plain SHA-256 of the hidden text, and
+its offsets give that text's length. For a short value, such as a salary, a date or an account
+number, anyone who sees the span can find the hidden text by hashing guesses until one matches.
+`SpanRedactor` removes its field from the metadata it returns, so with it in place the spans never
+leave the retriever. Every other setup must remove them too: with `PatternRedactor` alone, or a
+redactor of your own, the `redactions` field stays in each hit's metadata, and `metadata_fields` in
+the framework integrations and the HTTP service (or `metadata` in the MCP tool) passes it on when it
+names the field. Leave the field out of anything you return.
+
 ## Patterns
 
 `PatternRedactor` hides text matching regular expressions, unless the subject belongs to a group

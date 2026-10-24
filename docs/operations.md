@@ -64,7 +64,8 @@ import redis
 from wardowl import CachingAuthorizer
 from wardowl.caching import RedisCache
 
-shared = RedisCache(redis.Redis.from_url(REDIS_URL), signing_key=CACHE_SIGNING_KEY)
+client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=0.5, socket_timeout=0.5)
+shared = RedisCache(client, signing_key=CACHE_SIGNING_KEY)
 authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared, namespace="openfga-docs")
 ```
 
@@ -99,7 +100,11 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared, namespace="openfg
   replica of one version does not clear the other version's entries: call `invalidate()` once the
   upgrade is done, or allow for `ttl`.
 - **A failing or slow Redis never decides anything.** A read or write that fails is logged and
-  treated as a miss: the permission service is asked.
+  treated as a miss: the permission service is asked. A slow Redis only fails once the client gives
+  up, and redis-py waits without limit by default, so a Redis that hangs would hold up every
+  retrieval. Set `socket_connect_timeout` and `socket_timeout` on the client, as above: a hung
+  Redis then costs each retrieval at most that long before the permission service is asked, and
+  `invalidate()` raises instead of waiting.
 - **Nothing identifying in key names.** Keys are digests of the subject and the chunk, so Redis
   key listings show neither user ids nor document metadata.
 - **Sign the values.** Without `signing_key`, anyone who can write to that Redis could plant a
@@ -142,8 +147,8 @@ after `ttl`.
 
 ## Resilience of remote permission services
 
-`OPAAuthorizer` and `OpenFGAAuthorizer` share an HTTP client built for permission checks on every
-retrieval:
+The HTTP authorizers, `OPAAuthorizer`, `OpenFGAAuthorizer`, `SpiceDBAuthorizer`, `CerbosAuthorizer`
+and `KetoAuthorizer`, share an HTTP client built for permission checks on every retrieval:
 
 - **Connections are reused**, one per thread, so a busy service does not open a TCP and TLS
   connection per check. A connection the server closed while idle is replaced transparently.

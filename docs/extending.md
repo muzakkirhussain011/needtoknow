@@ -100,6 +100,27 @@ two disagree, pre-filtered and post-filtered results differ. It also checks that
 `CachingAuthorizer` before each call, so a cached answer cannot hide what the authorizer behind it
 does.
 
+`check_authorizer` shows that the authorizer is consistent, not that its policy is right: one whose
+`check` and `filter_for` agree on letting everyone read everything passes. Nor does it check that a
+`scope_for` covers every readable chunk; a scope too narrow hides chunks the subject may read
+([Security model](security.md#what-it-relies-on)). Test the policy itself as well, with subjects and
+chunks whose answers you know:
+
+```python
+from wardowl import AllOf, Hit, MetadataACLAuthorizer, Subject, TenantAuthorizer
+
+authorizer = AllOf(TenantAuthorizer(), MetadataACLAuthorizer())
+
+
+def test_policy_known_cases():
+    salaries = Hit("salaries-1", "Salary bands", 1.0, {"tenant": "acme", "allowed_groups": ["hr"]})
+    assert authorizer.check(Subject("ann", ["hr"], {"tenant": "acme"}), [salaries]) == [True]
+    assert authorizer.check(Subject("bob", ["eng"], {"tenant": "acme"}), [salaries]) == [False]
+    assert authorizer.check(Subject("eve", ["hr"], {"tenant": "globex"}), [salaries]) == [False]
+```
+
+Retrieving through a `PermissionedRetriever` in the same test also covers the backend's filter.
+
 A failure raises `ConformanceError` with the seed, the example number, the documents, the filter
 and what came back. For shrinking to a minimal failing example, the same properties can be written
 with [Hypothesis](https://hypothesis.readthedocs.io), as wardowl's own

@@ -54,6 +54,29 @@ search (efficient k-NN filtering). `create_index` makes a `knn_vector` field wit
 and HNSW; pass `parameters={"m": 16, "ef_construction": 128}` to tune the graph. For a native
 `aretrieve`, pass `async_client=AsyncOpenSearch(...)` (install `opensearch-py[async]`).
 
+## Approximate search and recall
+
+Both backends always run an approximate kNN search (HNSW, or a quantized form of it), and neither
+has a switch for exact search. The engines may search exactly on their own when a filter admits few
+documents, but the answer does not say which ran. A result can therefore miss some of the nearest
+chunks the user may read and still say `complete=True`
+([Concepts](../concepts.md#what-a-result-tells-you)). To find more of them:
+
+- **Elasticsearch:** raise `num_candidates` (100 by default), the neighbours each shard considers;
+  the backend sends at least the `k` the retriever asks for. Keep full-precision vectors with
+  `create_index(..., index_options={"type": "hnsw"})`, or, on Elasticsearch 8.13 and later, use
+  `{"type": "flat"}`, which compares the query with every vector the filter admits: exact, and
+  slower as the index grows.
+- **OpenSearch:** the query takes no candidate count. With the Lucene engine (the default), HNSW
+  examines as many neighbours as the query's `k`, which is the number of chunks the retriever asks
+  for: `k`, more when post-filtering, or a [reranker's](../reranking.md) depth. With the Faiss
+  engine, the index setting `index.knn.algo_param.ef_search` (100 by default) sets it, as in
+  `create_index(..., engine="faiss", settings={"index": {"knn.algo_param.ef_search": 256}})`; it
+  can also be changed on a live index.
+
+The [benchmarks](../benchmarks.md#every-store-on-the-same-million-chunks) measure what these
+settings cost and buy on a million chunks.
+
 ## How permissions are indexed
 
 Keyword fields in both engines hold strings, so a `terms` query for the integer `1` also matches the

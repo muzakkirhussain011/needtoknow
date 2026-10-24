@@ -64,6 +64,16 @@ Chroma's `$in` lists hold a single type) and an `$eq: true` test on each value's
 skips the query entirely; `filter_to_where` raises `NothingMatches` for it rather than return `{}`,
 which Chroma reads as no filter at all.
 
+## Exact or approximate
+
+Chroma searches an HNSW index, and the backend has no switch for exact search, so treat a filtered
+search as approximate, like an unfiltered one. In the [benchmarks](../benchmarks.md) (local Chroma
+1.5.9, default settings), pre-filtered searches found 0.996 to 1.000 of the true top 10 for users
+who may read 0.06% to 20% of the collection, and 0.990 with everything readable, which is the
+index's own recall: high, but not exact. A result can then miss a chunk the user may read and still
+say `complete=True` ([Concepts](../concepts.md#what-a-result-tells-you)). Chroma's HNSW settings,
+such as `ef_search` in the collection's `hnsw` configuration, trade latency for recall.
+
 ## Performance
 
 In the [benchmarks](../benchmarks.md) (57,600 chunks, local Chroma 1.5.9), pre-filtered queries kept
@@ -73,7 +83,10 @@ number of groups in the filter. So:
 - When users may read a small part of the collection, keep the default (`auto`, which pre-filters):
   it is the only strategy that finds their documents.
 - When users may read most of it, `strategy="postfilter"` returns the same results far faster
-  (20 ms instead of 876 ms when everything was readable).
+  (20 ms instead of 876 ms when everything was readable). That holds when post-filtering sends
+  Chroma no `where`, as with `MetadataACLAuthorizer` in the benchmark. An `AllOf` whose parts all
+  give filters sends its whole filter as a scope even with `strategy="postfilter"`
+  ([Concepts](../concepts.md#what-the-store-receives)), so post-filtering is then no faster.
 - Grant access through a few broad groups (team, department, division) rather than hundreds of
   individual groups, which keeps the `where` document small.
 

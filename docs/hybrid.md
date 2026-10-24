@@ -35,6 +35,8 @@ needs no embedding function and runs under the same permission filter as the vec
 - **MongoDB:** Atlas Search's BM25 on the text, in an index `create_text_index` creates beside
   the vector index, so one collection serves both
   ([MongoDB](integrations/mongodb.md#keyword-search-and-hybrid-search)).
+- **Vespa:** Vespa's BM25 on the text, which the schema written by `schema(dim)` indexes with
+  `enable-bm25`, so one schema serves both ([Vespa](integrations/vespa.md#search-modes)).
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python

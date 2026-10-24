@@ -15,7 +15,7 @@ import redis
 
 from wardowl.backends.redis import RedisBackend, create_index
 
-client = redis.Redis.from_url(REDIS_URL)
+client = redis.Redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=5)
 create_index(client, "chunks", dim=768)  # hashes under "wardowl:", HNSW, cosine
 backend = RedisBackend(client, "chunks", embed=embed)  # embed: str -> list[float]
 backend.add(documents)
@@ -26,6 +26,18 @@ Each chunk is a hash under the prefix (`wardowl:` plus the document id) with the
 is searchable as soon as it returns; replacing a chunk replaces the whole hash. `ef_runtime` sets
 HNSW's search breadth. Scores are cosine similarity, 1 minus Redis's cosine distance. For a native
 `aretrieve`, pass `async_client=redis.asyncio.Redis(...)`; otherwise async calls run in a thread.
+
+An index covers every hash whose key starts with its prefix. Two indexes on the default prefix
+therefore index each other's chunks, and two backends that write the same chunk id overwrite one
+hash. Give each index its own prefix, and pass the same prefix to its backends:
+
+```python
+create_index(client, "acme_chunks", dim=768, prefix="acme:")
+acme = RedisBackend(client, "acme_chunks", embed=embed, prefix="acme:")
+```
+
+Prefixes are compared as plain strings, so end each with a separator: `t1:` and `t10:` are apart,
+but every key under `t10` also starts with `t1`.
 
 HNSW is approximate. Redis indexes a hash again whenever any of its fields changes, so `set_metadata`
 removes and re-adds the chunk's vector in the graph, and a small graph that changes often can miss
@@ -38,7 +50,10 @@ it found so far, which look complete. In production, make it fail instead: set
 `search-on-timeout fail` in the Redis 8 configuration (`FT.CONFIG SET ON_TIMEOUT FAIL` on Redis
 Stack), and a timed-out search raises. A client using RESP3 (`protocol=3`) also receives a
 warning with such partial results, and the backend raises `RuntimeError` when it sees one; RESP2
-replies carry no warning, so with RESP2 the server setting is the only protection.
+replies carry no warning, so with RESP2 the server setting is the only protection. On the client's
+side, redis-py waits for an answer without limit by default: set `socket_connect_timeout` and
+`socket_timeout`, as in the example above, so that a Redis that hangs raises instead of holding up
+retrievals.
 
 ## How permissions are indexed
 

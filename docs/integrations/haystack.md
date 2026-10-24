@@ -63,6 +63,41 @@ agent = Agent(chat_generator=chat_generator, tools=[search], state_schema={"subj
 result = agent.run(messages=messages, subject=subject)  # the authenticated user, from your session
 ```
 
+`inputs_from_state` maps a key of the agent's state to a tool input, the state key first: here the
+state's `subject` fills the component's `subject`. The key must be declared in `state_schema`, and
+`agent.run(..., subject=...)` sets it for that run.
+
+The model fills in the tool's other inputs: `query`, `top_k` and `query_embedding`. None of them
+changes whose permissions apply, and a `query_embedding` the model makes up is searched like any
+vector, under the same filter and checks. `top_k`, though, is bounded only by the retriever's
+`max_candidates` (1,000 by default; a larger value raises `ValueError`), so a model can pull far
+more documents into its context than you planned. To cap it, give the tool its own
+`PermissionedRetriever` with a smaller `max_candidates`, which also bounds how far post-filtering
+searches.
+
+To get the documents the agent found back with its answer, for citations, send the tool's
+`documents` output to the state with `outputs_to_state`:
+
+```python
+from haystack import Document
+
+search = ComponentTool(
+    component=WardowlRetriever(PermissionedRetriever(backend, authorizer)),
+    name="search_documents",
+    description="Search the company documents the current user may read.",
+    inputs_from_state={"subject": "subject"},
+    outputs_to_state={"documents": {"source": "documents"}},
+)
+agent = Agent(
+    chat_generator=chat_generator,
+    tools=[search],
+    state_schema={"subject": {"type": Subject}, "documents": {"type": list[Document]}},
+)
+
+result = agent.run(messages=messages, subject=subject)
+documents = result["documents"]  # what the tool returned, as Haystack Documents
+```
+
 ### `BoundWardowlRetriever`
 
 `BoundWardowlRetriever` takes the subject from a function instead and has no `subject` input at

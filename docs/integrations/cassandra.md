@@ -15,12 +15,21 @@ from wardowl import MetadataACLAuthorizer, PermissionedRetriever
 from wardowl.backends.cassandra import CassandraBackend, create_table
 
 session = Cluster(["cassandra.internal"]).connect()
+session.execute(
+    "CREATE KEYSPACE IF NOT EXISTS rag "
+    "WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': 3}"  # your data centers
+)
 create_table(session, "rag", "chunks", dim=768)  # the table and its two SAI indexes, if missing
 
 backend = CassandraBackend(session, "rag", "chunks", embed)
 backend.add(chunks)  # or backend.add(chunks, embeddings) with vectors you computed
 retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 ```
+
+`create_table` creates the table and its indexes, not the keyspace, so create the keyspace first,
+with the replication your cluster needs: `NetworkTopologyStrategy` with a replica count for each
+data center in production, or `{'class': 'SimpleStrategy', 'replication_factor': 1}` for a single
+test node, as CI uses. Keyspace and table names are plain lowercase CQL names.
 
 ## How filtering works
 

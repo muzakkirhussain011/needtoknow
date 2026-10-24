@@ -1,7 +1,8 @@
 # Integrations
 
 Each integration is an optional extra, so the core stays free of dependencies. The OPA, OpenFGA,
-SpiceDB and Cerbos authorizers need no extra at all: they use the standard library's HTTP client.
+SpiceDB, Cerbos and Keto authorizers need no extra at all: they use the standard library's HTTP
+client.
 
 | Integration | Kind | Install | Pre-filters |
 |---|---|---|---|

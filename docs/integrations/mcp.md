@@ -72,6 +72,33 @@ add_search_tool(server, retriever, Subject("alice", ["eng"]))
 server.run()  # stdio
 ```
 
+### A stdio server for a signed-in user
+
+A stdio server answers only the client that started it, so it serves one person: start one process
+per user, never one process for several. The `Subject` is fixed when the process starts, and it is
+only as trustworthy as whatever chose it. Whoever can edit the client's configuration or the
+process's environment can name any user there, so an identity read from them suits only a person's
+own machine and documents they may read anyway.
+
+When the person must not choose their identity, let the launcher (your desktop app, or whatever
+starts the process for the signed-in user) pass a token your identity provider signed, and verify
+it when the server starts:
+
+```python
+import os
+
+from wardowl.server import OIDCAuthenticator  # pip install "wardowl[server]"
+
+verify = OIDCAuthenticator(issuer=ISSUER, audience="knowledge-mcp", jwks_url=JWKS_URL)
+add_search_tool(server, retriever, verify(os.environ["KNOWLEDGE_TOKEN"]))  # set by the launcher
+server.run()  # stdio
+```
+
+The subject then stays the same for the life of the process, after the token expires too, so the
+launcher must stop the process when the user signs out. For a server several people reach, use
+Streamable HTTP with a token verifier, as at the top of this page: every request carries the user's
+token, and `subject_for` builds the subject from it each time.
+
 ## What the tool returns
 
 The tool is marked read-only, and returns structured results:
