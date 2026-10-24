@@ -24,6 +24,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from wardowl.backends._engines import _SEP, tag, terms
+from wardowl.backends._errors import required
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import And, Filter, In, Or, _ordered
 from wardowl.types import Document, Embed, Hit, Query
@@ -40,8 +41,16 @@ def _hex(term: str) -> str:
     return term.encode().hex()
 
 
-def filter_to_yql(f: Filter) -> str | None:
-    """Translate a filter into a YQL condition on the hex-encoded terms, or None when nothing can match."""
+def filter_to_yql(f: Filter) -> str:
+    """Translate a filter into a YQL condition on the hex-encoded terms.
+
+    Raises `NothingMatches` when nothing can match, as a query without the condition matches everything.
+    """
+    return required(_condition(f))
+
+
+def _condition(f: Filter) -> str | None:
+    """The YQL condition, or None when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
@@ -51,12 +60,12 @@ def filter_to_yql(f: Filter) -> str | None:
         quoted = (f'"{_hex(tag(f.field, v))}"' for v in values)
         return f"{TERMS_FIELD} in ({', '.join(quoted)})"
     if isinstance(f, And):
-        parts = [filter_to_yql(c) for c in f.clauses]
+        parts = [_condition(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else f"({' and '.join(p for p in parts if p)})"
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_yql(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_condition(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else f"({' or '.join(kept)})"
@@ -240,7 +249,7 @@ class VespaBackend:
             return []
         where = None
         if filter is not None:
-            where = filter_to_yql(filter)
+            where = _condition(filter)
             if where is None:
                 return []
         response = self._client.post(f"{self.url}/search/", json=self._body(Query.of(query), k, where))
@@ -250,6 +259,10 @@ class VespaBackend:
             raise RuntimeError(f"Vespa search failed: HTTP {response.status_code}: {response.text[:300]}") from None
         if root.get("errors") or response.status_code != 200:
             raise RuntimeError(f"Vespa search failed: HTTP {response.status_code}: {root.get('errors')}")
+        coverage = root.get("coverage") or {}
+        if coverage.get("full") is False or any((coverage.get("degraded") or {}).values()):
+            # Some content nodes did not answer, or answered after a timeout: partial results.
+            raise RuntimeError(f"Vespa returned partial results: coverage {coverage}")
         hits = []
         for child in root.get("children", []):
             fields = child.get("fields", {})

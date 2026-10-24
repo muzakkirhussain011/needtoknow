@@ -6,7 +6,8 @@ pip install "wardowl[milvus]"
 
 The backend runs Milvus's vector search with the permission filter applied inside the search, so
 the k nearest chunks the subject may read come back however few of the collection's chunks that
-is. It needs `pymilvus` 2.6 or newer and a Milvus that supports filter templating. CI runs
+is. It needs `pymilvus` 2.6.2 or newer and Milvus 2.6.2 or newer, for filter templating and
+partial updates. CI runs
 wardowl's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against Milvus
 3.0.2 standalone. Zilliz Cloud serves the same API through the same client, but CI does not test
 it.
@@ -61,7 +62,16 @@ filter_to_expression(In("allowed_groups", ["hr", "eng"]))
 ```
 
 A group name or user id containing quotes, brackets or operators is therefore only ever a value, and
-cannot change what the filter selects. CI checks this against a real Milvus.
+cannot change what the filter selects. Chunk ids travel the same way: `delete` and `set_metadata`
+select rows with `id in {ids}` and the ids as a parameter, never with pymilvus's `ids=` argument,
+which writes string ids into the expression between quotes. CI checks both against a real Milvus.
+`filter_to_expression` raises `NothingMatches` for a filter that can match nothing, since Milvus
+reads an empty filter as "match everything".
+
+`set_metadata` looks the ids up and changes the rows found with a partial update of the metadata
+and terms alone: the text and vector are never written back, so a concurrent `add` keeps its text.
+A row deleted between the lookup and the update is not recreated, because Milvus refuses to insert
+a row without its vector; `set_metadata` then raises, and can be repeated.
 
 The metadata itself is stored in the JSON field and returned as written, so the retriever's
 re-check sees the true permissions. The terms field is not consulted by the re-check: if the two

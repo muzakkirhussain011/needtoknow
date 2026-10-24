@@ -17,7 +17,8 @@ data that is a leak, so:
   results are rebuilt from that copy, never from what Chroma returns alongside it. The retriever's
   re-check therefore always sees the true permissions.
 
-Field names may not contain `::` and `wardowl_metadata` is reserved. Values other than strings
+Field names, in metadata and in filters, may not contain `::`, and `wardowl_metadata` is reserved:
+either would address a list key or the JSON copy rather than a field. Values other than strings
 and integers (booleans, floats, nested objects) are kept in the JSON copy only, which matches the
 reference semantics: no filter ever matches them.
 """
@@ -28,15 +29,13 @@ import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
+from wardowl.backends._errors import required
 from wardowl.filters import And, Filter, In, Or, _is_value, _ordered
 from wardowl.types import Document, Hit, Query
 
-__all__ = ["JSON_KEY", "NEVER", "ChromaBackend", "filter_to_where"]
+__all__ = ["JSON_KEY", "ChromaBackend", "filter_to_where"]
 
 Embed = Callable[[str], Sequence[float]]
-
-NEVER: dict[str, Any] = {}
-"""Returned by `filter_to_where` when the filter can match nothing (an `In` with no values)."""
 
 JSON_KEY = "wardowl_metadata"
 """Reserved field holding the exact JSON copy of a chunk's metadata."""
@@ -55,12 +54,22 @@ def _join(op: str, parts: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def filter_to_where(f: Filter) -> dict[str, Any]:
-    """Translate a filter into a Chroma `where` document, or `NEVER` when nothing can match.
+    """Translate a filter into a Chroma `where` document.
 
     `In` becomes `$in` on the scalar field (one clause per value type, since Chroma's `$in` lists
-    are single-typed) plus an equality test on each value's list key.
+    are single-typed) plus an equality test on each value's list key. Raises `NothingMatches` when
+    nothing can match, as Chroma reads an empty `where` as "match everything", and `ValueError` for
+    a field name containing `::` or equal to `wardowl_metadata`, which would address the stored
+    list keys or the JSON copy rather than a metadata field.
     """
+    return required(_where(f))
+
+
+def _where(f: Filter) -> dict[str, Any] | None:
+    """The Chroma `where` document, or `None` when nothing can match."""
     if isinstance(f, In):
+        if _SEP in f.field or f.field == JSON_KEY:
+            raise ValueError(f"field {f.field!r} cannot be filtered in Chroma (contains '::', or is {JSON_KEY!r})")
         values = _ordered(f.values)
         clauses: list[dict[str, Any]] = []
         for kind in (int, str):
@@ -68,13 +77,14 @@ def filter_to_where(f: Filter) -> dict[str, Any]:
             if same:
                 clauses.append({f.field: {"$in": same}})
         clauses += [{_flat_key(f.field, v): {"$eq": True}} for v in values]
-        return _join("$or", clauses) if clauses else NEVER
+        return _join("$or", clauses) if clauses else None
     if isinstance(f, And):
-        parts = [filter_to_where(c) for c in f.clauses]
-        return NEVER if any(p is NEVER for p in parts) else _join("$and", parts)
+        found = [_where(c) for c in f.clauses]
+        parts = [p for p in found if p is not None]
+        return _join("$and", parts) if len(parts) == len(found) else None
     if isinstance(f, Or):
-        parts = [p for p in (filter_to_where(c) for c in f.clauses) if p is not NEVER]
-        return _join("$or", parts) if parts else NEVER
+        parts = [p for p in (_where(c) for c in f.clauses) if p is not None]
+        return _join("$or", parts) if parts else None
     raise TypeError(f"not a filter: {f!r}")
 
 
@@ -149,30 +159,33 @@ class ChromaBackend:
         self.collection.add(**records)
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
-        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
-        ids = list(metadata)
-        if not ids:
+        """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
+
+        An update, which Chroma applies to stored records only: a chunk deleted meanwhile is not
+        recreated, and its text and vector are never read and written back. Keys of the stored
+        metadata that the new one lacks are removed (set to None), so no old list key survives.
+        """
+        encoded = {doc_id: _encode_metadata(doc_id, new) for doc_id, new in metadata.items()}
+        if not encoded:
             return
-        stored = self.collection.get(ids=ids, include=["documents", "embeddings"])
+        stored = self.collection.get(ids=list(encoded), include=["metadatas"])
         found = list(stored["ids"])
-        if found:
-            self._replace(
-                {
-                    "ids": found,
-                    "documents": stored["documents"],
-                    "embeddings": stored["embeddings"],
-                    "metadatas": [_encode_metadata(i, metadata[i]) for i in found],
-                }
-            )
+        if not found:
+            return
+        updates: list[dict[str, Any]] = []
+        for doc_id, old in zip(found, stored["metadatas"], strict=True):
+            new = encoded[doc_id]
+            updates.append({**{key: None for key in old or {} if key not in new}, **new})
+        self.collection.update(ids=found, metadatas=updates)
 
     def delete(self, ids: Iterable[str]) -> None:
         self.collection.delete(ids=list(ids))
 
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         q = Query.of(query)
-        where = filter_to_where(filter) if filter is not None else None
-        if k < 1 or where is NEVER or self.collection.count() == 0:
-            return []
+        where = _where(filter) if filter is not None else None
+        if k < 1 or (filter is not None and where is None) or self.collection.count() == 0:
+            return []  # nothing asked for, nothing can match, or nothing stored
         kwargs: dict[str, Any] = {"n_results": k, "include": ["documents", "metadatas", "distances"]}
         if where is not None:
             kwargs["where"] = where

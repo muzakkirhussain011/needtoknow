@@ -17,6 +17,7 @@ import asyncio
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
+from wardowl.backends._errors import required
 from wardowl.filters import And, Filter, In, Or, _is_value, _ordered
 from wardowl.types import Document, Hit, Query
 
@@ -40,20 +41,25 @@ def terms(doc_id: str, metadata: Mapping[str, Any]) -> list[str]:
     return sorted(found)
 
 
-def filter_to_query(f: Filter) -> dict[str, Any] | None:
-    """Translate a filter into a query on the tagged terms, or `None` when nothing can match."""
+def filter_to_query(f: Filter) -> dict[str, Any]:
+    """Translate a filter into a query on the tagged terms. Raises `NothingMatches` when nothing can match."""
+    return required(_query(f))
+
+
+def _query(f: Filter) -> dict[str, Any] | None:
+    """The query on the tagged terms, or `None` when nothing can match."""
     if isinstance(f, In):
         if _SEP in f.field:
             raise ValueError(f"field {f.field!r} may not contain \\x1f")
         values = _ordered(f.values)
         return {"terms": {TERMS_FIELD: [tag(f.field, v) for v in values]}} if values else None
     if isinstance(f, And):
-        parts = [filter_to_query(c) for c in f.clauses]
+        parts = [_query(c) for c in f.clauses]
         if any(p is None for p in parts):
             return None
         return parts[0] if len(parts) == 1 else {"bool": {"filter": parts}}
     if isinstance(f, Or):
-        kept = [p for p in (filter_to_query(c) for c in f.clauses) if p is not None]
+        kept = [p for p in (_query(c) for c in f.clauses) if p is not None]
         if not kept:
             return None
         return kept[0] if len(kept) == 1 else {"bool": {"should": kept, "minimum_should_match": 1}}
@@ -174,7 +180,7 @@ class EngineBackend:
     def _request(self, q: Query, k: int, f: Filter | None) -> dict[str, Any] | None:
         query = None
         if f is not None:
-            query = filter_to_query(f)
+            query = _query(f)
             if query is None:
                 return None  # nothing can match
         if self.mode == "keyword":
@@ -202,7 +208,7 @@ class EngineBackend:
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
-        request = self._request(Query.of(query), min(k, _MAX_K), filter)
+        request = self._request(Query.of(query), _checked_k(k), filter)
         if request is None:
             return []
         return self._hits(self.client.search(index=self.index, **request))
@@ -212,13 +218,20 @@ class EngineBackend:
             return await asyncio.to_thread(self.search, query, k, filter)
         if k < 1:
             return []
-        request = await asyncio.to_thread(self._request, Query.of(query), min(k, _MAX_K), filter)
+        request = await asyncio.to_thread(self._request, Query.of(query), _checked_k(k), filter)
         if request is None:
             return []
         return self._hits(await self.async_client.search(index=self.index, **request))
 
 
 _MAX_K = 10_000  # both engines cap k and num_candidates at 10,000
+
+
+def _checked_k(k: int) -> int:
+    # A larger k would come back as 10,000 hits, which a caller cannot tell from "no more match".
+    if k > _MAX_K:
+        raise ValueError(f"k={k} is more than one search returns ({_MAX_K:,}); ask for at most {_MAX_K:,}")
+    return k
 
 
 def _raise_for_items(response: Any, *, allow_not_found: bool) -> None:

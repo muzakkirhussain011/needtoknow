@@ -8,10 +8,13 @@ terms (`wardowl_terms CONTAINS ?`), the queries run concurrently, and the best `
 results are kept. Every value is a bound parameter, never CQL text.
 
 `create_table(session, keyspace, table, dim)` creates the table and its indexes. Cassandra allows
-1,000 rows per ANN query, so `k` above that returns at most 1,000 hits. A filter that expands to more
-than `max_queries` ANDs is sent as one ANN query on the terms every match must have, for 1,000
-rows, and the filter is applied to those rows here: never a chunk the filter excludes, but matches
-beyond those 1,000 rows can be missed, as Cassandra's ANN search is approximate in any case.
+1,000 rows per ANN query, so a search with `k` above that raises `ValueError`. A filter that expands
+to more than `max_queries` ANDs is sent as one ANN query on the terms every match must have, for
+1,000 rows, and the filter is applied to those rows here: never a chunk the filter excludes, but
+matches beyond those 1,000 rows can be missed, as Cassandra's ANN search is approximate in any case.
+
+Every write is a plain write, ordered by the client's timestamps; `set_metadata` uses no lightweight
+transaction, whose Paxos timestamps would not order with the plain writes of `add` and `delete`.
 """
 
 from __future__ import annotations
@@ -206,14 +209,24 @@ class CassandraBackend:
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
         """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored.
 
-        A lightweight transaction (`IF EXISTS`) makes sure an id that is not stored creates no row.
+        The ids are looked up first, and only the rows found are updated, with plain writes like those
+        of `add` and `delete`. A lightweight transaction (`IF EXISTS`) would take its timestamp from
+        Paxos rather than from the client, and Cassandra orders writes by timestamp, so mixed with plain
+        writes to the same rows it could apply an older change over a newer one, bringing a revoked
+        permission back. A chunk deleted between the lookup and the update is left as a row holding
+        only its metadata and terms, with no text and no vector, which an ANN search never returns;
+        a later `add` of that id replaces it.
         """
         rows = [(json.dumps(dict(new)), set(terms(i, new)), i) for i, new in metadata.items()]
-        self._run(f"UPDATE {self.name} SET metadata = ?, wardowl_terms = ? WHERE id = ? IF EXISTS", rows, write=True)
+        found = self._run(f"SELECT id FROM {self.name} WHERE id = ?", [(i,) for _, _, i in rows])
+        stored = [row for row, result in zip(rows, found, strict=True) if result.one() is not None]
+        self._run(f"UPDATE {self.name} SET metadata = ?, wardowl_terms = ? WHERE id = ?", stored, write=True)
 
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         if k < 1:
             return []
+        if k > _MAX_LIMIT:  # Cassandra would answer with 1,000 rows, as if no more matched
+            raise ValueError(f"k={k} is more than one Cassandra ANN query returns ({_MAX_LIMIT:,})")
         groups: list[frozenset[str]] = [frozenset()]
         local = None  # a filter too wide for ANN queries, applied here to the rows of one query
         if filter is not None:
@@ -224,8 +237,7 @@ class CassandraBackend:
             if not groups:
                 return []
         vector = [float(x) for x in Query.of(query).embedded(self.embed)]
-        limit = min(k, _MAX_LIMIT)
-        fetch = _MAX_LIMIT if local is not None else limit
+        fetch = _MAX_LIMIT if local is not None else k
         best: dict[str, Hit] = {}
         for size in sorted({len(g) for g in groups}):
             where = " AND ".join(["wardowl_terms CONTAINS ?"] * size)
@@ -240,4 +252,4 @@ class CassandraBackend:
                     hit = Hit(doc_id, text or "", float(score), json.loads(metadata or "{}"))
                     if doc_id not in best and (local is None or matches(local, hit.metadata)):
                         best[doc_id] = hit
-        return sorted(best.values(), key=lambda h: (-h.score, h.id))[:limit]
+        return sorted(best.values(), key=lambda h: (-h.score, h.id))[:k]

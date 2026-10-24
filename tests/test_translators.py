@@ -7,21 +7,25 @@ import json
 import pytest
 
 from wardowl import And, In, Or
-from wardowl.backends.chroma import JSON_KEY, NEVER, _decode_metadata, _encode_metadata, filter_to_where
-from wardowl.backends.pgvector import filter_to_sql
+from wardowl.backends import NothingMatches
+from wardowl.backends.chroma import JSON_KEY, _decode_metadata, _encode_metadata, filter_to_where
+from wardowl.backends.pgvector import _EXACT_INTEGERS, filter_to_sql
 
 # ---- PostgreSQL ------------------------------------------------------------------------------
 
 
 def test_sql_uses_two_containment_tests_per_value_in_a_stable_order():
     sql, params = filter_to_sql(In("allowed_groups", {"hr", 7}))
-    assert sql == "(" + " OR ".join(["metadata @> %s::jsonb"] * 4) + ")"
-    assert [json.loads(p) for p in params] == [
+    pair = "(metadata @> %s::jsonb OR metadata @> %s::jsonb)"
+    assert sql == f"(({pair} AND {_EXACT_INTEGERS}) OR {pair})"
+    assert [json.loads(p) for p in params[:2] + params[4:]] == [
         {"allowed_groups": 7},
         {"allowed_groups": [7]},
         {"allowed_groups": "hr"},
         {"allowed_groups": ["hr"]},
     ]
+    assert params[2:4] == ["allowed_groups", ["7"]]  # integers must also read as integers, not as 7.0
+    assert filter_to_sql(In("team", ["a"])) == (pair, ['{"team": "a"}', '{"team": ["a"]}'])
 
 
 def test_sql_values_are_always_bound_never_inlined():
@@ -58,12 +62,22 @@ def test_where_never_has_a_single_clause_and_or():
 
 
 def test_where_handles_filters_that_match_nothing():
-    assert filter_to_where(In("team", [])) is NEVER
-    assert filter_to_where(And(In("team", {"a"}), In("level", []))) is NEVER
-    assert filter_to_where(Or(In("team", []), In("level", []))) is NEVER
+    # Never {}: Chroma reads an empty where as no filter, which matches every record.
+    for nothing in (In("team", []), And(In("team", {"a"}), In("level", [])), Or(In("team", []), In("level", []))):
+        with pytest.raises(NothingMatches):
+            filter_to_where(nothing)
     assert filter_to_where(Or(In("team", []), In("level", {1}))) == {
         "$or": [{"level": {"$in": [1]}}, {"level::i:1": {"$eq": True}}]
     }
+
+
+@pytest.mark.parametrize("field", ["groups::s:hr", "a::b", "::", JSON_KEY])
+def test_where_refuses_fields_that_address_list_keys_or_the_json_copy(field):
+    # "groups::s:hr" would test the list key of {"groups": ["hr"]}; the reference finds no field of that name.
+    with pytest.raises(ValueError, match="cannot be filtered"):
+        filter_to_where(In(field, ["x"]))
+    with pytest.raises(ValueError, match="cannot be filtered"):
+        filter_to_where(Or(In("team", ["a"]), In(field, [])))
 
 
 def test_chroma_metadata_never_uses_arrays_and_round_trips_exactly():

@@ -22,7 +22,9 @@ backend = QdrantBackend(client, "docs", embed=embed)  # embed: str -> list[float
 
 `create_collection(client, name, dim, keyword_fields=("allowed_users", "allowed_groups"))` creates
 a cosine-distance collection if it does not exist, and keyword payload indexes on the permission
-fields. Without the indexes Qdrant still filters correctly, but has to check every point.
+fields and on `wardowl_id`, which `set_metadata` and `delete` filter on. Without the indexes Qdrant
+still filters correctly, but has to check every point; a collection in strict mode refuses filtered
+updates on a field without an index, so index `wardowl_id` in collections you create yourself.
 
 ## How points are stored
 
@@ -32,10 +34,17 @@ be searched with permissions without re-indexing, as long as its metadata carrie
 fields. Pass `content_key=` and `metadata_key=` for another layout, and `vector_name=` for a named
 vector.
 
-Qdrant point ids are unsigned integers or UUIDs. `add` uses a document id that is a UUID as the point
-id, and derives a stable UUID from any other id, keeping the original under `wardowl_id` in the
-payload. Search results report that id, or the point id for points written by something else. A
-point without a `metadata` object carries no permissions, so the re-check denies it.
+Qdrant point ids are unsigned integers or UUIDs. `add` derives a stable UUID from the SHA-256 of
+every document id (`point_id`), a document id that is already a UUID included, and keeps the
+original under `wardowl_id` in the payload. Search results report that id, or the point id for
+points written by something else. A point without a `metadata` object carries no permissions, so
+the re-check denies it.
+
+`set_metadata` and `delete` select points with a filter that also requires `wardowl_id` to equal
+the id asked for, so they never change or remove a point that holds another id. A point written by
+something else has no `wardowl_id`: it is reached by its UUID written exactly as search results
+report it (lower case, with hyphens). `set_metadata` sets only the payload's `metadata` key; the
+text and any other payload keys stay as they are, and a point deleted meanwhile is not recreated.
 
 ```python
 from wardowl import Document
@@ -51,7 +60,7 @@ backend.delete(["salaries-1"])
 | `In("allowed_groups", ["hr", "eng"])` | `FieldCondition(key="metadata.allowed_groups", match=MatchAny(any=["eng", "hr"]))` |
 | `In("level", ["a", 1])` | one `MatchAny` for the strings and one for the integers, under `should` |
 | `And(...)` / `Or(...)` | `Filter(must=[...])` / `Filter(should=[...])` |
-| `In(field, [])` | matches nothing: the backend returns no hits without calling Qdrant |
+| `In(field, [])` | matches nothing: the backend returns no hits without calling Qdrant, and `filter_to_qdrant` raises `NothingMatches` |
 
 For a list field, Qdrant matches when any element matches, which is the reference semantics of `In`.
 Strings and integers are never mixed in one `MatchAny`, and an empty value list is handled before the

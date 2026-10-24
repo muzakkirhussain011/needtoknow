@@ -13,6 +13,7 @@ pytest.importorskip("lancedb")
 import lancedb
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, tag
 from wardowl.backends.lancedb import (
     KEY_FIELD,
@@ -48,8 +49,11 @@ def test_filters_become_array_has_any_on_hex_terms():
 
 
 def test_an_empty_in_matches_nothing_without_asking_lancedb():
-    assert filter_to_sql(In("team", [])) is None
-    assert filter_to_sql(And(In("team", ["a"]), In("level", []))) is None
+    # Never None: LanceDB reads a missing predicate as "no filter", which matches every row.
+    with pytest.raises(NothingMatches):
+        filter_to_sql(In("team", []))
+    with pytest.raises(NothingMatches):
+        filter_to_sql(And(In("team", ["a"]), In("level", [])))
     assert filter_to_sql(Or(In("team", []), In("level", [1]))) == filter_to_sql(In("level", [1]))
 
 
@@ -184,6 +188,28 @@ def test_set_metadata_replaces_permissions_and_ignores_unknown_ids(db):
     assert backend.search("leave", 5, In("level", [1])) == []
     (hit,) = backend.search("leave", 5)
     assert hit.id == "plan" and hit.text == "leave plan" and hit.metadata == {"allowed_groups": ["O'Brien's team"]}
+
+
+def test_set_metadata_never_recreates_a_deleted_chunk_nor_restores_old_text(db):
+    table = _new_table(db)
+    backend = LanceDBBackend(table, EMBED)
+    backend.add([Document("a", "leave plan", {"allowed_groups": ["eng"]}), Document("b", "old text", {})])
+
+    class Interleaved:
+        """The table, with another writer's changes landing just before set_metadata writes."""
+
+        def __getattr__(self, name):
+            return getattr(table, name)
+
+        def merge_insert(self, on):
+            backend.delete(["a"])
+            backend.add([Document("b", "new text", {"allowed_groups": ["eng"]})])
+            return table.merge_insert(on)
+
+    LanceDBBackend(Interleaved(), EMBED).set_metadata({"a": {"allowed_groups": ["*"]}, "b": {"allowed_groups": ["*"]}})
+    hits = {h.id: (h.text, h.metadata) for h in backend.search("leave plan text", 5)}
+    assert hits == {"b": ("new text", {"allowed_groups": ["*"]})}
+    assert [h.id for h in backend.search("text", 5, In("allowed_groups", ["*"]))] == ["b"]
 
 
 # ---- keyword search and hybrid search ----------------------------------------------------------

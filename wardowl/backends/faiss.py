@@ -69,11 +69,19 @@ class FaissBackend:
         return x
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
-        """Store chunks, replacing any with the same id. `embeddings` gives their vectors, in order."""
+        """Store chunks, replacing any with the same id. `embeddings` gives their vectors, in order.
+
+        When one call repeats an id, the last of its documents is stored, as if they were added in turn.
+        """
         docs = list(documents)
         if not docs:
             return
-        x = self._matrix(document_vectors(docs, embeddings, self.embed))
+        vectors = document_vectors(docs, embeddings, self.embed)
+        # One slot per id: an earlier copy given its own slot would stay in the index, out of reach of
+        # delete and set_metadata, and searches would still return it with its old metadata.
+        latest = list({d.id: i for i, d in enumerate(docs)}.values())
+        docs = [docs[i] for i in latest]
+        x = self._matrix([vectors[i] for i in latest])
         with self._lock:
             self.delete([d.id for d in docs if d.id in self._ids])
             ids = []

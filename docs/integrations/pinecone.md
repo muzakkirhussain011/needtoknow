@@ -38,13 +38,20 @@ reference semantics do, and no metadata value can change the filter's structure.
 ## Production notes
 
 - **Consistency:** serverless indexes are eventually consistent; a write usually shows within a
-  few seconds. `wait=30.0` makes `add`, `delete` and `set_metadata` wait, up to that many seconds,
-  until a search sees the change, and raise `TimeoutError` otherwise.
+  few seconds. By default (`wait=30.0`) `add`, `delete` and `set_metadata` wait, up to that many
+  seconds, until a search sees the change, and raise `TimeoutError` otherwise, so a revoked
+  permission or a deleted chunk is out of searches when the call returns. `wait=None` returns at
+  once; searches may then see the old permissions for a few seconds.
 - **The API key** is sent only in the `Api-Key` header and never appears in errors or `repr`.
   Pass `client=httpx.Client(...)` for proxies or custom TLS.
-- **Ids:** Pinecone record ids are printable ASCII of at most 512 characters; other chunk ids are
-  stored under `sha256-` and their SHA-256, and returned as written.
+- **Ids:** Pinecone record ids are printable ASCII of at most 512 characters; other chunk ids, and
+  ids that start with `sha256-`, are stored under `sha256-` and their SHA-256, and returned as
+  written. No two chunk ids share a record. `set_metadata` and `delete` first fetch the records
+  (`GET /vectors/fetch`) and leave alone any record that holds another chunk id.
 - **Limits:** Pinecone allows 40 KB of metadata per record, which includes the chunk's text, and
-  10,000 results per query. Writes go in batches of 100, 8 requests at a time.
+  10,000 results per query: a search with `k` above 10,000 raises `ValueError` rather than return
+  10,000 hits as if no more matched. Writes go in batches of 100, 8 requests at a time.
+- **Translating filters yourself:** `filter_to_pinecone` raises `NothingMatches` for a filter that
+  can match nothing, since Pinecone reads a missing filter as "match everything".
 - **Namespaces** keep tenants or corpora apart; `clear()` removes every chunk in the backend's
   namespace.

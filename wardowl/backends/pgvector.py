@@ -5,7 +5,8 @@ iterative index scans, which keep an HNSW scan going until enough rows pass a se
 
 Chunks live in one table: `id text`, `content text`, `metadata jsonb`, `embedding vector(n)`.
 Permission metadata is matched with JSON containment, which a GIN (`jsonb_path_ops`) index serves,
-so the filter stays fast on large tables. `create_schema` sets this up.
+so the filter stays fast on large tables. `create_schema` sets this up. Metadata keys must be
+strings, as JSON's are.
 """
 
 from __future__ import annotations
@@ -29,15 +30,25 @@ MANY_VALUES = 100
 """Above this many values, an `In` is sent as two array parameters rather than two per value."""
 
 
+# True when the field, or an element of it, is a number whose text is one of the integers'. `lax $[*]`
+# yields an array's elements, or a scalar itself. The text of a jsonb number keeps its scale, so `1`
+# reads "1" and `1.0` reads "1.0" (a float, once read back), and a string keeps its quotes.
+_EXACT_INTEGERS = (
+    "EXISTS (SELECT 1 FROM jsonb_path_query(metadata -> %s, 'lax $[*]') AS e(v) WHERE v::text = ANY(%s::text[]))"
+)
+
+
 def filter_to_sql(f: Filter | None) -> tuple[str, list[Any]]:
     """Translate a filter into a condition on the `metadata` jsonb column, with bound parameters.
 
     Each value becomes two containment tests: scalar equality (`{"field": v}`) and array
     membership (`{"field": [v]}`), which the GIN index on `metadata` serves. Above
-    `MANY_VALUES` values (a subject in thousands of groups) the test takes two array parameters
-    instead of two per value, so the query stays small and far below PostgreSQL's limit of 65,535
-    parameters. jsonb equality and containment compare by type either way, matching the reference
-    semantics in `wardowl.filters.matches`.
+    `MANY_VALUES` values of one type (a subject in thousands of groups) the test takes two array
+    parameters instead of two per value, so the query stays small and far below PostgreSQL's limit
+    of 65,535 parameters. jsonb compares strings, and keeps strings, numbers and booleans apart, as
+    the reference semantics in `wardowl.filters.matches` do; but it compares numbers by value, so
+    `1.0` would contain `1`. Integer values therefore also require the stored number to read as that
+    integer (`_EXACT_INTEGERS`), so a float in the metadata never matches, as in the reference.
     """
     if f is None:
         return "TRUE", []
@@ -45,16 +56,19 @@ def filter_to_sql(f: Filter | None) -> tuple[str, list[Any]]:
         values = _ordered(f.values)
         if not values:
             return "FALSE", []
-        if len(values) > MANY_VALUES:
-            scalars = [json.dumps(v) for v in values]
-            members = [json.dumps([v]) for v in values]
-            sql = "(metadata -> %s = ANY(%s::jsonb[]) OR metadata -> %s @> ANY(%s::jsonb[]))"
-            return sql, [f.field, scalars, f.field, members]
-        tests, params = [], []
-        for value in values:
-            tests += ["metadata @> %s::jsonb", "metadata @> %s::jsonb"]
-            params += [json.dumps({f.field: value}), json.dumps({f.field: [value]})]
-        return "(" + " OR ".join(tests) + ")", params
+        integers = [v for v in values if isinstance(v, int)]
+        strings = [v for v in values if isinstance(v, str)]
+        parts: list[str] = []
+        params: list[Any] = []
+        if integers:
+            sql, p = _contains(f.field, integers)
+            parts.append(f"({sql} AND {_EXACT_INTEGERS})")
+            params += [*p, f.field, [json.dumps(v) for v in integers]]
+        if strings:
+            sql, p = _contains(f.field, strings)
+            parts.append(sql)
+            params += p
+        return (parts[0] if len(parts) == 1 else "(" + " OR ".join(parts) + ")"), params
     if isinstance(f, (And, Or)):
         parts, params = [], []
         for clause in f.clauses:
@@ -64,6 +78,29 @@ def filter_to_sql(f: Filter | None) -> tuple[str, list[Any]]:
         joiner = " AND " if isinstance(f, And) else " OR "
         return "(" + joiner.join(parts) + ")", params
     raise TypeError(f"not a filter: {f!r}")
+
+
+def _contains(field: str, values: Sequence[str | int]) -> tuple[str, list[Any]]:
+    """Containment tests, which the GIN index serves: the field equals a value, or is an array holding one."""
+    if len(values) > MANY_VALUES:
+        scalars = [json.dumps(v) for v in values]
+        members = [json.dumps([v]) for v in values]
+        sql = "(metadata -> %s = ANY(%s::jsonb[]) OR metadata -> %s @> ANY(%s::jsonb[]))"
+        return sql, [field, scalars, field, members]
+    tests, params = [], []
+    for value in values:
+        tests += ["metadata @> %s::jsonb", "metadata @> %s::jsonb"]
+        params += [json.dumps({field: value}), json.dumps({field: [value]})]
+    return "(" + " OR ".join(tests) + ")", params
+
+
+def _metadata_json(doc_id: str, metadata: Mapping[str, Any]) -> str:
+    """The metadata as JSON. Keys must be strings: JSON would turn `1` into `"1"`, which a filter on
+    the field `"1"` then matches though the reference semantics do not."""
+    for key in metadata:
+        if not isinstance(key, str):
+            raise ValueError(f"{doc_id}: metadata key {key!r} is not allowed (keys must be strings)")
+    return json.dumps(dict(metadata))
 
 
 def _vector(values: Sequence[float]) -> str:
@@ -181,7 +218,9 @@ class PgVectorBackend:
         """Insert or replace chunks. Embeddings are computed with `embed` unless given."""
         docs = list(documents)
         vectors = document_vectors(docs, embeddings, self.embed)  # the table stores a vector for every chunk
-        rows = [(d.id, d.text, json.dumps(dict(d.metadata)), _vector(v)) for d, v in zip(docs, vectors, strict=True)]
+        rows = [
+            (d.id, d.text, _metadata_json(d.id, d.metadata), _vector(v)) for d, v in zip(docs, vectors, strict=True)
+        ]
 
         from psycopg import sql
 
@@ -195,7 +234,7 @@ class PgVectorBackend:
 
     def set_metadata(self, metadata: Mapping[str, Mapping[str, Any]]) -> None:
         """Replace the metadata of stored chunks, keeping their text and vectors. Ids not stored are ignored."""
-        rows = [(json.dumps(dict(m)), doc_id) for doc_id, m in metadata.items()]
+        rows = [(_metadata_json(doc_id, m), doc_id) for doc_id, m in metadata.items()]
         if not rows:
             return
 

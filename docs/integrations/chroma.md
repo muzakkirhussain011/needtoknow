@@ -43,16 +43,23 @@ Search results are rebuilt from the JSON copy, never from the fields Chroma retu
 retriever's re-check always sees the true permissions. Records written by something other than
 wardowl have no copy and are treated as having no permissions: the re-check denies them.
 
-Field names may not contain `::`, and `wardowl_metadata` is reserved. Values that are not
-strings or integers are kept in the JSON copy only, which matches the reference semantics: no filter
-matches them.
+Field names, in metadata and in filters, may not contain `::`, and `wardowl_metadata` is
+reserved: a filter on such a name would test a list field or the JSON copy, and `filter_to_where`
+refuses it with `ValueError`. Values that are not strings or integers are kept in the JSON copy
+only, which matches the reference semantics: no filter matches them.
+
+`set_metadata` is an update, which Chroma applies to stored records only, so a chunk deleted
+meanwhile is not recreated, and its text and vector are never read and written back. Fields of the
+stored metadata that the new metadata lacks are removed in the same update, so no old list field
+survives.
 
 ## How the filter becomes `where`
 
 `In(field, values)` becomes an `$or` of `$in` on the scalar field (one per value type, since
 Chroma's `$in` lists hold a single type) and an `$eq: true` test on each value's list field.
 `And` and `Or` become `$and` and `$or`. A filter that can match nothing, such as `In(field, [])`,
-skips the query entirely.
+skips the query entirely; `filter_to_where` raises `NothingMatches` for it rather than return `{}`,
+which Chroma reads as no filter at all.
 
 ## Performance
 

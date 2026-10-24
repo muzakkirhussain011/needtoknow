@@ -63,6 +63,37 @@ def test_changes_replace_delete_and_set_metadata():
     assert b.search("launch", 0) == [] and FaissBackend(EMBED, EMBED.dim).search("launch", 3) == []
 
 
+def test_an_id_repeated_in_one_call_keeps_only_its_last_document():
+    b = FaissBackend(EMBED, EMBED.dim)
+    b.add(
+        [
+            Document("plan", "launch plan draft", {"allowed_groups": ["*"]}),
+            Document("other", "launch notes", {"allowed_groups": ["eng"]}),
+            Document("plan", "launch plan final", {"allowed_groups": ["hr"]}),
+        ]
+    )
+    assert len(b) == 2 and b.index.ntotal == 2
+    hits = b.search("launch plan", 5)
+    assert sorted(h.id for h in hits) == ["other", "plan"]
+    assert next(h for h in hits if h.id == "plan").text == "launch plan final"
+    # The earlier copy, readable by everyone, must not be found under its old metadata.
+    assert b.search("launch plan", 5, In("allowed_groups", ["*"])) == []
+    b.set_metadata({"plan": {"allowed_groups": ["eng"]}})
+    assert sorted(h.id for h in b.search("launch", 5, In("allowed_groups", ["eng"]))) == ["other", "plan"]
+    b.delete(["plan"])
+    assert [h.id for h in b.search("launch plan", 5)] == ["other"] and b.index.ntotal == 1
+
+
+def test_repeated_ids_take_the_vector_of_their_last_document():
+    b = FaissBackend(None, EMBED.dim)
+    b.add(
+        [Document("a", "first", {}), Document("a", "second", {})],
+        [EMBED("salary bands"), EMBED("launch plan")],
+    )
+    (hit,) = b.search(Query(vector=EMBED("launch plan")), 5)
+    assert hit.text == "second" and hit.score == pytest.approx(1.0, abs=1e-5)
+
+
 def test_save_and_load(tmp_path):
     original = backend()
     original.save(tmp_path / "index")

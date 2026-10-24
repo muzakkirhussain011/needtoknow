@@ -53,7 +53,18 @@ metadata @> '{"allowed_groups": "hr"}'::jsonb OR metadata @> '{"allowed_groups":
 ```
 
 `And` and `Or` become `AND` and `OR`. Values are bound parameters, never interpolated. Containment
-compares by type, which matches the reference semantics, and the GIN index serves it.
+keeps strings, numbers and booleans apart, which matches the reference semantics, and the GIN index
+serves it. jsonb compares numbers by value, though, so `{"level": 1.0}` contains `{"level": 1}`,
+where the reference semantics match integers only. An integer value therefore also requires the
+stored number, or an element of the stored list, to read as that integer:
+
+```sql
+EXISTS (SELECT 1 FROM jsonb_path_query(metadata -> 'level', 'lax $[*]') AS e(v) WHERE v::text = ANY('{1}'))
+```
+
+The text of a jsonb number keeps its scale (`1.0` reads `1.0`), so a float never matches. Metadata
+keys must be strings: `add` and `set_metadata` refuse others with `ValueError`, since JSON would
+turn the key `1` into `"1"`, which a filter on the field `"1"` would then match.
 
 ## Iterative index scans
 

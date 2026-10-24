@@ -33,6 +33,13 @@ a chunk; it never returns one the filter excludes. `create_index(..., algorithm=
 the query with every vector instead: exact, and fast enough up to some tens of thousands of chunks.
 CI checks both, exactly on `FLAT`.
 
+**Timeouts.** By default the Query Engine answers a query that runs out of time with the results
+it found so far, which look complete. In production, make it fail instead: set
+`search-on-timeout fail` in the Redis 8 configuration (`FT.CONFIG SET ON_TIMEOUT FAIL` on Redis
+Stack), and a timed-out search raises. A client using RESP3 (`protocol=3`) also receives a
+warning with such partial results, and the backend raises `RuntimeError` when it sees one; RESP2
+replies carry no warning, so with RESP2 the server setting is the only protection.
+
 ## How permissions are indexed
 
 The backend uses the same type-tagged terms as [Elasticsearch, OpenSearch](elasticsearch.md#how-permissions-are-indexed)
@@ -51,8 +58,9 @@ filter_to_query(In("allowed_groups", ["hr"]))
 A hex string holds only `0-9` and `a-f`, so no group name or user id can add query syntax, and
 `"HR"` and `"hr"` stay different values. CI checks both on a real server. `And` becomes an
 intersection and `Or` a union of TAG conditions, and an `In` with no values matches nothing without
-a call to Redis. The metadata is stored as JSON and returned exactly as written, so the
-retriever's re-check sees the true permissions.
+a call to Redis; `filter_to_query` raises `NothingMatches` for a filter that can match nothing,
+since a query without the expression matches every hash. The metadata is stored as JSON and
+returned exactly as written, so the retriever's re-check sees the true permissions.
 
 ## Hashes written by other tools
 

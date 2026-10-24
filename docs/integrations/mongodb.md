@@ -48,7 +48,9 @@ need to read its own writes can pass `wait=False`.
 
 - **`num_candidates`** (default 100) is how many neighbours the approximate search considers. It
   is raised to `k` when `k` is larger, and Atlas caps it at 10,000. Higher finds more of the true
-  nearest chunks and takes longer. MongoDB suggests about 20 times the number of results.
+  nearest chunks and takes longer. MongoDB suggests about 20 times the number of results. Atlas
+  Vector Search returns at most 10,000 chunks, so a vector search with `k` above that raises
+  `ValueError` rather than return 10,000 as if no more matched.
 - **`exact=True`** compares the query with every chunk that passes the filter instead: exact
   results, at a higher cost on large collections.
 - For a native `aretrieve`, pass `async_collection=` the same collection from an
@@ -61,8 +63,10 @@ and [Milvus](milvus.md#how-permissions-are-indexed): one array field holds a typ
 every string and integer in the chunk's metadata, so `1` and `"1"` stay apart and booleans, floats,
 nested lists and objects never match. A filter becomes `$in` on that field, joined with `$and` and
 `$or`. It is a BSON document, so a group name or user id is always a value and never query syntax.
-An `In` with no values matches nothing without a call to MongoDB. Only one field needs indexing,
-whatever your metadata looks like.
+An `In` with no values matches nothing without a call to MongoDB; `filter_to_mongo` and
+`filter_to_search` raise `NothingMatches` for a filter that can match nothing, since a search
+without a filter matches everything. Only one field needs indexing, whatever your metadata looks
+like.
 
 ## Collections written by other tools
 

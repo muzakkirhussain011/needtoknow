@@ -16,7 +16,7 @@ from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labe
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from wardowl import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject
+from wardowl import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject, matches
 from wardowl.testing import QUERY as KIT_QUERY
 from wardowl.testing import check_backend
 
@@ -127,6 +127,31 @@ def test_chroma_chunk_without_permissions_never_inherits_another_chunks(chroma_f
     assert backend.search("policy", 5) and backend.search("policy", 5)[0].metadata == {}
 
 
+def test_chroma_set_metadata_never_recreates_a_deleted_chunk_nor_restores_old_text(chroma_factory):
+    from wardowl.backends.chroma import ChromaBackend
+
+    eng = {"allowed_groups": ["eng"]}
+    backend = chroma_factory([Document("a", "leave plan", eng), Document("b", "old text", eng)])
+    collection = backend.collection
+
+    class Interleaved:
+        """The collection, with another writer's changes landing just after set_metadata reads."""
+
+        def __getattr__(self, name):
+            return getattr(collection, name)
+
+        def get(self, **kwargs):
+            stored = collection.get(**kwargs)
+            backend.delete(["a"])
+            backend.add([Document("b", "new text", eng)])
+            return stored
+
+    ChromaBackend(Interleaved(), EMBED).set_metadata({"a": {"allowed_groups": ["*"]}, "b": {"allowed_groups": ["*"]}})
+    hits = {h.id: (h.text, h.metadata) for h in backend.search("leave plan text", 5)}
+    assert hits == {"b": ("new text", {"allowed_groups": ["*"]})}
+    assert backend.search("text", 5, In("allowed_groups", ["eng"])) == []  # the old list field is gone
+
+
 # ---- pgvector specifics ----------------------------------------------------------------------
 
 
@@ -151,11 +176,43 @@ def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_
 def test_pgvector_sends_many_values_as_two_array_parameters():
     from wardowl.backends.pgvector import MANY_VALUES, filter_to_sql
 
-    sql, params = filter_to_sql(In("allowed_groups", [f"g{i}" for i in range(MANY_VALUES + 1)] + [7]))
+    sql, params = filter_to_sql(In("allowed_groups", [f"g{i}" for i in range(MANY_VALUES + 1)]))
     assert sql.count("%s") == 4 and len(params) == 4
-    assert params[1][0] == "7" and params[3][0] == "[7]"  # values keep their JSON type
+    assert params[1][0] == '"g0"' and params[3][0] == '["g0"]'  # values keep their JSON type
+    ints_sql, ints_params = filter_to_sql(In("level", range(MANY_VALUES + 1)))
+    assert ints_sql.count("%s") == len(ints_params) == 6 and ints_params[1][1] == "1" and ints_params[3][1] == "[1]"
+    assert ints_params[5] == [str(i) for i in range(MANY_VALUES + 1)]  # the text each integer must read as
     few_sql, few_params = filter_to_sql(In("allowed_groups", ["hr", "eng"]))
     assert len(few_params) == 4 and few_sql.count("metadata @>") == 4  # GIN-friendly containment
+
+
+def test_pgvector_matches_integers_only_where_the_reference_does(pgvector_factory):
+    from wardowl.backends.pgvector import MANY_VALUES
+
+    # jsonb compares numbers by value, so containment alone finds 1.0 for 1; the reference does not.
+    docs = [
+        Document("int", "leave", {"level": 1}),
+        Document("float", "leave", {"level": 1.0}),
+        Document("listed-int", "leave", {"level": [1.0, 1]}),
+        Document("listed-float", "leave", {"level": [1.0, 2.5]}),
+        Document("string", "leave", {"level": "1"}),
+        Document("nested", "leave", {"level": [[1]]}),
+        Document("object", "leave", {"level": {"a": 1}}),
+        Document("bool", "leave", {"level": True}),
+    ]
+    backend = pgvector_factory(docs)
+    many = list(range(2, MANY_VALUES + 5))
+    for f in (In("level", [1]), In("level", [1, "x"]), In("level", [1, *many]), In("level", ["1"])):
+        assert {h.id for h in backend.search("leave", 10, f)} == {d.id for d in docs if matches(f, d.metadata)}, f
+
+
+def test_pgvector_refuses_metadata_keys_that_json_would_turn_into_strings(pgvector_factory):
+    backend = pgvector_factory([Document("a", "leave", {"level": 1})])
+    with pytest.raises(ValueError, match="keys must be strings"):
+        backend.add([Document("b", "leave", {1: "x"})])
+    with pytest.raises(ValueError, match="keys must be strings"):
+        backend.set_metadata({"a": {1: "x"}})
+    assert [h.metadata for h in backend.search("leave", 5)] == [{"level": 1}]
 
 
 def test_pgvector_serves_a_subject_in_forty_thousand_groups(pgvector_factory):

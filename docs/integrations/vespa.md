@@ -33,7 +33,9 @@ value's type and the value), hex-encoded, in the array attribute `wardowl_terms`
 A filter becomes `wardowl_terms in ("...")` conditions joined with `and` and `or`. The terms keep
 `1` and `"1"` apart, as the reference semantics do, and every value the filter writes into the YQL
 text is hex digits, so no metadata value can change the query. The metadata itself is stored as
-JSON and returned exactly as written.
+JSON and returned exactly as written. A filter that can match nothing returns no hits without a
+query, and `filter_to_yql` raises `NothingMatches` for it, since a query without the condition
+matches every chunk.
 
 ## Search modes
 
@@ -52,6 +54,9 @@ scores in keyword mode.
   tokens or proxies; the backend uses it as given.
 - **Hits per query:** Vespa allows 400 hits unless the query profile raises `maxHits`, as the example
   package does. Post-filtering can ask for more than `k`.
+- **Coverage:** a search that did not cover every document (a content node down or slow, or a
+  timeout: `coverage.full` false, or `coverage.degraded` set) raises `RuntimeError` rather than
+  return its partial results as complete.
 - **Writes** go `concurrency` requests at a time (8 by default). A write that fails raises; repeated
   ids in one `add` keep the last.
 - **Visibility:** a write is searchable when Vespa acknowledges it, so `add` returning means the chunk

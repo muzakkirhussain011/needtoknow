@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, EngineBackend, _raise_for_items, filter_to_query, tag, terms
 from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
@@ -38,9 +39,28 @@ def test_filters_become_terms_queries_on_the_tags():
 
 
 def test_an_empty_in_matches_nothing_without_asking_the_engine():
-    assert filter_to_query(In("team", [])) is None
-    assert filter_to_query(And(In("a", ["x"]), In("b", []))) is None
+    # Never None or {}: an engine reads either as "no filter", which matches every document.
+    for nothing in (In("team", []), And(In("a", ["x"]), In("b", [])), Or(In("a", []), In("b", []))):
+        with pytest.raises(NothingMatches):
+            filter_to_query(nothing)
     assert filter_to_query(Or(In("a", []), In("b", ["y"]))) == {"terms": {TERMS_FIELD: [tag("b", "y")]}}
+    client = Recorder()
+    assert EngineBackend(client, "i", EMBED).search("leave", 5, In("team", [])) == []
+    assert client.searches == []
+
+
+def test_k_above_what_one_search_returns_raises_instead_of_truncating():
+    from wardowl.backends.elasticsearch import ElasticsearchBackend
+    from wardowl.backends.opensearch import OpenSearchBackend
+
+    for backend in (ElasticsearchBackend(Recorder(), "docs", EMBED), OpenSearchBackend(Recorder(), "docs", EMBED)):
+        assert backend.search("leave", 10_000) == []
+        with pytest.raises(ValueError, match="10,000"):
+            backend.search("leave", 10_001)
+        with pytest.raises(ValueError, match="10,000"):
+            asyncio.run(backend.asearch("leave", 10_001))
+    with pytest.raises(ValueError, match="10,000"):
+        ElasticsearchBackend(Recorder(), "docs", None, mode="keyword").search("leave", 20_000)
 
 
 def test_names_containing_the_separator_are_refused():

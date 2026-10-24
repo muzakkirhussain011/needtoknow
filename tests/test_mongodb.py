@@ -10,6 +10,7 @@ from functools import partial
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import TERMS_FIELD, tag, terms
 from wardowl.backends.mongodb import (
     WRITE_FIELD,
@@ -37,8 +38,11 @@ def test_filters_become_bson_on_the_tags():
 
 
 def test_an_empty_in_matches_nothing_without_asking_mongodb():
-    assert filter_to_mongo(In("team", [])) is None
-    assert filter_to_mongo(And(In("a", ["x"]), In("b", []))) is None
+    # Never None: a $vectorSearch or $search without a filter matches every document.
+    for translate in (filter_to_mongo, filter_to_search):
+        for nothing in (In("team", []), And(In("a", ["x"]), In("b", [])), Or(In("a", []))):
+            with pytest.raises(NothingMatches):
+                translate(nothing)
     assert filter_to_mongo(Or(In("a", []), In("b", ["y"]))) == {TERMS_FIELD: {"$in": [tag("b", "y")]}}
     collection = FakeCollection()
     assert MongoDBBackend(collection, EMBED).search("leave", 5, In("team", [])) == []
@@ -89,7 +93,9 @@ class FakeCollection:
 def test_the_pipeline_searches_inside_the_filter_with_enough_candidates():
     collection = FakeCollection()
     MongoDBBackend(collection, EMBED, num_candidates=50).search("leave", 80, In("team", ["hr"]))
-    MongoDBBackend(collection, EMBED).search("leave", 20_000)
+    MongoDBBackend(collection, EMBED).search("leave", 10_000)
+    with pytest.raises(ValueError, match="10,000"):  # Atlas would answer with 10,000, as if no more matched
+        MongoDBBackend(collection, EMBED).search("leave", 10_001)
     MongoDBBackend(collection, EMBED, exact=True, index="docs").search("leave", 3)
     (filtered, project), (capped, _), (exact, _) = collection.pipelines
     stage = filtered["$vectorSearch"]
@@ -214,7 +220,8 @@ def test_filters_become_atlas_search_operators_on_the_tags():
     either = filter_to_search(Or(In("team", ["hr"]), In("level", [1])))
     assert either == {"compound": {"should": [hr, one], "minimumShouldMatch": 1}}
     assert filter_to_search(Or(In("team", ["hr"]), In("level", []))) == hr
-    assert filter_to_search(And(In("team", ["hr"]), In("level", []))) is None
+    with pytest.raises(NothingMatches):
+        filter_to_search(And(In("team", ["hr"]), In("level", [])))
     with pytest.raises(ValueError):
         filter_to_search(In("a\x1fb", ["x"]))
 
