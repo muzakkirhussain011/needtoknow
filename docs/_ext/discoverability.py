@@ -70,7 +70,7 @@ def _write_files(app: Sphinx, exception: Exception | None) -> None:
     if exception is not None or app.builder.format != "html":
         return
     root = app.config.root_doc
-    pages = [root] + sorted(p for p in app.env.found_docs if p != root and p not in SKIP)
+    pages = [root, *sorted(p for p in app.env.found_docs if p != root and p not in SKIP)]
     out = Path(app.outdir)
 
     urls = "".join(f"  <url><loc>{escape(_url(app, p))}</loc></url>\n" for p in pages)
