@@ -195,9 +195,7 @@ def test_an_event_that_cannot_be_built_never_replaces_the_error_or_the_result(mo
     failing = PermissionedRetriever(InMemoryBackend(DOCS), authz, observers=[events.append], audit_key=KEY)
     with pytest.raises(AuthorizationError):  # the retrieval's own error, not the reporting one
         failing.retrieve("leave", BOB)
-    ok = PermissionedRetriever(
-        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY
-    )
+    ok = PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=KEY)
     assert [h.id for h in ok.retrieve("leave", BOB).hits] == ["handbook"]
     assert events == [] and "could not build the retrieval event" in caplog.text
 
