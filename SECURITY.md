@@ -26,7 +26,8 @@ dates published for needtoknow 1.3 to 1.6 no longer apply.
 
 | Version | Security fixes | Until |
 |---|---|---|
-| 2.0.x | Yes (latest) | |
+| 2.1.x | Yes (latest) | |
+| 2.0.x | Yes | 2027-04-24, six months after 2.1.0 |
 | needtoknow 1.6.x and earlier | No: upgrade to wardowl 2.0 | |
 
 ## How reports are handled
@@ -101,5 +102,5 @@ From 1.4.0, each release also carries SLSA build provenance (`wardowl-<version>.
 also stored as a GitHub attestation. With the GitHub CLI:
 
 ```bash
-gh attestation verify wardowl-2.0.1-py3-none-any.whl --repo muzakkirhussain011/wardowl
+gh attestation verify wardowl-2.1.0-py3-none-any.whl --repo muzakkirhussain011/wardowl
 ```

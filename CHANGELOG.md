@@ -6,6 +6,165 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-24
+
+Fixes found by real-world acceptance scenarios, run against real servers, a real identity provider
+and real models: a SpiceDB setting that let a banned user read through their group, a permission
+service's error text reaching models, Ory Keto's batch limit, stale redaction spans failing every
+retrieval, Chroma's batch limit, and the example gateway's streaming and OpenAI content parts. The
+scenarios join the project and run weekly against the release on PyPI. SpiceDB's
+`group_subjects` and Keto's `batch_size` change their defaults; see Security and Fixed.
+
+### Added
+
+- Acceptance scenarios (`acceptance/`): the applications a company builds with wardowl, run from
+  the documentation against real servers, a real identity provider (Keycloak), real embedding and
+  reranking models, and a local LLM, with every result checked against an oracle of who may read
+  what that does not use wardowl. They cover 14 stores, seven permission systems, LangChain,
+  LlamaIndex, Haystack and MCP, the HTTP service, day-2 operations with servers stopped mid-traffic,
+  redaction and reranking, a team's own store and policy, and the example gateway: 3,912 checks,
+  run weekly against the release on PyPI. A Kaggle notebook runs the assistant at scale on GPUs.
+
+- `wardowl.InvalidQuery`, a `ValueError` for a query that cannot be searched through its own fault,
+  raised by `Query.embedded`, `Query.keywords`, the retriever's checks of `k`, Vespa's keyword mode
+  and `FaissBackend` (a query vector whose length is not `dim`). Code that catches `ValueError` keeps
+  working; a backend of your own can raise it.
+- `OIDCAuthenticator(ssl_context=...)` fetches the identity provider's keys with that context, for a
+  provider whose certificate a private CA signed, instead of a process-wide `SSL_CERT_FILE`.
+- `InMemoryBackend.delete(ids)`, as every other backend has; ids not stored are ignored.
+- `ChromaBackend(batch_size=...)`.
+
+### Security
+
+- Example gateway (`examples/gateway`): the audit record links the records of one question by an
+  HMAC-SHA256 under a key derived from `RAMPART_KEY_SECRET` (`question_hmac`) instead of an unkeyed
+  SHA-256 (`question_sha256`), which anyone who could read the log could reverse when the only
+  unknown in a question was a masked phone or ID number, by hashing every candidate. `rampart
+  ingest` and `rampart verify-audit` now need `RAMPART_KEY_SECRET` (or `RAMPART_DEMO=1`), as
+  `rampart serve` already did. A request from a disabled principal is now audited, without anything
+  it carried, and counted as `account_disabled`; it was refused without a record, like a request
+  with an unknown key. Every read of the audit log, through `/v1/audit`, `/v1/audit/verify` or the
+  dashboard, is audited too.
+
+- `SpiceDBAuthorizer` checks only the user by default (`group_subjects=False`, was `True`), and
+  SpiceDB follows the group memberships it stores. With groups checked as subject sets of their own,
+  a chunk was allowed when the user or any group had the permission, so under an exclusion such as
+  `permission view = viewer - banned` a banned user still read a document granted to their group
+  (the group is not banned), and under an intersection a grant through a group was refused. If your
+  group memberships live only in the token and your permissions neither exclude nor intersect, pass
+  `group_subjects=True` to keep the old behaviour; otherwise write the memberships to SpiceDB
+  (`group:<name>#member@user:<id>`). A real-SpiceDB test checks that a banned member of a permitted
+  group is denied.
+- `AuthorizationError` messages are fixed and never carry the text of the exception behind them,
+  which stays the error's `__cause__` (and so in logged tracebacks; `RetrievalEvent.cause` still names
+  its type). The retriever wrapped an authorizer's or redactor's exception as
+  `authorizer failed: <its text>`, so a failure such as
+  `could not reach opa.internal:8181 as svc-wardowl (password hunter2)` reached a model through
+  Haystack's `Agent`, which shows tool errors to it, and through LangChain and LlamaIndex agents.
+  The same holds for the LlamaIndex postprocessor, the HTTP client the permission services share
+  (which now names the exception's type, not its text), Casbin, Cedar, Cerbos `roles`, OPA's filter,
+  SpiceDB's `caveat_context` and the OIDC key fetch.
+
+### Fixed
+
+- Example gateway: `/v1/chat/completions` accepts a message's `content` as OpenAI's list of text
+  parts, joined with newlines, as well as a string; it refused the list with 422, so SDKs and chat
+  UIs that send it got no answer. The 4,000-character limit applies to the joined text, a message
+  holds at most 50 parts, and a part that is not text (an image, audio, a file) is refused with 422
+  naming its type.
+- Example gateway: `stream: true` on `/v1/chat/completions` answers in OpenAI's server-sent events
+  (`chat.completion.chunk` objects, a last chunk with `finish_reason` and the `rampart` block, a
+  usage chunk with `stream_options.include_usage`, then `data: [DONE]`). It was ignored and
+  answered with one JSON body, which streaming clients could not read. The answer is checked in
+  full first and then streamed in pieces, so the policy, masking, audit and metrics are those of
+  any other answer, and a denied request is the usual 403.
+- Example gateway: denied ingests and audit reads are counted in `rampart_policy_denials_total`, as
+  `ingest_not_allowed` and `audit_not_allowed`; only denied questions were, although the reason
+  codes existed. The dashboard's denials by reason count every action too.
+- Example gateway: Compose passes the gateway's settings through, with the gateway's defaults.
+  `RAMPART_LLM_API_KEY`, needed for a model server that wants a key, `RAMPART_MAX_BODY_BYTES`, the
+  embedding model and dimension and the tuning settings could not be set. `RAMPART_LOCAL_MODEL`
+  makes the `local-llm` profile pull a smaller chat model and serve it under the name the policy
+  approves. `RAMPART_DEFAULT_MODEL` is gone: nothing read it, since the policy chooses the model.
+
+- `KetoAuthorizer` sends 10 tuples per batch check by default (`batch_size=10`, was 100). Keto
+  refuses more than `limit.max_batch_check_size` tuples, 10 unless configured, with HTTP 400, so with
+  both defaults every check of more than 10 chunks failed, closed. Raise both together for larger
+  batches. The real-Keto CI tests now send more than 10 tuples.
+- `SpanRedactor` hides a chunk whole when one of its spans ends past the text, as when the text was
+  shortened after its spans were written, as it does for a `sha256` mismatch. It used to raise, so
+  every retrieval that reached the chunk failed, for its readers too. Spans that are wrong whatever
+  the text (not two integers with `0 <= start < end`, and the other malformed cases) still fail the
+  retrieval.
+- `ChromaBackend` writes in batches of at most `batch_size` records: the client's own maximum
+  (`get_max_batch_size()`, about 5,400 for a local client) by default, or 1,000 when the collection
+  reports none. `add`, `delete` and `set_metadata` sent everything in one call, which Chroma refuses
+  above its maximum. Every record is checked before the first batch is written.
+- An open `CircuitBreaker` raises `AuthorizationError` caused by the new
+  `wardowl.authorizers.CircuitOpenError`, so `RetrievalEvent.cause` is `"CircuitOpenError"`. It had
+  no cause, which monitoring could not tell from a malformed answer.
+- The HTTP service answers 422, echoing nothing, for a query it cannot search as sent (the new
+  `wardowl.InvalidQuery`): `k` over the retriever's `max_candidates`, only a vector for a keyword
+  backend, only text for a backend without an embed function, or a vector of the wrong length for
+  `FaissBackend`. These answered 500. Other errors remain server faults and answer 500.
+
+### Documentation
+
+- Concepts says what each strategy sends to the store: post-filtering searches inside the
+  authorizer's scope when it has one, and for an `AllOf` whose parts all give filters that scope is
+  the whole filter, even with `strategy="postfilter"`. The authorizer table lists every built-in
+  authorizer. Combining and the Chroma page's speed advice say the same.
+- Combining shows `TenantAuthorizer`'s `attribute` as it is (`None`, meaning the field's name) and
+  how one chunk serves several tenants through a list-valued `tenant` field.
+- Vespa: `namespace` only names document paths, a search covers the whole schema, and tenants are
+  kept apart by the permission filter or by a schema each. Redis: each index needs its own prefix,
+  and clients need socket timeouts. Qdrant: index `tenant` in multi-tenant collections. Cassandra:
+  `create_table` does not create the keyspace. Chroma, Elasticsearch and OpenSearch: searches are
+  approximate, with what tunes their recall.
+- Hybrid search lists Vespa's keyword mode, and Your own vectors covers LanceDB, FAISS, Vespa,
+  Cassandra and Pinecone and what a query vector of the wrong size raises.
+- Redaction warns that a span's `sha256` of a short value can be recovered by guessing, so the
+  spans must not reach callers.
+- Extending says `check_authorizer` proves consistency, not a correct policy, and shows a test of
+  known cases.
+- SpiceDB explains why `group_subjects=True` fails under an intersection or an exclusion, and what
+  to do instead. Casbin says what a custom `request` skips and must do itself. Keto and OpenFGA show
+  how to keep tenants apart in one server. OPA recommends files or bundles over policies uploaded
+  through its API.
+- Operations, Security and the integrations overview name all five HTTP authorizers, and the shared
+  cache's Redis client gets timeouts. Revocation covers Keto, Cedar and Casbin.
+- HTTP service: mapping a real provider's tokens, with Keycloak's `sub`, group paths, admin-only
+  claims and audience mapper. LangChain: a per-call `subject=` wins over `for_subject`. Haystack:
+  what a model can set on the agent tool, `inputs_from_state`, and `outputs_to_state` for getting
+  the documents back. MCP: a stdio server for a signed-in user. Agent frameworks: the `mcp` 2 client
+  takes its header on an `httpx2` client, and the MCP adapters for LangChain, LlamaIndex and
+  Haystack.
+
+- Example gateway: the README says exactly which requests are audited (not `/v1/me`, nor requests
+  refused before the policy is asked with 401, 413 or 422), how the policy chooses the model and how
+  to change it or serve a smaller one under the approved name, and how to stream. The quickstart
+  waits for the models before ingesting (`docker compose wait ollama-pull`), uses
+  `docker compose exec -T`, and says the model server needs the models pulled. It gives the status
+  and body of an over-limit request (422) and of a disabled principal (403,
+  `{"detail": "account disabled"}`), lists the `admin` demo principal, and explains that the express
+  delivery question gets no answer because the vendor FAQ is a single chunk, quarantined whole. The
+  threat model covers the keyed fingerprint, audited audit reads and disabled principals, and the
+  limit on content parts.
+
+- The Keto guide explains the batch limit and how to raise it; the example configuration keeps
+  Keto's default on purpose.
+- The HTTP service guide lists every status code, 500 included, and shows `ssl_context`.
+- The SpiceDB guide describes the new default and why `group_subjects=True` must not be used with
+  permissions that exclude or intersect; the README and the review checklist say the same.
+- The security model, threat model, operations guide, runbook and Haystack guide describe fixed
+  error messages and the `CircuitOpenError` cause; the redaction guide says which spans hide a chunk
+  and which fail the retrieval; the Chroma guide describes batched writes.
+- `OpenSearchBackend`'s docstring said to set `ef_search` in the index settings; that applies to the
+  Faiss engine only, and with the default Lucene engine the query's `k` sets the search breadth.
+- The README's Redis example sets `socket_timeout` and `socket_connect_timeout`, so a Redis that
+  stops answering fails the search instead of holding it.
+- `InMemoryBackend.add` says why it takes no `embeddings`: it matches words and keeps no vectors.
+
 ## [2.0.1] - 2026-10-24
 
 The wardowl logo arrives, on PyPI, in the README and in 3D on the documentation's front page, and
@@ -1071,7 +1230,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `wardowl`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.5.0...v1.6.0
