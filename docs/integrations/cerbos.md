@@ -87,8 +87,9 @@ attribute in the shape the policy assumes.
 ## Failures
 
 Every failure raises `AuthorizationError`, so retrieval returns nothing. `timeout=` (2 seconds by
-default) bounds the whole call, and an answer larger than `max_response_bytes=` (10 MiB by default)
-is refused. An `Authorization` header over `http://` to another machine needs
+default) bounds the whole call except the DNS lookup of the host
+([OPA](opa.md#failing-closed) explains), and an answer larger than `max_response_bytes=` (10 MiB by
+default) is refused. An `Authorization` header over `http://` to another machine needs
 `allow_insecure=True`, as for [OPA](opa.md#failing-closed). Connections are reused, transient
 failures are retried once, and a `CircuitBreaker` can pause requests to a failing PDP (see
 [Operations](../operations.md#resilience-of-remote-permission-services)).

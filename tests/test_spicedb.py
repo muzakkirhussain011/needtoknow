@@ -167,6 +167,20 @@ def test_a_resource_field_that_is_not_one_string_never_passes_check(server):
     assert server.requests == []
 
 
+@pytest.mark.parametrize("resource_field", ["doc_id", None])
+def test_a_resource_id_spicedb_would_refuse_denies_only_its_chunk(server, resource_field):
+    # One such id used to go into the CheckBulkPermissions request, which SpiceDB refuses whole, so
+    # every retrieval that found the chunk returned nothing, for every user.
+    bad = ["", "a b", "a:b", "a#b", "a.b", "a@b", "*", "\xe9", "a\n", "x" * 1025]
+    good = ["a", "A-z_0/9|=+", "x" * 1024]
+    server.responder = _bulk({(i, "ann") for i in bad + good})
+    hits = [Hit(i, "t", 1.0, {"doc_id": i}) for i in bad + good]
+    authz = SpiceDBAuthorizer(server.url, resource_field=resource_field, group_subjects=False)
+    assert authz.check(ANN, hits) == [False] * len(bad) + [True] * len(good)
+    sent = [i["resource"]["objectId"] for _, payload, _ in server.requests for i in payload["items"]]
+    assert sorted(sent) == sorted(good)
+
+
 def test_without_a_resource_field_chunks_are_resources_and_there_is_no_filter(server):
     server.responder = _bulk({("c2", "ann")})
     authz = SpiceDBAuthorizer(server.url, resource_field=None, group_subjects=False)

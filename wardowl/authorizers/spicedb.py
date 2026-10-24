@@ -21,11 +21,12 @@ id when `resource_field` is None; a chunk without it, or whose field is not one 
 The `In` pre-filter matches a list field by any of its elements, which `check` never allows, so keep
 the field one string on every chunk: with `recheck=False` the retriever trusts the filter alone.
 Subject ids and group names travel as separate JSON fields, never inside a `type:id#relation`
-string, so a `:` or `#` in one cannot change its type or relation. SpiceDB object ids allow letters,
-digits and `/_|-=+`: store such an id in `resource_field` and use such subject ids, or requests fail,
-closed. Every failure raises `AuthorizationError`. Connections are reused, transient failures are
-retried once, and a `CircuitBreaker` can pause requests to a failing server; see
-`wardowl.authorizers`.
+string, so a `:` or `#` in one cannot change its type or relation. SpiceDB object ids are 1 to 1024
+letters, digits and `/_|-=+`: store such an id in `resource_field` and use such subject ids. A chunk
+whose resource id is not one is denied without being sent, since SpiceDB would refuse the whole
+request; a subject id or group name that is not one makes requests fail, closed. Every failure
+raises `AuthorizationError`. Connections are reused, transient failures are retried once, and a
+`CircuitBreaker` can pause requests to a failing server; see `wardowl.authorizers`.
 
 Consistency: the default, `{"minimizeLatency": true}`, lets SpiceDB answer from a recent snapshot,
 so a revoked permission can keep granting access for up to the datastore's revision quantization
@@ -35,6 +36,7 @@ interval (5 seconds by default). Pass `consistency={"fullyConsistent": True}`, o
 
 from __future__ import annotations
 
+import re
 import ssl
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
@@ -50,6 +52,8 @@ _HAS = "PERMISSIONSHIP_HAS_PERMISSION"
 _NO = "PERMISSIONSHIP_NO_PERMISSION"
 _LOOKUP_HAS = "LOOKUP_PERMISSIONSHIP_HAS_PERMISSION"
 _LOOKUP_CONDITIONAL = "LOOKUP_PERMISSIONSHIP_CONDITIONAL_PERMISSION"
+# ObjectReference.object_id in SpiceDB's API (authzed/api, core.proto), less "*", the subjects' wildcard.
+_OBJECT_ID = re.compile(r"[a-zA-Z0-9/_|\-=+]{1,1024}")
 
 
 def _key(resource: Mapping[str, Any], subject: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -145,10 +149,10 @@ class SpiceDBAuthorizer:
             raise AuthorizationError(f"caveat_context failed: {exc}") from exc
 
     def _resource(self, hit: Hit) -> str | None:
-        if self.resource_field is None:
-            return hit.id
-        value = hit.metadata.get(self.resource_field)
-        return value if isinstance(value, str) and value else None
+        """The chunk's resource id, or None (the chunk is denied without asking) when it is missing,
+        not one string, or not a SpiceDB object id, which would fail the whole request with it."""
+        value = hit.id if self.resource_field is None else hit.metadata.get(self.resource_field)
+        return value if isinstance(value, str) and _OBJECT_ID.fullmatch(value) else None
 
     # ---- Authorizer ------------------------------------------------------------------------
 

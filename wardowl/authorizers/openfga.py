@@ -23,7 +23,10 @@ userset, `*` a wildcard and `:` another type, so an id or group name that is emp
 
 The resource id is `hit.metadata[resource_field]` (a document id shared by its chunks), or the
 chunk id when `resource_field` is None. A chunk without its resource id, or whose field is not one
-string, is denied. Pre-filtering needs `resource_field`. The `In` pre-filter matches a list field by
+string, is denied. So is a chunk whose resource id OpenFGA refuses in an object (one with `:`, `#`,
+a space or a control character, the id `*`, or an object longer than 256 characters): it is never
+sent, since OpenFGA would refuse the whole request and every retrieval that found the chunk would
+return nothing. Pre-filtering needs `resource_field`. The `In` pre-filter matches a list field by
 any of its elements, which `check` never allows, so keep the field one string on every chunk: with
 `recheck=False` the retriever trusts the filter alone.
 
@@ -49,6 +52,9 @@ __all__ = ["OpenFGAAuthorizer"]
 
 _CONSISTENCY = ("MINIMIZE_LATENCY", "HIGHER_CONSISTENCY")
 _NOT_IN_IDS = re.compile(r"[:#*\s]")  # would make "user:<id>" another type, a userset or a wildcard
+# OpenFGA refuses an object ("<type>:<id>") over 256 characters, or whose id is "*" or holds one of these.
+_NOT_IN_OBJECT_IDS = re.compile(r"[:# \x00-\x1f\x7f-\x9f]")
+_MAX_OBJECT = 256
 
 
 def _safe(kind: str, value: str) -> str:
@@ -161,10 +167,12 @@ class OpenFGAAuthorizer:
         return {"contextual_tuples": {"tuple_keys": keys}}
 
     def _resource(self, hit: Hit) -> str | None:
-        if self.resource_field is None:
-            return hit.id
-        value = hit.metadata.get(self.resource_field)
-        return value if isinstance(value, str) and value else None
+        """The chunk's resource id, or None (the chunk is denied without asking) when it is missing,
+        not one string, or an id OpenFGA would refuse, failing the whole request with it."""
+        value = hit.id if self.resource_field is None else hit.metadata.get(self.resource_field)
+        if not isinstance(value, str) or not value or value == "*" or _NOT_IN_OBJECT_IDS.search(value):
+            return None
+        return value if len(self.object_type) + 1 + len(value) <= _MAX_OBJECT else None
 
     # ---- Authorizer ------------------------------------------------------------------------
 

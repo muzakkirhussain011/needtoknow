@@ -47,7 +47,7 @@ then drop the old one.
 | `PermissionedRetriever(audit_key=...)` | Keys shorter than 16 bytes are refused, and a key that is not bytes raises `TypeError` | Use a key of 16 bytes or more, such as `secrets.token_bytes(32)` |
 | `CasbinAuthorizer(group_subjects=True)` | Groups are sent as `group:` + the group | Name groups with the prefix in your policies |
 | `GoogleDriveACL` | Grants with an expiry are ignored by default; a deleted or unshared file gives `Access()` | Pass `expiring_grants=True` to count them until they expire, and sync again before `access_expires_at` |
-| The HTTP authorizers | `ssl_context` or an `Authorization` header over `http://` raises `ValueError`; `timeout` bounds the whole call | Use `https://`, or `allow_insecure=True` on a network you trust; review your timeouts |
+| The HTTP authorizers | `ssl_context` or an `Authorization` header over `http://` raises `ValueError`; `timeout` bounds the whole call except the DNS lookup | Use `https://`, or `allow_insecure=True` on a network you trust; review your timeouts |
 | `OpenFGAAuthorizer` | Subject ids and groups with `:`, `#`, `*` or whitespace raise `AuthorizationError` | Map such ids before they reach the authorizer |
 | `PineconeBackend` | Writes wait up to 30 seconds for searches to see them | Pass `wait=None` for the old behaviour |
 | `PgVectorBackend` | `In("level", [1])` no longer matches a stored `1.0`; metadata keys must be strings | Store integers as integers |

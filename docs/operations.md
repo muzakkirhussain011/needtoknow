@@ -149,8 +149,9 @@ retrieval:
   connection per check. A connection the server closed while idle is replaced transparently.
 - **Transient failures are retried once** (`retries=1`): refused or reset connections, responses
   that never arrived, and HTTP 502, 503 and 504. The requests are queries, so a retry has no side
-  effects. Timeouts are not retried, which keeps the worst case at one `timeout`; neither are other
-  HTTP errors or invalid answers.
+  effects. Timeouts are not retried, and neither are other HTTP errors or invalid answers, so the
+  worst case is one `timeout`, plus the DNS lookup when a connection is opened, which only the
+  system resolver's settings bound (see [OPA](integrations/opa.md#failing-closed)).
 - **A circuit breaker** pauses requests to a service that keeps failing, so retries do not pile on
   during an outage. Retrieval fails closed either way; the breaker makes it fail fast.
 - **Redirects are never followed**, and the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`

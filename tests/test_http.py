@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import socket
 import ssl
 import sys
 import threading
@@ -225,6 +226,86 @@ def test_timeout_bounds_the_whole_call_not_each_read(server):
         OPAAuthorizer(server.url, timeout=0.3).check(BOB, HITS)
     assert time.monotonic() - started < 1.0
     assert len(server.requests) == 1  # a timeout is not retried
+
+
+class _FakeSocket:
+    """A socket on a fake clock: connecting takes `seconds`, then fails with `error` or succeeds."""
+
+    def __init__(self, clock, seconds, error=None):
+        self.clock, self.seconds, self.error = clock, seconds, error
+        self.timeouts, self.connected, self.closed = [], False, False
+
+    def settimeout(self, value):
+        self.timeouts.append(value)
+
+    def connect(self, address):
+        if self.seconds >= self.timeouts[-1]:
+            self.clock[0] += self.timeouts[-1]
+            raise TimeoutError("timed out")
+        self.clock[0] += self.seconds
+        if self.error is not None:
+            raise self.error
+        self.connected = True
+
+    def setsockopt(self, *args):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+def _fake_network(monkeypatch, *connects, lookup=0.0):
+    """Puts _http on a fake clock and network: the host resolves in `lookup` seconds to one address
+    per (seconds, error) in `connects`. Returns the clock and the sockets made, in order."""
+    clock, made, pending = [0.0], [], list(connects)
+
+    def getaddrinfo(host, port, family, kind):
+        clock[0] += lookup
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (f"10.0.0.{i}", port)) for i in range(len(connects))]
+
+    def new_socket(family, kind, proto):
+        made.append(_FakeSocket(clock, *pending.pop(0)))
+        return made[-1]
+
+    network = SimpleNamespace(getaddrinfo=getaddrinfo, socket=new_socket, SOCK_STREAM=socket.SOCK_STREAM)
+    monkeypatch.setattr(_http, "socket", network)
+    monkeypatch.setattr(_http, "time", SimpleNamespace(monotonic=lambda: clock[0], sleep=time.sleep))
+    return clock, made
+
+
+def test_each_address_and_the_tls_handshake_get_only_the_time_left(monkeypatch):
+    # Each address used to get the whole timeout, and the TLS handshake all of it again.
+    _, made = _fake_network(monkeypatch, (0.3, ConnectionRefusedError()), (0.1, None), lookup=0.2)
+    handshakes = []
+
+    def wrap_socket(sock, server_hostname):
+        handshakes.append((server_hostname, sock.timeouts[-1]))
+        return sock
+
+    tls = SimpleNamespace(verify_mode=ssl.CERT_REQUIRED, check_hostname=True, wrap_socket=wrap_socket)
+    conn = _http._HTTPSConnection("authz.internal", 443, context=tls)
+    _http._deadline.at = 1.0  # as post_json sets it
+    try:
+        conn.connect()
+    finally:
+        _http._deadline.at = None
+    refused, accepted = made
+    assert refused.timeouts == pytest.approx([0.8]) and refused.closed  # the lookup took 0.2 of 1 s
+    assert accepted.timeouts == pytest.approx([0.5, 0.4]) and accepted.connected and not accepted.closed
+    assert [name for name, _ in handshakes] == ["authz.internal"] and handshakes[0][1] == pytest.approx(0.4)
+
+
+def test_a_connect_or_lookup_that_uses_up_the_timeout_times_out_without_trying_another_address(monkeypatch):
+    client = JsonClient("http://authz.internal:8181", service="test", timeout=0.5, headers={}, retries=0)
+    client._proxied = False  # whatever the proxy variables say
+    _, made = _fake_network(monkeypatch, (5.0, None), (0.0, None))
+    with pytest.raises(AuthorizationError, match=r"timed out after 0.5 s"):
+        client.post_json("/x", {}, "test")
+    assert len(made) == 1 and made[0].timeouts == [0.5] and made[0].closed
+    _, made = _fake_network(monkeypatch, (0.0, None), lookup=0.6)  # resolving is not bounded, but counted
+    with pytest.raises(AuthorizationError, match=r"timed out after 0.5 s"):
+        client.post_json("/x", {}, "test")
+    assert made == []
 
 
 @pytest.mark.parametrize("fault", ["big", "big-chunked"])

@@ -63,7 +63,12 @@ Every failure raises `AuthorizationError`: an unreachable server, a timeout, a n
 invalid JSON, an answer larger than `max_response_bytes=` (10 MiB by default), an undefined
 decision, a list of the wrong length or type, or a malformed filter. An undefined decision is
 treated as a deny, never an allow. `timeout=` (2 seconds by default) bounds the whole call:
-connecting, sending, reading every byte of the answer, and any retry.
+connecting to each address of the host, the TLS handshake, sending, reading every byte of the
+answer, and any retry. Looking up the host's addresses (DNS) is the one step it cannot cut short,
+though the time it takes counts: the standard library has no timeout for it, and a lookup moved to a
+thread could not be stopped, so it would hold the thread until the system resolver gave up. Bound it
+with the resolver's own settings (`options timeout:` and `attempts:` in `/etc/resolv.conf`), or name
+the server by IP address. Connections are reused, so a lookup happens only when one is opened.
 
 `headers=` adds headers to every request, for example `{"Authorization": "Bearer ..."}` when OPA
 requires a token. An `Authorization` header is refused with `ValueError` over `http://` unless the

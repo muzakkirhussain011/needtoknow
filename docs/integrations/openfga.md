@@ -32,7 +32,10 @@ type document
 Chunks of one source document share its id in metadata (`doc_id` above), so a permission is
 written once per document, not once per chunk. With `resource_field=None` the chunk id is the
 resource. A chunk without its resource id, or whose field holds anything but one string (a list,
-a number), is denied.
+a number), is denied. So is a chunk whose resource id OpenFGA refuses in an object: one that
+contains `:`, `#`, a space or a control character, the id `*`, or an id that makes
+`document:<id>` longer than 256 characters. Such an id is never sent: OpenFGA would refuse the
+whole BatchCheck request, so every retrieval that found the chunk would return nothing.
 
 Subject ids and group names are written into OpenFGA's `type:id` strings, where `bob#manager`
 would be a userset, `*` the wildcard and a `:` another type. An id or group name that is empty or
@@ -87,7 +90,8 @@ must come from authentication, not from the client.
 ## Failing closed
 
 Every failure raises `AuthorizationError`: an unreachable server, a timeout (`timeout=`, 2 seconds
-by default, for the whole call), an unexpected response or one larger than `max_response_bytes=`
+by default, for the whole call except the DNS lookup of the host, as
+[for OPA](opa.md#failing-closed)), an unexpected response or one larger than `max_response_bytes=`
 (10 MiB by default), or an action with no configured relation. `headers=` adds headers to every
 request, for example an API token; an `Authorization` header over `http://` to another machine
 needs `allow_insecure=True`, as for [OPA](opa.md#failing-closed). Connections are reused and

@@ -62,7 +62,12 @@ authorizer = CedarAuthorizer(POLICIES, entities=[payroll])
   without asking Cedar, and counted with the errors in the log: left out, the attribute would make
   `resource has x` false and a `forbid` guarded by it would stop applying. A subject attribute of
   that kind raises `AuthorizationError`. Store absent values as absent keys, not None, and numbers
-  that need a fraction as strings or scaled integers. Metadata keys that are not strings, or that
-  start with `__` (`__entity` and `__extn` have special meanings in Cedar's JSON), are left out.
+  that need a fraction as strings or scaled integers.
+- **Keys Cedar cannot hold are treated the same way.** A key that is not a string (JSON would write
+  `1` as `"1"`), or that is `__entity`, `__extn` or `__expr`, which Cedar's JSON reserves for its
+  escapes (a record holding one could be read as an entity reference or an extension value), denies
+  the chunk wherever it appears in the metadata, and raises `AuthorizationError` in a subject's
+  attributes. Other keys that start with `__`, such as `__restricted`, reach Cedar like any other:
+  write `resource has "__restricted"` in a policy, and declare them in a `schema` if you pass one.
 - **Configuration** is checked when the authorizer is created: policies Cedar cannot parse raise
   `ValueError`. Any other failure raises `AuthorizationError`, and the retriever returns nothing.

@@ -58,6 +58,20 @@ def test_chunks_without_a_resource_id_are_denied_without_asking(fga):
     assert fga.requests == []
 
 
+@pytest.mark.parametrize("resource_field", ["doc_id", None])
+def test_a_resource_id_openfga_would_refuse_denies_only_its_chunk(fga, resource_field):
+    # One such id used to go into the BatchCheck request, which OpenFGA refuses whole, so every
+    # retrieval that found the chunk returned nothing, for every user.
+    fga.responder = _all_allowed
+    bad = ["", "a b", "a#viewer", "group:a", "a\tb", "a\x00b", "a\x85b", "*", "x" * 248]
+    good = ["a", "a*b", "ann@example.com", "x" * 247]  # "document:" and 247 characters make 256
+    hits = [Hit(i, "t", 1.0, {"doc_id": i}) for i in bad + good]
+    authz = OpenFGAAuthorizer(fga.url, "s", resource_field=resource_field)
+    assert authz.check(BOB, hits) == [False] * len(bad) + [True] * len(good)
+    sent = [c["tuple_key"]["object"] for _, payload in fga.requests for c in payload["checks"]]
+    assert sorted(sent) == sorted(f"document:{i}" for i in good)
+
+
 @pytest.mark.parametrize(
     "result",
     [None, {}, {"0": {"error": {"message": "boom"}}}, {"0": {"allowed": "yes"}}],

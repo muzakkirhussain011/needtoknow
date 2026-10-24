@@ -45,9 +45,12 @@ a number), is denied. Change the names with `resource_type=`, `subject_type=`,
 are sent as separate fields of SpiceDB's JSON, never inside a `type:id#relation` string, so a `:`
 or `#` in one cannot change its type or relation.
 
-SpiceDB object ids allow letters, digits and `/_|-=+`. Store such an id in the chunk's
-`resource_field` and use such subject ids (for example a stable user id rather than an email
-address); an id SpiceDB rejects makes the request fail, so retrieval fails closed.
+SpiceDB object ids are 1 to 1024 letters, digits and `/_|-=+` (its API's rule; `*` alone is the
+wildcard, which only subjects use). Store such an id in the chunk's `resource_field` and use such
+subject ids (for example a stable user id rather than an email address). A chunk whose resource
+id breaks the rule is denied without being sent, since SpiceDB would refuse the whole request and
+every retrieval that found the chunk would return nothing. A subject id or group name SpiceDB
+rejects makes the request fail, so retrieval fails closed.
 
 ## Groups from your identity provider
 
@@ -89,9 +92,9 @@ or `{"atLeastAsFresh": {"token": zedtoken}}` with the ZedToken from your last wr
 ## Failures
 
 Every failure raises `AuthorizationError`, so retrieval returns nothing: an unreachable server, a
-timeout (`timeout=`, 2 seconds by default, for the whole call), an HTTP error, a malformed answer
-or one larger than `max_response_bytes=` (10 MiB by default), a per-item error, or a missing
-answer. Connections are
+timeout (`timeout=`, 2 seconds by default, for the whole call except the DNS lookup of the host, as
+[for OPA](opa.md#failing-closed)), an HTTP error, a malformed answer or one larger than
+`max_response_bytes=` (10 MiB by default), a per-item error, or a missing answer. Connections are
 reused, transient failures are retried once, and a `CircuitBreaker` can pause requests to a failing
 server (see [Operations](../operations.md#resilience-of-remote-permission-services)).
 
