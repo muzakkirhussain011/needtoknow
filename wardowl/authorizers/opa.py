@@ -42,7 +42,8 @@ class OPAAuthorizer:
 
     `decisions_path` is the rule returning one boolean per resource and `filter_path`, if set, the
     rule returning a filter or null. `headers` are sent with every request, for example an
-    `Authorization` header. `timeout` bounds each call in total, retries included. `retries` is how
+    `Authorization` header. `timeout` bounds each call in total, retries included; only the DNS
+    lookup of the host is left to the system resolver's own timeout. `retries` is how
     many times a transient failure is retried, `circuit_breaker` pauses requests to a server that
     keeps failing, and `ssl_context` sets the TLS trust and client certificates (your own CA,
     mutual TLS) of an https:// url; it is refused with http://. An answer larger than

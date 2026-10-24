@@ -46,8 +46,9 @@ so the search starts inside the subject's tenant.
 
 Every failure raises `AuthorizationError`, and the retriever returns nothing: an unreachable server,
 a malformed answer, a wrong number of results, or a result that carries an error (an unknown
-namespace, for example). `timeout=` (2 seconds by default) bounds the whole call, and an answer
-larger than `max_response_bytes=` (10 MiB by default) is refused. An `Authorization` header over
+namespace, for example). `timeout=` (2 seconds by default) bounds the whole call except the DNS
+lookup of the host ([OPA](opa.md#failing-closed) explains), and an answer larger than
+`max_response_bytes=` (10 MiB by default) is refused. An `Authorization` header over
 `http://` to another machine needs `allow_insecure=True`, as for [OPA](opa.md#failing-closed).
 Connections are reused, transient failures are retried once, and a `CircuitBreaker` can pause
 requests to a failing server.

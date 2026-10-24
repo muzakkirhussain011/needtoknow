@@ -22,8 +22,10 @@ fractional part (`3.0`, from a store that returns every number as a float) becom
 of any other kind (another float, None, an integer beyond 64 bits, a list holding one) is never
 left out, since a `forbid ... when { resource has x && ... }` would then stop applying: a chunk
 with such a value in its metadata is denied without asking Cedar, and a subject with one in its
-attributes makes `check` raise `AuthorizationError`. Keys that are not strings, or that start with
-`__` (`__entity` and `__extn` have special meanings in Cedar JSON), are left out.
+attributes makes `check` raise `AuthorizationError`. Keys are treated the same way when they are
+not strings (JSON would write the key `1` as `"1"`) or are `__entity`, `__extn` or `__expr`, which
+Cedar JSON reserves for its escapes: a record holding one could be read as an entity reference or
+an extension value. Other keys that start with `__` reach Cedar like any other.
 
 Cedar skips a policy whose evaluation errors, a `forbid` as much as a `permit`, so a chunk whose
 evaluation reports any error is denied, never allowed. How many chunks were denied for an error
@@ -50,20 +52,21 @@ _log = logging.getLogger("wardowl")
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$")  # a Cedar entity type
 _ACTION_ID = re.compile(r'^[^"\\\x00-\x1f]+$')  # written between quotes in Action::"..."
 _LONG_MIN, _LONG_MAX = -(2**63), 2**63 - 1
+_RESERVED_KEYS = frozenset({"__entity", "__extn", "__expr"})  # Cedar JSON's escapes
 
 Entity = Mapping[str, Any]
 
 
 class _Unrepresentable(Exception):
-    """A value Cedar has no type for."""
+    """A key or value Cedar has no type for; the message describes it."""
 
 
 def _record(mapping: Mapping[Any, Any]) -> dict[str, Any]:
-    """A mapping as a Cedar record; `_Unrepresentable` when one of its values has no Cedar type."""
+    """A mapping as a Cedar record; `_Unrepresentable` when one of its keys or values has no Cedar form."""
     out: dict[str, Any] = {}
     for key, value in mapping.items():
-        if not isinstance(key, str) or key.startswith("__"):
-            continue  # "__entity" and "__extn" have special meanings in Cedar JSON
+        if not isinstance(key, str) or key in _RESERVED_KEYS:
+            raise _Unrepresentable(f"the key {key!r}")
         out[key] = _value(value)
     return out
 
@@ -79,12 +82,12 @@ def _value(value: Any) -> Any:
     # An integer, or a float without a fraction: 3.0, from a store that returns every number as a float.
     integral = isinstance(value, numbers.Integral) or (isinstance(value, float) and value.is_integer())
     if not integral or not _LONG_MIN <= int(value) <= _LONG_MAX:
-        raise _Unrepresentable(value)
+        raise _Unrepresentable(repr(value))
     return int(value)
 
 
 def _attributes(hit: Hit) -> dict[str, Any] | None:
-    """A chunk's metadata as Cedar attributes, or None when Cedar cannot hold one of its values."""
+    """A chunk's metadata as Cedar attributes, or None when Cedar cannot hold one of its keys or values."""
     try:
         return _record(hit.metadata)
     except _Unrepresentable:
@@ -92,6 +95,7 @@ def _attributes(hit: Hit) -> dict[str, Any] | None:
 
 
 def _uid(entity_type: str, entity_id: str) -> dict[str, Any]:
+    """An entity reference, in the `__entity` escape that only wardowl and `entities` may write."""
     return {"__entity": {"type": entity_type, "id": entity_id}}
 
 
@@ -177,7 +181,7 @@ class CedarAuthorizer:
         try:
             attrs = _record(subject.attributes)
         except _Unrepresentable as exc:
-            raise AuthorizationError(f"a subject attribute holds {exc.args[0]!r}, which Cedar cannot hold") from exc
+            raise AuthorizationError(f"a subject attribute holds {exc}, which Cedar cannot hold") from exc
         attrs["id"] = subject.id
         attrs["groups"] = groups
         principal = {

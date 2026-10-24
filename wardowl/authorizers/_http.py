@@ -3,9 +3,15 @@
 * Connections are kept alive and reused, one per thread, so a busy retriever does not open a TCP
   (and TLS) connection for every permission check. A connection made before `fork()` is never used
   in the child process: parent and child would share one socket and could read each other's answers.
-* `timeout` bounds a whole call: connecting, sending, every read of the answer, the pause before a
-  retry and the retry itself. An answer larger than `max_response_bytes` (10 MiB by default) is
-  refused.
+* `timeout` bounds a whole call: connecting to each address of the host, the TLS handshake,
+  sending, every read of the answer, the pause before a retry and the retry itself. An answer
+  larger than `max_response_bytes` (10 MiB by default) is refused.
+* Looking up the host's addresses is the one step `timeout` does not bound, though the time it takes
+  counts against it. The standard library has no timeout for `getaddrinfo`, and a lookup run in a
+  thread cannot be stopped: each one that hung would hold a thread until the system resolver gave
+  up, and during a DNS outage they would pile up. The resolver's own settings bound it (`timeout`
+  and `attempts` in /etc/resolv.conf), a url with an IP address needs no lookup, and connections
+  are reused, so a lookup happens only when a new one is opened.
 * A request that fails in a way that is safe to repeat is retried `retries` times (default once):
   a refused or reset connection, a response that never arrived, or HTTP 502, 503 or 504. Every
   request is a query (OPA's data API, OpenFGA's checks and object lists), so repeating one has no
@@ -154,12 +160,56 @@ class _Response(http.client.HTTPResponse):
             plain.close()
 
 
+def _create_connection(
+    address: tuple[str, int], timeout: Any = None, source_address: tuple[str, int] | None = None
+) -> socket.socket:
+    """`socket.create_connection` under the deadline of the request in flight on this thread.
+
+    Each address gets only the time left, not a fresh `timeout`, and the connected socket is then
+    set to the time still left, which bounds the TLS handshake that follows. The lookup of the
+    addresses is not bounded (see the module docstring).
+    """
+    deadline: float | None = getattr(_deadline, "at", None)
+    if deadline is None:
+        return socket.create_connection(address, timeout, source_address)
+    host, port = address
+    failure = OSError(f"no address found for {host!r}")
+    for family, kind, proto, _, sockaddr in socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM):
+        left = _left(deadline)  # TimeoutError once the lookup or earlier addresses used up the time
+        sock = socket.socket(family, kind, proto)
+        try:
+            sock.settimeout(left)
+            if source_address is not None:
+                sock.bind(source_address)
+            sock.connect(sockaddr)
+            sock.settimeout(_left(deadline))  # what remains is all the TLS handshake gets
+        except OSError as exc:
+            sock.close()
+            if isinstance(exc, TimeoutError):
+                raise  # the deadline has passed: there is no time left for another address
+            failure = exc
+        except BaseException:
+            sock.close()
+            raise
+        else:
+            return sock
+    raise failure
+
+
 class _HTTPConnection(http.client.HTTPConnection):
     response_class = _Response
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _create_connection
 
 
 class _HTTPSConnection(http.client.HTTPSConnection):
     response_class = _Response
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _create_connection
 
 
 class _HTTPHandler(urllib.request.HTTPHandler):
@@ -336,7 +386,7 @@ class JsonClient:
             sock = conn.sock
             if sock is None:
                 conn.timeout = _left(deadline)
-                conn.connect()
+                conn.connect()  # TCP and TLS within the deadline, by _create_connection
                 sock = conn.sock
             sock.settimeout(_left(deadline))
             conn.request("POST", self._prefix + path, body=body, headers=self.headers)
