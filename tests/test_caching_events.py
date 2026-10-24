@@ -208,6 +208,18 @@ def test_without_an_audit_key_there_is_no_fingerprint():
     assert events[0].query_hmac is None
 
 
+def test_an_audit_key_that_is_not_bytes_is_refused_when_the_retriever_is_made():
+    # A string passed the length check, then failed inside every event: no observer heard of any retrieval.
+    with pytest.raises(TypeError, match="audit_key"):
+        PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), audit_key="k" * 16)
+    events = []
+    retriever = PermissionedRetriever(
+        InMemoryBackend(DOCS), MetadataACLAuthorizer(), observers=[events.append], audit_key=bytearray(KEY)
+    )
+    retriever.retrieve("leave", BOB)
+    assert events[0].query_hmac == query_fingerprint("leave", KEY)
+
+
 def test_opentelemetry_spans_hold_counts_not_content():
     pytest.importorskip("opentelemetry.sdk")
     from opentelemetry.sdk.trace import TracerProvider

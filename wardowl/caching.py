@@ -386,7 +386,8 @@ class CachingAuthorizer:
             expires, payload = float(entry["expires"]), entry["value"]
             if entry["epoch"] != epoch:
                 return _MISS, 0.0  # written before an invalidate(), perhaps by a call still in flight
-        except (ValueError, TypeError, KeyError, RecursionError):  # nested too deep to decode: a miss
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            # OverflowError: an integer expiry too large for a float. RecursionError: nested too deep to decode.
             return _MISS, 0.0
         if not math.isfinite(expires):  # JSON can carry NaN and Infinity, and NaN never compares as expired
             return _MISS, 0.0
@@ -706,6 +707,10 @@ class RedisCache:
     """
 
     def __init__(self, client: Any, *, signing_key: bytes | None = None) -> None:
+        key: Any = signing_key
+        if key is not None and not isinstance(key, (bytes, bytearray)):
+            # hmac needs bytes: a string would fail on every read and write, turning the cache off.
+            raise TypeError(f"signing_key must be bytes, such as secrets.token_bytes(32), not {type(key).__name__}")
         if signing_key is not None and len(signing_key) < 16:
             raise ValueError("signing_key should be at least 16 random bytes")
         self.client = client

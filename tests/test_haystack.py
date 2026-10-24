@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("haystack")
 
-from haystack import Pipeline
+from haystack import Pipeline, component
 
 from wardowl import (
     AuthorizationError,
@@ -48,6 +48,30 @@ def test_a_pipeline_returns_only_what_the_run_subject_may_read():
     assert [d.id for d in hr["documents"]] == ["salaries"]
 
 
+@component
+class _Session:
+    """Stands in for the web layer: the authenticated user of a session, as a Subject."""
+
+    @component.output_types(subject=Subject)
+    def run(self, session_id: str) -> dict:
+        return {"subject": {"s-bob": BOB, "s-ann": ANN}[session_id]}
+
+
+def test_the_subject_can_come_from_a_connected_component_or_a_function():
+    pipeline = Pipeline()
+    pipeline.add_component("session", _Session())
+    pipeline.add_component("retriever", _component())
+    pipeline.connect("session.subject", "retriever.subject")  # a Subject output fits the subject input
+    out = pipeline.run({"session": {"session_id": "s-bob"}, "retriever": {"query": "leave salary"}})
+    assert [d.id for d in out["retriever"]["documents"]] == ["handbook"]
+    provided = Pipeline()
+    provided.add_component("retriever", _component())
+    out = provided.run({"retriever": {"query": "leave salary", "subject": lambda: ANN}})["retriever"]
+    assert {d.id for d in out["documents"]} == {"handbook", "salaries"}
+    documents = asyncio.run(_component().run_async("leave salary", lambda: BOB))["documents"]
+    assert [d.id for d in documents] == ["handbook"]
+
+
 def test_run_async_gives_the_same_documents():
     component = _component()
     assert asyncio.run(component.run_async("leave salary", ANN)) == component.run("leave salary", ANN)
@@ -63,6 +87,10 @@ def test_a_missing_or_wrong_subject_is_refused():
         _component().run("leave", None)
     with pytest.raises(TypeError):
         _component().run("leave", "bob")
+    with pytest.raises(TypeError):
+        _component().run("leave", {"id": "ann", "groups": ["hr"]})  # a JSON object is not a Subject
+    with pytest.raises(TypeError):
+        _component().run("leave", lambda: "bob")  # a function must return a Subject
     with pytest.raises(ValueError):
         _component(top_k=0)
 
@@ -114,7 +142,6 @@ def _bound():
 
 
 def test_a_bound_component_has_no_subject_input_for_a_caller_or_a_model_to_set():
-    # As a run input, the subject is something an agent's model fills in through ComponentTool.
     pipeline, bound = Pipeline(), Pipeline()
     pipeline.add_component("retriever", _component())
     bound.add_component("retriever", _bound())
@@ -135,6 +162,35 @@ def test_a_bound_component_used_as_a_tool_offers_the_model_no_subject():
     tools = pytest.importorskip("haystack.tools")
     tool = tools.ComponentTool(component=_bound(), name="search", description="Search the documents.")
     assert "query" in tool.parameters["properties"] and "subject" not in tool.parameters["properties"]
+
+
+def test_as_a_tool_the_subject_is_not_offered_to_the_model_and_a_forged_one_is_refused():
+    tools = pytest.importorskip("haystack.tools")
+    backend = _Recording()
+    retriever = WardowlRetriever(PermissionedRetriever(backend, MetadataACLAuthorizer()))
+    tool = tools.ComponentTool(component=retriever, name="search", description="Search the documents.")
+    assert "query" in tool.parameters["properties"] and "subject" not in tool.parameters["properties"]
+    # ComponentTool passes on every argument a model sends, even one not in its parameters, and
+    # converts it to the input's type with pydantic: a JSON object must not become a Subject.
+    forged = {"id": "ann", "groups": ["hr"], "attributes": {}}
+    for subject in (forged, "ann", ["ann"]):
+        with pytest.raises(TypeError):
+            tool.function(query="leave", subject=subject)
+    if getattr(tool, "async_function", None) is not None:
+        with pytest.raises(TypeError):
+            asyncio.run(tool.async_function(query="leave", subject=forged))
+    with pytest.raises(TypeError):
+        tool.function(query="leave")  # no subject: no run
+    assert backend.queries == []  # nothing was searched
+
+
+def test_a_tool_takes_the_subject_from_the_agent_state():
+    tools = pytest.importorskip("haystack.tools")
+    tool = tools.ComponentTool(component=_component(), name="search", inputs_from_state={"subject": "subject"})
+    assert "subject" not in tool.parameters["properties"]
+    # The agent adds the Subject in its state to the model's arguments; it reaches the component as it is.
+    out = tool.function(query="leave salary", subject=ANN)
+    assert {d.id for d in out["documents"]} == {"handbook", "salaries"}
 
 
 def test_a_bound_component_refuses_a_provider_that_gives_no_subject():

@@ -201,6 +201,23 @@ def test_a_backend_may_refuse_a_field_name_it_cannot_filter_on():
     check_backend(_RefusingBackend)
 
 
+class _AsyncAcceptingBackend(_RefusingBackend):
+    """Its search refuses a field name with a dot, but its async path drops that filter and searches."""
+
+    async def asearch(self, query, k, filter=None):
+        try:
+            return self.search(query, k, filter)
+        except ValueError:
+            return self.search(query, k)
+
+
+def test_asearch_must_refuse_a_filter_that_search_refuses():
+    # A refusal from search ended the comparison, so an async path that dropped the filter went unseen.
+    with pytest.raises(ConformanceError, match="asearch and search disagree") as failure:
+        check_backend(_AsyncAcceptingBackend)
+    assert "refused the filter" in str(failure.value)
+
+
 def test_failures_say_how_to_reproduce_them():
     with pytest.raises(ConformanceError) as failure:
         check_backend(FilterIgnoringBackend, seed=7)

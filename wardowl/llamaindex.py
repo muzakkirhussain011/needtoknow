@@ -3,7 +3,8 @@
 * `WardowlRetriever`: a LlamaIndex retriever for one subject, usable in query engines and
   chat engines (`RetrieverQueryEngine.from_args(WardowlRetriever(permissioned, subject))`).
 * `PermissionNodePostprocessor`: drops nodes the subject may not read, for existing pipelines.
-  It post-filters, so it can return fewer nodes than were retrieved.
+  It post-filters, so it can return fewer nodes than were retrieved. The nodes it keeps are copies
+  that carry only the metadata named in `metadata_fields`, like the retriever's.
 * `LlamaIndexBackend`: an existing LlamaIndex index as a wardowl backend (post-filtered).
 
 Any authorizer failure raises `AuthorizationError`; nothing is returned unfiltered.
@@ -16,7 +17,7 @@ from typing import Any
 
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.retrievers import BaseRetriever
-from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, RelatedNodeInfo, TextNode
 from pydantic import ConfigDict
 
 from wardowl.authz import AuthorizationError
@@ -43,6 +44,23 @@ def _nodes(result: RetrievalResult, fields: Collection[str]) -> list[NodeWithSco
 
 def _picked(metadata: Mapping[str, Any], fields: Collection[str]) -> dict[str, Any]:
     return {key: metadata[key] for key in fields if key in metadata}
+
+
+def _trimmed(node: BaseNode, fields: Collection[str]) -> BaseNode:
+    """A copy of `node` holding only the metadata keys named, in its relationships too.
+
+    A relationship carries the metadata of the node it points to, such as the source document's
+    permission fields. The copy is shallow: `node` itself is not changed.
+    """
+    relationships = {
+        kind: [_related(r, fields) for r in related] if isinstance(related, list) else _related(related, fields)
+        for kind, related in node.relationships.items()
+    }
+    return node.model_copy(update={"metadata": _picked(node.metadata, fields), "relationships": relationships})
+
+
+def _related(info: RelatedNodeInfo, fields: Collection[str]) -> RelatedNodeInfo:
+    return info.model_copy(update={"metadata": _picked(info.metadata, fields)})
 
 
 class WardowlRetriever(BaseRetriever):
@@ -80,13 +98,20 @@ class WardowlRetriever(BaseRetriever):
 
 
 class PermissionNodePostprocessor(BaseNodePostprocessor):
-    """Keeps only the nodes `subject` may read, as decided by `authorizer`."""
+    """Keeps only the nodes `subject` may read, as decided by `authorizer`.
+
+    The nodes it keeps are copies that carry the metadata keys named in `metadata_fields`, none by
+    default, as the retriever's nodes do: LlamaIndex puts a node's metadata into prompts by default,
+    and permission fields such as `allowed_users`, `allowed_groups` and `tenant` say who may read
+    what. The authorizer sees all the metadata, and the nodes passed in are not changed.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     authorizer: Any
     subject: Any
     action: str = "read"
+    metadata_fields: tuple[str, ...] = ()
 
     @classmethod
     def class_name(cls) -> str:
@@ -106,7 +131,11 @@ class PermissionNodePostprocessor(BaseNodePostprocessor):
             raise AuthorizationError(f"authorizer failed: {exc}") from exc
         if len(decisions) != len(nodes) or not all(isinstance(d, bool) for d in decisions):
             raise AuthorizationError("authorizer must return one boolean per node")
-        return [n for n, ok in zip(nodes, decisions, strict=True) if ok]
+        return [
+            NodeWithScore(node=_trimmed(n.node, self.metadata_fields), score=n.score)
+            for n, ok in zip(nodes, decisions, strict=True)
+            if ok
+        ]
 
 
 class LlamaIndexBackend:

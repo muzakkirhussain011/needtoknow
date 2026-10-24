@@ -180,6 +180,36 @@ def test_llamaindex_postprocessor_drops_nodes_and_fails_closed(li):
         li.PermissionNodePostprocessor(authorizer=Broken(), subject=BOB).postprocess_nodes(nodes)
 
 
+def test_llamaindex_postprocessor_nodes_carry_only_the_metadata_named(li):
+    from llama_index.core.schema import MetadataMode, NodeRelationship, NodeWithScore, RelatedNodeInfo, TextNode
+
+    # A relationship carries the metadata of the node it points to: here, the source file's.
+    source = RelatedNodeInfo(node_id="file", metadata={"allowed_groups": ["*"], "title": "File"})
+    nodes = [
+        NodeWithScore(
+            node=TextNode(
+                id_=d.id, text=d.text, metadata=dict(d.metadata), relationships={NodeRelationship.SOURCE: source}
+            ),
+            score=1.0,
+        )
+        for d in DOCS
+    ]
+    default = li.PermissionNodePostprocessor(authorizer=MetadataACLAuthorizer(), subject=BOB).postprocess_nodes(nodes)
+    assert {n.node.node_id for n in default} == {"handbook", "runbook", "bob-review"}
+    assert all(n.node.metadata == {} and n.node.source_node.metadata == {} and n.score == 1.0 for n in default)
+    assert all("allowed" not in n.node.get_content(metadata_mode=MetadataMode.LLM) for n in default)
+    named = li.PermissionNodePostprocessor(authorizer=MetadataACLAuthorizer(), subject=BOB, metadata_fields=["title"])
+    kept = named.postprocess_nodes(nodes)
+    titles = {n.node.node_id: n.node.metadata for n in kept}
+    assert titles == {"handbook": {"title": "Handbook"}, "runbook": {}, "bob-review": {}}
+    assert all(n.node.source_node.metadata == {"title": "File"} for n in kept)
+    # The nodes passed in keep all their metadata: the kept nodes are copies.
+    assert [n.node.metadata for n in nodes] == [dict(d.metadata) for d in DOCS]
+    assert source.metadata == {"allowed_groups": ["*"], "title": "File"}
+    with pytest.raises(ValueError):
+        li.PermissionNodePostprocessor(authorizer=MetadataACLAuthorizer(), subject=BOB, metadata_fields="title")
+
+
 def test_an_existing_llamaindex_index_can_be_post_filtered(li):
     from llama_index.core import VectorStoreIndex
     from llama_index.core.embeddings import MockEmbedding
