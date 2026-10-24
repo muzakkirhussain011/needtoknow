@@ -16,6 +16,7 @@ them back.
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 from collections.abc import Iterable, Mapping, Sequence
@@ -36,6 +37,12 @@ def _modules() -> tuple[Any, Any]:
     except ImportError as exc:  # pragma: no cover - exercised without the extra installed
         raise ImportError('FaissBackend needs faiss-cpu: pip install "wardowl[faiss]"') from exc
     return faiss, numpy
+
+
+def _copy(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    # The backend keeps its own copy and hands out copies, as `InMemoryBackend` does: a caller changing
+    # a hit's metadata, or the dict it stored, must not change the permissions of the chunk stored here.
+    return copy.deepcopy(dict(metadata))
 
 
 class FaissBackend:
@@ -87,7 +94,7 @@ class FaissBackend:
             ids = []
             for doc in docs:
                 self._ids[doc.id] = self._next
-                self._docs[self._next] = doc
+                self._docs[self._next] = Document(doc.id, doc.text, _copy(doc.metadata))
                 ids.append(self._next)
                 self._next += 1
             self.index.add_with_ids(x, self._np.asarray(ids, dtype="int64"))
@@ -107,7 +114,7 @@ class FaissBackend:
             for doc_id, new in metadata.items():
                 n = self._ids.get(doc_id)
                 if n is not None:
-                    self._docs[n] = Document(doc_id, self._docs[n].text, dict(new))
+                    self._docs[n] = Document(doc_id, self._docs[n].text, _copy(new))
 
     def __len__(self) -> int:
         return len(self._docs)
@@ -132,7 +139,7 @@ class FaissBackend:
             for score, n in zip(scores[0], found[0], strict=True):
                 doc = self._docs.get(int(n))
                 if doc is not None:  # FAISS pads with -1 when it finds fewer than k
-                    hits.append(Hit(doc.id, doc.text, float(score), doc.metadata))
+                    hits.append(Hit(doc.id, doc.text, float(score), _copy(doc.metadata)))
             return hits
 
     def save(self, path: str | Path) -> None:

@@ -173,24 +173,30 @@ class VespaBackend:
             self._client.close()
 
     def _document(self, doc_id: str) -> str:
+        if doc_id in (".", ".."):
+            # httpx drops a "." or ".." path segment, so the request would go to another path, whose 404
+            # `delete` and `set_metadata` would take for "not stored". Vespa refuses them percent-encoded too.
+            raise ValueError(f"Vespa cannot address a document whose id is {doc_id!r}")
         return f"{self.url}/document/v1/{self.namespace}/{self.schema}/docid/{quote(doc_id, safe='')}"
 
     def _each(self, method: str, items: Sequence[tuple[str, Any]], what: str) -> None:
         """Send one document request per (id, body), `concurrency` at a time; any failure raises."""
         ok = frozenset({200}) if method == "POST" else frozenset({200, 404})  # 404: not stored, ignored
+        # Every address first, so an id `_document` refuses stops the call before anything is sent.
+        requests = [(self._document(doc_id), body) for doc_id, body in items]
 
-        def run(item: tuple[str, Any]) -> None:
-            response = self._client.request(method, self._document(item[0]), json=item[1])
+        def run(request: tuple[str, Any]) -> None:
+            response = self._client.request(method, request[0], json=request[1])
             if response.status_code not in ok:
                 raise RuntimeError(f"Vespa {what} failed: HTTP {response.status_code}: {response.text[:300]}")
 
-        if not items:
+        if not requests:
             return
-        if len(items) == 1:
-            run(items[0])
+        if len(requests) == 1:
+            run(requests[0])
             return
-        with ThreadPoolExecutor(min(self.concurrency, len(items))) as pool:
-            list(pool.map(run, items))
+        with ThreadPoolExecutor(min(self.concurrency, len(requests))) as pool:
+            list(pool.map(run, requests))
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         """Store chunks, replacing any with the same id. `embeddings` gives their vectors, in order."""

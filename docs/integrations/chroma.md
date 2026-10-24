@@ -51,7 +51,10 @@ only, which matches the reference semantics: no filter matches them.
 `set_metadata` is an update, which Chroma applies to stored records only, so a chunk deleted
 meanwhile is not recreated, and its text and vector are never read and written back. Fields of the
 stored metadata that the new metadata lacks are removed in the same update, so no old list field
-survives.
+survives. Reading the stored fields and updating them are two calls, though, so an `add` of the same
+chunk between them can leave list fields the update does not know of. Every search therefore
+checks each hit's JSON copy against the filter, and drops a hit that the filter matches only
+through such a field.
 
 ## How the filter becomes `where`
 

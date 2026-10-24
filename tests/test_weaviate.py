@@ -199,6 +199,19 @@ def test_delete_reaches_objects_of_other_tools_only_by_their_exact_uuid():
     assert others.value == [other_tool]
 
 
+def test_an_empty_id_is_still_an_id_and_its_object_is_not_another_tools():
+    pytest.importorskip("weaviate")
+    empty = point_id("")  # the object add writes the chunk id "" to
+    client = FakeClient(stored={empty: {ID_PROPERTY: ""}})
+    backend = WeaviateBackend(client, "Docs", EMBED)
+    # Asked for the id that is that object's UUID, which it does not hold, the backend leaves it alone.
+    backend.set_metadata({empty: {"allowed_groups": ["*"]}})
+    backend.delete([empty])
+    assert client.handle.updated == [] and len(client.handle.deleted) == 1  # only the delete of what add wrote
+    backend.set_metadata({"": {"allowed_groups": ["*"]}})
+    assert [uid for uid, _ in client.handle.updated] == [empty]
+
+
 def test_wrong_configuration_is_rejected():
     with pytest.raises(ValueError):
         WeaviateBackend(None, "", EMBED)

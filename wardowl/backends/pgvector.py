@@ -100,7 +100,35 @@ def _metadata_json(doc_id: str, metadata: Mapping[str, Any]) -> str:
     for key in metadata:
         if not isinstance(key, str):
             raise ValueError(f"{doc_id}: metadata key {key!r} is not allowed (keys must be strings)")
-    return json.dumps(dict(metadata))
+    return _json(dict(metadata))
+
+
+def _json(value: Any) -> str:
+    """`value` as `json.dumps` writes it, except that a float without a fraction is written with one.
+
+    jsonb stores numbers as `numeric`, which keeps the digits after a point but not an exponent:
+    `json.dumps` writes the float 1e16 as `1e+16`, which jsonb stores as the integer
+    10000000000000000. It would come back as an int, and a filter on that integer would match it
+    though `matches` does not. Written as `10000000000000000.0`, it reads back as a float. Every
+    float of magnitude 1e16 or more is whole and written with an exponent (a large id in a pandas
+    integer column with a missing value, say).
+    """
+    if isinstance(value, float) and value.is_integer():
+        return f"{value:.1f}"  # the exact value, which reads back as the same float
+    if isinstance(value, dict):
+        return "{" + ",".join(f"{json.dumps(_key(k))}:{_json(v)}" for k, v in value.items()) + "}"
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_json(v) for v in value) + "]"
+    return json.dumps(value)
+
+
+def _key(key: Any) -> str:
+    # A nested object's key as json.dumps writes it: numbers, booleans and None become text.
+    if isinstance(key, str):
+        return key
+    if key is None or isinstance(key, (int, float)):
+        return json.dumps(key)
+    raise TypeError(f"keys must be str, int, float, bool or None, not {type(key).__name__}")
 
 
 def _vector(values: Sequence[float]) -> str:

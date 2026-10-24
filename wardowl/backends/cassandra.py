@@ -11,7 +11,9 @@ results are kept. Every value is a bound parameter, never CQL text.
 1,000 rows per ANN query, so a search with `k` above that raises `ValueError`. A filter that expands
 to more than `max_queries` ANDs is sent as one ANN query on the terms every match must have, for
 1,000 rows, and the filter is applied to those rows here: never a chunk the filter excludes, but
-matches beyond those 1,000 rows can be missed, as Cassandra's ANN search is approximate in any case.
+matches beyond those 1,000 rows are missed, so such a search can return fewer than `k` hits, or
+none, though more chunks match, and nothing in the result says so. Raise `max_queries`, or send
+fewer groups, to avoid it.
 
 Every write is a plain write, ordered by the client's timestamps; `set_metadata` uses no lightweight
 transaction, whose Paxos timestamps would not order with the plain writes of `add` and `delete`.

@@ -84,6 +84,22 @@ def test_an_id_repeated_in_one_call_keeps_only_its_last_document():
     assert [h.id for h in b.search("launch plan", 5)] == ["other"] and b.index.ntotal == 1
 
 
+def test_the_backend_keeps_its_own_copy_of_the_metadata():
+    stored = {"allowed_groups": ["hr"]}
+    b = backend([Document("d", "launch plan", stored)])
+    stored["allowed_groups"].append("eng")  # the caller's dict, changed after it was added
+    hit = b.search("launch", 1)[0]
+    hit.metadata["allowed_groups"].append("eng")  # a hit handed out, changed by whoever got it
+    hit.metadata["allowed_users"] = ["bob"]
+    assert b.search("launch", 1)[0].metadata == {"allowed_groups": ["hr"]}
+    assert b.search("launch", 1, In("allowed_groups", ["eng"])) == []
+    new = {"allowed_groups": ["sales"]}
+    b.set_metadata({"d": new})
+    new["allowed_groups"].append("eng")  # the dict given to set_metadata, changed afterwards
+    assert b.search("launch", 1)[0].metadata == {"allowed_groups": ["sales"]}
+    assert PermissionedRetriever(b, MetadataACLAuthorizer()).retrieve("launch", Subject("bob", ["eng"])).hits == []
+
+
 def test_repeated_ids_take_the_vector_of_their_last_document():
     b = FaissBackend(None, EMBED.dim)
     b.add(

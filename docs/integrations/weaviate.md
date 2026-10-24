@@ -51,7 +51,8 @@ Weaviate object ids are UUIDs. `add` derives one from the SHA-256 of every docum
 `wardowl_id`, which results report. `set_metadata` and `delete` act on an object only when its
 `wardowl_id` equals the id asked for, so they never change or remove an object that holds another
 id. An object written by another tool, without `wardowl_id`, is reached by its UUID written
-exactly as results report it (lower case, with hyphens).
+exactly as results report it (lower case, with hyphens). An object whose `wardowl_id` is a string,
+the empty string included, holds that id and is never reached by its UUID.
 
 ## How permissions are indexed
 

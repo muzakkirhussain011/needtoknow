@@ -72,6 +72,8 @@ class OpenSearchBackend(EngineBackend):
     may then be None.
     """
 
+    _engine = "OpenSearch"
+
     def _search_request(self, vector: list[float], k: int, query: dict[str, Any] | None) -> dict[str, Any]:
         clause: dict[str, Any] = {"vector": vector, "k": k}
         if query is not None:

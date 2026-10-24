@@ -114,6 +114,7 @@ def test_keyword_mode_sends_a_bm25_query_under_the_same_filter_and_needs_no_embe
     (es_request,) = es.searches
     assert es_request["query"] == {"bool": {"must": [{"match": {"content": "leave policy"}}], "filter": [terms_filter]}}
     assert es_request["size"] == 3 and es_request["source_excludes"] == ["embedding"]
+    assert es_request["allow_partial_search_results"] is False
     (os_request,) = os_client.searches
     assert os_request["body"]["query"] == {"bool": {"must": [{"match": {"content": "leave policy"}}], "filter": []}}
     # A keyword-only backend writes chunks without vectors; a vector backend refuses to without embed.
@@ -124,6 +125,55 @@ def test_keyword_mode_sends_a_bm25_query_under_the_same_filter_and_needs_no_embe
         ElasticsearchBackend(es, "docs", None).add([Document("a", "leave", {})])
     with pytest.raises(ValueError):
         ElasticsearchBackend(es, "docs", None).search("leave", 3)
+
+
+class Replying(Recorder):
+    """A client that records search requests and answers each with `reply`."""
+
+    def __init__(self, reply):
+        super().__init__()
+        self.reply = reply
+
+    def search(self, **request):
+        self.searches.append(request)
+        return self.reply
+
+
+class AsyncReplying(Replying):
+    """The same, as an async client."""
+
+    async def search(self, **request):
+        return super().search(**request)
+
+
+HIT = {"_id": "a", "_score": 0.9, "_source": {"content": "leave", "metadata": {"team": "hr"}}}
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        {"timed_out": True, "_shards": {"total": 2, "successful": 2, "failed": 0}, "hits": {"hits": [HIT]}},
+        {"timed_out": False, "_shards": {"total": 2, "successful": 1, "failed": 1}, "hits": {"hits": [HIT]}},
+    ],
+)
+def test_partial_results_raise_instead_of_passing_for_complete_ones(reply):
+    from wardowl.backends.elasticsearch import ElasticsearchBackend
+    from wardowl.backends.opensearch import OpenSearchBackend
+
+    for backend_class, name in ((ElasticsearchBackend, "Elasticsearch"), (OpenSearchBackend, "OpenSearch")):
+        client, async_client = Replying(reply), AsyncReplying(reply)
+        backend = backend_class(client, "docs", EMBED, async_client=async_client)
+        with pytest.raises(RuntimeError, match=f"{name} returned partial results"):
+            backend.search("leave", 3)
+        with pytest.raises(RuntimeError, match=f"{name} returned partial results"):
+            asyncio.run(backend.asearch("leave", 3, In("team", ["hr"])))
+        # Every search also asks the engine to fail rather than answer without some shards' hits.
+        assert [r["allow_partial_search_results"] for r in client.searches + async_client.searches] == [False, False]
+    complete = reply | {"timed_out": False, "_shards": {"total": 2, "successful": 2, "skipped": 0, "failed": 0}}
+    for backend_class in (ElasticsearchBackend, OpenSearchBackend):
+        backend = backend_class(Replying(complete), "docs", EMBED, async_client=AsyncReplying(complete))
+        assert [h.id for h in backend.search("leave", 3)] == [h.id for h in asyncio.run(backend.asearch("leave", 3))]
+        assert [h.id for h in backend.search("leave", 3)] == ["a"]
 
 
 # ---- real servers ------------------------------------------------------------------------------
