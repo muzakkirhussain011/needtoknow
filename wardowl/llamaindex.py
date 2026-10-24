@@ -23,7 +23,7 @@ from wardowl.filters import Filter
 from wardowl.retriever import PermissionedRetriever, RetrievalResult
 from wardowl.types import Hit, Query, Subject
 
-__all__ = ["LlamaIndexBackend", "WardowlRetriever", "PermissionNodePostprocessor"]
+__all__ = ["LlamaIndexBackend", "PermissionNodePostprocessor", "WardowlRetriever"]
 
 
 def _query(bundle: QueryBundle) -> str | Query:

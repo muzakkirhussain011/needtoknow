@@ -40,11 +40,11 @@ from permissions_bench import (
     load_synthetic,
     log,
     measure,
-    wardowl_run,
     percentile,
     subject_units,
     tags,
     top_rows,
+    wardowl_run,
 )
 from stores import STORES, make_store
 
