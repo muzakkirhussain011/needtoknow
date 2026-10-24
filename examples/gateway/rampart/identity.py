@@ -62,6 +62,12 @@ class KeyHashing:
         """The hex digest stored for `api_key`, as `key_hmac` in the principals file."""
         return hmac.new(self.secret, api_key.encode("utf-8"), hashlib.sha256).hexdigest()
 
+    def derive(self, purpose: str) -> bytes:
+        """A key of its own for `purpose` (such as the audit log's question fingerprints), derived from
+        the secret so the gateway holds one secret. What is hashed contains a NUL byte, which no API key
+        sent in a header can contain, so a derived key is never the `key_hmac` of a key anyone can use."""
+        return hmac.new(self.secret, b"rampart\x00" + purpose.encode("utf-8"), hashlib.sha256).digest()
+
 
 def key_hashing(secret: str | None, demo: bool = False) -> KeyHashing:
     """The key hashing the gateway runs with: `secret` in hex (RAMPART_KEY_SECRET), or the published

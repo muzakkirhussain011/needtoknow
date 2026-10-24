@@ -1,8 +1,12 @@
 # Full local stack: gateway + Postgres/pgvector + OPA + Ollama (CPU is fine for the demo models).
-#   RAMPART_DEMO=1 docker compose up -d --build
-#   docker compose exec gateway rampart ingest samples
+#   export RAMPART_DEMO=1
+#   docker compose --profile local-llm up -d --build
+#   docker compose --profile local-llm wait ollama-pull    # returns once both models are pulled
+#   docker compose exec -T gateway rampart ingest samples
 #   curl -s localhost:8080/v1/ask -H "Authorization: Bearer demo-key-bob" -H "Content-Type: application/json" \
 #        -d '{"question": "How many days of annual leave do I get?"}'
+# The gateway's RAMPART_* settings come from your shell or a .env file next to this one, with the
+# gateway's own defaults; only the database, OPA and principals file are fixed here.
 services:
   postgres:
     image: pgvector/pgvector:0.8.7-pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -29,13 +33,24 @@ services:
     profiles: [local-llm]
     volumes: [ollama:/root/.ollama]
 
-  # One-shot: pulls the chat and embedding models into the ollama volume.
+  # One-shot: pulls the chat and embedding models into the ollama volume. The policy approves the
+  # chat model by name (gemma4:e2b in policies/data.json). On a small machine, RAMPART_LOCAL_MODEL
+  # names a smaller model to pull instead, copied to that name (`ollama cp`) so the policy admits it.
   ollama-pull:
     image: ollama/ollama:0.40.6@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7
     profiles: [local-llm]
     depends_on: [ollama]
-    environment: { OLLAMA_HOST: "ollama:11434" }
-    entrypoint: ["sh", "-c", "ollama pull gemma4:e2b && ollama pull embeddinggemma"]
+    environment:
+      OLLAMA_HOST: "ollama:11434"
+      CHAT_MODEL: ${RAMPART_LOCAL_MODEL:-gemma4:e2b}
+      EMBED_MODEL: ${RAMPART_EMBED_MODEL:-embeddinggemma}
+    entrypoint:
+      - sh
+      - -ec
+      - |
+        ollama pull "$$CHAT_MODEL"
+        if [ "$$CHAT_MODEL" != gemma4:e2b ]; then ollama cp "$$CHAT_MODEL" gemma4:e2b; fi
+        ollama pull "$$EMBED_MODEL"
     restart: "no"
 
   gateway:
@@ -47,12 +62,23 @@ services:
       RAMPART_DATABASE_URL: postgresql://rampart:rampart-dev-only@postgres:5432/rampart
       RAMPART_OPA_URL: http://opa:8181
       RAMPART_LLM_BASE_URL: ${RAMPART_LLM_BASE_URL:-http://ollama:11434/v1}
+      RAMPART_LLM_API_KEY: ${RAMPART_LLM_API_KEY:-not-needed-for-ollama}
       RAMPART_EMBED_BASE_URL: ${RAMPART_EMBED_BASE_URL:-http://ollama:11434}
+      RAMPART_EMBED_MODEL: ${RAMPART_EMBED_MODEL:-embeddinggemma}
+      RAMPART_EMBED_DIM: ${RAMPART_EMBED_DIM:-768}
       # The demo principals are hashed under a secret published with this example, so the gateway
       # refuses them unless RAMPART_DEMO=1. For anything else, mount your own principals file below
       # and set RAMPART_KEY_SECRET to the secret it was hashed under (`rampart key-hashing`).
       RAMPART_DEMO: ${RAMPART_DEMO:-0}
       RAMPART_KEY_SECRET: ${RAMPART_KEY_SECRET:-}
+      # Limits and tuning, with the gateway's defaults.
+      RAMPART_MAX_BODY_BYTES: ${RAMPART_MAX_BODY_BYTES:-1048576}
+      RAMPART_MAX_OUTPUT_TOKENS: ${RAMPART_MAX_OUTPUT_TOKENS:-512}
+      RAMPART_REQUEST_TIMEOUT_S: ${RAMPART_REQUEST_TIMEOUT_S:-180}
+      RAMPART_TOP_K: ${RAMPART_TOP_K:-5}
+      RAMPART_MAX_CONTEXT_CHARS: ${RAMPART_MAX_CONTEXT_CHARS:-6000}
+      RAMPART_CHUNK_INJECTION_THRESHOLD: ${RAMPART_CHUNK_INJECTION_THRESHOLD:-0.5}
+      RAMPART_MINUTES_SAVED_PER_ANSWER: ${RAMPART_MINUTES_SAVED_PER_ANSWER:-6}
     volumes: ["./config/principals.yaml:/app/config/principals.yaml:ro"]
     # The API on this machine only; put a TLS proxy in front of it to serve others. Metrics (9464)
     # are not published: scrape gateway:9464 from inside the compose network.
