@@ -11,11 +11,15 @@ question
   -> generate with the approved open-weight model   (models)
   -> restore PII only if the policy allows it, mask anything new in the output
   -> record usage, append a hash-chained audit record, emit metrics
+
+Denials are audited and counted by reason for every action: a question, an ingest, a read of the
+audit log, and any request from a disabled principal.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -90,8 +94,11 @@ class Answer:
     timings_ms: dict[str, float] = field(default_factory=dict)
 
 
-def _fingerprint(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+def question_fingerprint(key: bytes, question: str) -> str:
+    """Links the audit records of one question without storing it: HMAC-SHA256 under a key the gateway
+    holds, cut to 16 hex characters. An unkeyed hash of a question whose only unknown is a masked phone
+    or ID number could be reversed by anyone who reads the log, by hashing every possible number."""
+    return hmac.new(key, question.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
 class Gateway:
@@ -106,6 +113,7 @@ class Gateway:
         embedder: Embedder,
         injection: InjectionScorer,
         metrics: Metrics,
+        audit_key: bytes,
         top_k: int = 5,
         max_context_chars: int = 6000,
         max_output_tokens: int = 512,
@@ -119,6 +127,9 @@ class Gateway:
         self.embedder = embedder
         self.injection = injection
         self.metrics = metrics
+        if len(audit_key) < 32:
+            raise ValueError("the audit key must be at least 32 bytes")
+        self._audit_key = audit_key  # for question fingerprints in the audit log
         self.top_k = top_k
         self.max_context_chars = max_context_chars
         self.max_output_tokens = max_output_tokens
@@ -147,6 +158,13 @@ class Gateway:
             **extra,
         }
         return self.audit.append(record).seq
+
+    def _deny(self, principal: Principal, action: str, decision: Decision, **extra: Any) -> PolicyDenied:
+        """Audits a denial and counts each of its reasons by code; the caller raises what it returns."""
+        seq = self._record(principal, action, decision, **extra)
+        for reason in decision.reasons:
+            self.metrics.denials.labels(denial_code(reason)).inc()
+        return PolicyDenied(decision.reasons, seq)
 
     def decide(
         self,
@@ -195,19 +213,16 @@ class Gateway:
             },
         )
         if not decision.allow:
-            seq = self._record(
+            self.metrics.requests.labels(principal.team, "denied").inc()
+            raise self._deny(
                 principal,
                 "ask",
                 decision,
                 question_masked=masked_question,
-                question_sha256=_fingerprint(question),
+                question_hmac=question_fingerprint(self._audit_key, question),
                 injection_score=verdict.score,
                 injection_signals=list(verdict.signals),
             )
-            self.metrics.requests.labels(principal.team, "denied").inc()
-            for reason in decision.reasons:
-                self.metrics.denials.labels(denial_code(reason)).inc()
-            raise PolicyDenied(decision.reasons, seq)
 
         with self._timed("embed", timings):
             query_vec = self.embedder.embed([masked_question])[0]
@@ -247,7 +262,7 @@ class Gateway:
             model=model_name,
             collections=list(decision.collections),
             question_masked=masked_question,
-            question_sha256=_fingerprint(question),
+            question_hmac=question_fingerprint(self._audit_key, question),
             chunks_used=[c.id for c in used],
             chunks_quarantined=quarantined,
             pii_masked=dict(redactor.counts),
@@ -305,8 +320,7 @@ class Gateway:
     def ingest(self, principal: Principal, documents: Sequence[Document]) -> int:
         decision = self.decide(principal, "ingest")
         if not decision.allow:
-            seq = self._record(principal, "ingest", decision, documents=[d.doc_id for d in documents])
-            raise PolicyDenied(decision.reasons, seq)
+            raise self._deny(principal, "ingest", decision, documents=[d.doc_id for d in documents])
         chunks = [c for d in documents for c in chunk_document(d)]
         if chunks:
             vectors = self.embedder.embed([c.text for c in chunks])
@@ -314,8 +328,17 @@ class Gateway:
         self._record(principal, "ingest", decision, documents=[d.doc_id for d in documents], chunks=len(chunks))
         return len(chunks)
 
-    def require_audit_access(self, principal: Principal) -> None:
+    def require_audit_access(self, principal: Principal, view: str) -> None:
+        """Lets auditors and admins read the audit log (`view`: records, verify or dashboard). Each read
+        is audited, allowed or denied: who looked at the evidence is evidence too."""
         decision = self.decide(principal, "audit")
         if not decision.allow:
-            seq = self._record(principal, "audit", decision)
-            raise PolicyDenied(decision.reasons, seq)
+            raise self._deny(principal, "audit", decision, view=view)
+        self._record(principal, "audit", decision, view=view)
+
+    def refuse_disabled(self, principal: Principal, action: str) -> int:
+        """Audits and counts a request from a disabled principal, which the API refuses before the policy
+        is asked and before anything the request carries is read. Returns the audit sequence number."""
+        if action == "ask":
+            self.metrics.requests.labels(principal.team, "denied").inc()
+        return self._deny(principal, action, Decision(allow=False, reasons=("account disabled",))).audit_seq

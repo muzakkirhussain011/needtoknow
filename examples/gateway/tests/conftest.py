@@ -29,6 +29,7 @@ READABLE = {
     "security": ["company-handbook", "vendor-faq"],
 }
 LEVEL = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
+AUDIT_KEY = b"a test key for audit fingerprints"
 
 
 def simple_policy(inp: dict) -> Decision:
@@ -89,6 +90,7 @@ def gateway(chat) -> Gateway:
         embedder=HashingEmbedder(256),
         injection=HeuristicInjectionScorer(),
         metrics=Metrics(),
+        audit_key=AUDIT_KEY,
         top_k=5,
     )
     gw.ingest(ADMIN, load_markdown_documents(SAMPLES))

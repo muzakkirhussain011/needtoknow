@@ -87,7 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     from rampart.app import build_gateway
     from rampart.metrics import Metrics
 
-    gateway, pool = build_gateway(settings, Metrics())
+    try:  # the audit log's question fingerprints are keyed with the gateway's secret
+        gateway, pool = build_gateway(settings, Metrics())
+    except ValueError as exc:
+        print(f"rampart: {exc}", file=sys.stderr)
+        return 2
     try:
         if args.command == "ingest":
             from rampart.documents import load_markdown_documents

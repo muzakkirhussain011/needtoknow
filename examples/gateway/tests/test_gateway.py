@@ -1,9 +1,20 @@
+import hashlib
+
 import pytest
 
 from rampart.documents import Chunk, ScoredChunk
-from rampart.gateway import PolicyDenied, denial_code
+from rampart.gateway import Gateway, PolicyDenied, denial_code, question_fingerprint
 from rampart.policy import CallablePolicyEngine, Decision
-from tests.conftest import ALICE, BOB
+from tests.conftest import ALICE, AUDIT_KEY, BOB, DAVE
+
+
+def denial_counts(gateway) -> dict[str, float]:
+    return {
+        sample.labels["reason"]: sample.value
+        for metric in gateway.metrics.registry.collect()
+        for sample in metric.samples
+        if sample.name == "rampart_policy_denials_total"
+    }
 
 
 def test_denied_request_is_audited_and_never_reaches_the_model(gateway, chat):
@@ -90,13 +101,50 @@ def test_denial_metrics_use_fixed_reason_codes(gateway, chat):
     for i in range(3):  # each caller-chosen model name would have been a label value of its own
         with pytest.raises(PolicyDenied):
             gateway.ask(BOB, "leave?", model=f"made-up-model-{i}")
-    labels = {
-        sample.labels["reason"]: sample.value
-        for metric in gateway.metrics.registry.collect()
-        for sample in metric.samples
-        if sample.name == "rampart_policy_denials_total"
-    }
-    assert labels == {"model_not_approved": 3, "unknown_team": 3} and chat.calls == []
+    assert denial_counts(gateway) == {"model_not_approved": 3, "unknown_team": 3} and chat.calls == []
+
+
+def test_ingest_audit_and_disabled_account_denials_are_counted_and_audited(gateway):
+    with pytest.raises(PolicyDenied):
+        gateway.ingest(BOB, [])
+    with pytest.raises(PolicyDenied):
+        gateway.require_audit_access(BOB, "records")
+    seq = gateway.refuse_disabled(BOB, "ask")
+    assert denial_counts(gateway) == {"ingest_not_allowed": 1, "audit_not_allowed": 1, "account_disabled": 1}
+    records = [e.record for e in gateway.audit.recent(3)]
+    assert [(r["action"], r["allowed"]) for r in records] == [("ask", False), ("audit", False), ("ingest", False)]
+    assert records[0]["reasons"] == ["account disabled"] and gateway.audit.recent(1)[0].seq == seq
+    team_denied = gateway.metrics.registry.get_sample_value(
+        "rampart_requests_total", {"team": "platform", "outcome": "denied"}
+    )
+    assert team_denied == 1
+
+
+def test_reads_of_the_audit_log_are_audited(gateway):
+    gateway.require_audit_access(DAVE, "verify")
+    record = gateway.audit.recent(1)[0].record
+    assert (record["action"], record["user_id"], record["allowed"], record["view"]) == ("audit", "dave", True, "verify")
+    assert denial_counts(gateway) == {}
+
+
+def test_the_audit_fingerprint_of_a_question_needs_the_gateways_key(gateway):
+    question = "Please call me on 0501234567 about my annual leave"
+    gateway.ask(BOB, question)
+    with pytest.raises(PolicyDenied):
+        gateway.ask(BOB, question, collections=["hr-policies"])
+    allowed, denied = (e.record for e in gateway.audit.recent(2)[::-1])
+    for record in (allowed, denied):
+        assert "0501234567" not in record["question_masked"] and "question_sha256" not in record
+        assert record["question_hmac"] == question_fingerprint(AUDIT_KEY, question)
+    # Anyone reading the log could hash every mobile number to find an unkeyed digest; this one needs the key.
+    assert allowed["question_hmac"] != hashlib.sha256(question.encode()).hexdigest()[:16]
+    assert question_fingerprint(b"another key, also of 32 bytes or more", question) != allowed["question_hmac"]
+
+
+def test_the_gateway_needs_an_audit_key_of_32_bytes(gateway):
+    names = ("policy", "store", "usage", "audit", "chat", "embedder", "injection", "metrics")
+    with pytest.raises(ValueError, match="32 bytes"):
+        Gateway(**{name: getattr(gateway, name) for name in names}, audit_key=b"short")
 
 
 @pytest.mark.parametrize(

@@ -4,10 +4,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rampart.app import load_directory
+from rampart.app import build_gateway, load_directory
 from rampart.cli import main
 from rampart.config import Settings, get_settings
 from rampart.identity import DEMO_KEY_SECRET, KeyHashing, PrincipalDirectory, key_hashing
+from rampart.metrics import Metrics
 from tests.conftest import ROOT
 
 PRINCIPALS = ROOT / "config" / "principals.yaml"
@@ -145,6 +146,25 @@ def test_serve_checks_the_credentials_and_serves_metrics_on_their_own_port(monke
     started.clear()
     assert main(["serve", "--metrics-port", "0"]) == 0
     assert "metrics" not in started and "app" in started
+
+
+def test_derived_keys_belong_to_their_secret_and_purpose():
+    audit = DEMO.derive("audit question fingerprint")
+    assert len(audit) == 32 and audit == KeyHashing(DEMO_KEY_SECRET).derive("audit question fingerprint")
+    assert audit != DEMO.derive("another purpose")
+    assert audit != KeyHashing.generate().derive("audit question fingerprint")
+    assert audit.hex() != DEMO.digest("audit question fingerprint")  # nor the key_hmac of a key of that name
+
+
+def test_the_gateway_keys_audit_fingerprints_with_its_secret_and_needs_one(capsys, monkeypatch, demo_settings):
+    gateway, pool = build_gateway(Settings(key_secret=None, demo=True), Metrics())
+    assert pool is None and gateway._audit_key == DEMO.derive("audit question fingerprint")
+    with pytest.raises(ValueError, match="RAMPART_KEY_SECRET"):
+        build_gateway(Settings(key_secret=None, demo=False), Metrics())
+    monkeypatch.setenv("RAMPART_DEMO", "0")
+    get_settings.cache_clear()
+    assert main(["verify-audit"]) == 2
+    assert "RAMPART_KEY_SECRET" in capsys.readouterr().err
 
 
 def test_serve_refuses_the_demo_principals_without_demo_mode(capsys, monkeypatch, demo_settings):
