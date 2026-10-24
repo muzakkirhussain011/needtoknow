@@ -50,10 +50,12 @@ from wardowl.types import Query, Subject
 try:
     import jwt
     from fastapi import Depends, FastAPI, HTTPException
+    from fastapi.exceptions import RequestValidationError
     from fastapi.responses import JSONResponse
     from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
     from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
     from starlette.concurrency import run_in_threadpool
+    from starlette.requests import Request
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
 except ImportError as exc:  # pragma: no cover - exercised without the extra installed
     raise ImportError('wardowl.server needs the server extra: pip install "wardowl[server]"') from exc
@@ -262,6 +264,13 @@ def create_app(
     bearer = HTTPBearer(auto_error=False)
     app = FastAPI(title=title, docs_url="/docs" if docs else None, redoc_url=None)
     app.add_middleware(_BodyLimit, limit=max_body_bytes)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # The rejected input is never echoed back: it may not be JSON at all (NaN), and it may be sensitive.
+        errors = [{key: error[key] for key in ("type", "loc", "msg") if key in error} for error in exc.errors()]
+        return JSONResponse({"detail": errors}, status_code=422)
+
     # Anything else runs in a worker thread; a callable that still returns an awaitable is awaited.
     authenticate_is_async = inspect.iscoroutinefunction(authenticate)
 
