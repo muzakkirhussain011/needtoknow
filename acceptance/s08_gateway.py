@@ -1433,7 +1433,6 @@ def disabled_principal(report: Report, run: Run) -> None:
         )
         path = directory / "principals.yaml"
         path.write_text(yaml.safe_dump(principals, sort_keys=False), encoding="utf-8")
-        os.chmod(path, 0o644)  # the container's user reads it
         override = directory / "compose.disabled.yml"
         mount = {"type": "bind", "source": str(path), "target": "/app/config/principals.yaml", "read_only": True}
         override.write_text(yaml.safe_dump({"services": {"gateway": {"volumes": [mount]}}}), encoding="utf-8")

@@ -105,8 +105,10 @@ jobs:
         run: |
           python -m pip install --require-hashes --no-deps -r acceptance/requirements.txt
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            # An acceptance branch tests its own code: the same dependencies, this checkout's wardowl.
-            python -m pip install --no-deps --no-build-isolation --force-reinstall .
+            # An acceptance branch tests its own code: the same dependencies, this checkout's wardowl,
+            # built into a wheel and installed from it, as a release would be.
+            python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/dist" .
+            python -m pip install --no-deps --force-reinstall "$RUNNER_TEMP"/dist/wardowl-*.whl
           fi
           python -c "import wardowl; print('wardowl', wardowl.__version__)"
       - name: Wait until every server answers
