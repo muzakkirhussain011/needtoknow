@@ -6,12 +6,12 @@ description: Permission-aware retrieval for RAG. Every user gets only the chunks
 # Retrieval that knows who's asking
 
 ```{raw} html
-<div class="ntk-hero">
-  <p class="ntk-hero__lead">
+<div class="wo-hero">
+  <p class="wo-hero__lead">
     wardowl puts your permission system inside RAG retrieval. Every user gets only the chunks
     they are allowed to read, whatever vector store, permission system or framework you use.
   </p>
-  <div class="ntk-hero__actions">
+  <div class="wo-hero__actions">
     <a class="sd-btn sd-btn-primary sd-rounded-pill" href="quickstart.html">Get started</a>
     <a class="sd-btn sd-btn-outline-primary sd-rounded-pill" href="https://github.com/muzakkirhussain011/wardowl">View on GitHub</a>
   </div>
@@ -69,19 +69,19 @@ clients where the store has them.
 :gutter: 3
 
 :::{grid-item-card} 1. Ask the permission system
-:class-card: ntk-step
+:class-card: wo-step
 The authorizer turns the user into a filter (OpenFGA, SpiceDB, Cerbos, Open Policy Agent, or
 permissions stored on the chunks), or checks candidates one by one.
 :::
 
 :::{grid-item-card} 2. Filter inside the search
-:class-card: ntk-step
+:class-card: wo-step
 The filter runs inside the vector store's own query, so the nearest chunks the user may read come
 back, however few of the corpus that is.
 :::
 
 :::{grid-item-card} 3. Check, then return
-:class-card: ntk-step
+:class-card: wo-step
 Every hit is checked again before it reaches the prompt. Anything that cannot be decided raises an
 error instead.
 :::
@@ -208,26 +208,26 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 :gutter: 3
 
 :::{grid-item-card}
-:class-card: ntk-stat
-<span class="ntk-stat__value">0</span>
+:class-card: wo-stat
+<span class="wo-stat__value">0</span>
 forbidden chunks returned in 21,000 benchmark retrievals
 :::
 
 :::{grid-item-card}
-:class-card: ntk-stat
-<span class="ntk-stat__value">0.88–0.97</span>
+:class-card: wo-stat
+<span class="wo-stat__value">0.88–0.97</span>
 recall@10 at a million chunks, pre-filtered on pgvector
 :::
 
 :::{grid-item-card}
-:class-card: ntk-stat
-<span class="ntk-stat__value">129/s</span>
+:class-card: wo-stat
+<span class="wo-stat__value">129/s</span>
 retrievals on 4 CPUs, a million chunks in PostgreSQL
 :::
 
 :::{grid-item-card}
-:class-card: ntk-stat
-<span class="ntk-stat__value">8–10%</span>
+:class-card: wo-stat
+<span class="wo-stat__value">8–10%</span>
 cost of a remote permission service, all of it recovered by caching
 :::
 ::::
@@ -257,7 +257,7 @@ Scorecard.
 ::::
 
 ```{raw} html
-<div class="ntk-cta">
+<div class="wo-cta">
   <a class="sd-btn sd-btn-primary sd-rounded-pill" href="quickstart.html">Get started</a>
   <a class="sd-btn sd-btn-outline-primary sd-rounded-pill" href="concepts.html">Read the concepts</a>
 </div>
@@ -327,6 +327,8 @@ api
 extending
 support
 benchmarks
+faq
+upgrading
 changelog
 contributing
 ```

@@ -289,7 +289,7 @@ def redis_client():
 
 
 def _store(client, algorithm="HNSW"):
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_index(client, name, EMBED.dim, prefix=f"{name}:", algorithm=algorithm)
     return name, RedisBackend(client, name, EMBED, prefix=f"{name}:")
 
@@ -326,7 +326,7 @@ def test_server_searches_with_query_vectors(redis_client):
     def make(docs):
         for name in made:
             _drop(redis_client, name)
-        name = f"ntk_{uuid.uuid4().hex}"
+        name = f"wo_{uuid.uuid4().hex}"
         create_index(redis_client, name, EMBED.dim, prefix=f"{name}:", algorithm="FLAT")
         made[:] = [name]
         backend = RedisBackend(redis_client, name, prefix=f"{name}:")
@@ -429,7 +429,7 @@ def test_a_subject_in_ten_thousand_groups(redis_client):
 
 
 def _keyword_index(client):
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_index(client, name, EMBED.dim, prefix=f"{name}:", content_field="content", algorithm="FLAT")
     return name
 

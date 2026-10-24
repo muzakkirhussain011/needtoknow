@@ -17,6 +17,26 @@ All notable changes are recorded here. The format follows
   now `wardowl_terms`, `wardowl_id` and `wardowl_metadata`), so collections written by needtoknow
   must be indexed again. needtoknow 1.6.0 remains on PyPI and gets no further releases.
 
+- Shared-cache keys changed, so entries written by an earlier version are not read after an
+  upgrade, and during a rolling upgrade an `invalidate()` made by one version does not clear the
+  other's entries: call `invalidate()` once the upgrade is done, or allow for `ttl`.
+- The operations guide's `set_metadata` example merges the stored metadata instead of replacing it
+  with the changed permission alone.
+
+- The public filter translators raise the new `wardowl.backends.NothingMatches` (a `ValueError`) for
+  a filter that can match nothing, instead of returning `None` or `{}`, which store clients read as
+  no filter at all: `filter_to_query` (Elasticsearch, OpenSearch, Redis), `filter_to_where`
+  (Chroma), `filter_to_qdrant`, `filter_to_mongo`, `filter_to_search`, `filter_to_expression`
+  (Milvus), `filter_to_weaviate`, `filter_to_sql` (LanceDB), `filter_to_yql` and
+  `filter_to_pinecone`. Chroma's `NEVER` constant is removed. The backends still return no hits for
+  such a filter without asking the store.
+- A search with `k` above what the store returns in one query raises `ValueError` instead of
+  returning that many hits as if no more matched: 10,000 for Elasticsearch, OpenSearch, MongoDB
+  Atlas Vector Search and Pinecone, and 1,000 for Cassandra.
+- `PineconeBackend` waits 30 seconds by default (`wait=30.0`, was `None`) for a search to see each
+  write, so a revoked permission or a deleted chunk is out of searches when the call returns.
+  `wait=None` keeps the old behaviour.
+
 ### Added
 
 - `PineconeBackend` (the `pinecone` extra): dense vector search on a Pinecone index through its
@@ -25,6 +45,206 @@ All notable changes are recorded here. The format follows
   search. `wait=` makes writes wait until a search sees them, for serverless indexes' eventual
   consistency; ids that Pinecone cannot store are kept under their SHA-256; the API key never
   appears in errors. Tested with the conformance kit against a Pinecone serverless index.
+
+### Security
+
+- `CachingAuthorizer(shared=...)` requires an explicit `namespace`. Shared-cache keys held only the
+  namespace, subject, kind, action and chunk, and the namespace defaulted to `"wardowl"`, so two
+  caching authorizers sharing one Redis answered for each other:
+  `AllOf(CachingAuthorizer(TenantAuthorizer(), shared=r), CachingAuthorizer(OpenFGAAuthorizer(...), shared=r))`
+  skipped OpenFGA. A process also refuses, with `ValueError`, a second kind of authorizer under a
+  Redis client (or `SharedCache`) and namespace it already uses.
+- Cache keys are exact. Their parts were joined with NUL and no lengths, values were encoded with
+  `json.dumps(default=repr)`, and this process's keys compared subjects with `==`, so `{1}` and
+  `"{1}"`, the metadata keys `1` and `"1"`, lists and tuples, the attributes `1`, `True` and `1.0`,
+  and an action and chunk id containing NUL could share a cached decision. Keys are now digests of a
+  length-prefixed, type-tagged encoding, and a subject or chunk holding a value of a type that has
+  no exact encoding is not cached: the authorizer is asked every time.
+- A shared-cache entry whose expiry is NaN or infinite is a miss. `float()` accepted both, and a NaN
+  expiry gave a local copy that never expired. Non-finite or non-positive lifetimes are never
+  stored, and `ttl` and `local_ttl` must be finite.
+- `SpanRedactor` hides the whole text of a chunk without its spans field (`required=True` by
+  default; `[]` still means nothing to hide, and `required=False` restores the old behaviour). A
+  missing field showed the chunk in full, and `set_metadata`, which replaces the metadata, dropped
+  the field whenever permissions were updated without it. A span may now carry `sha256`
+  (`wardowl.redaction.span_digest` of the text it covers); a chunk whose text no longer matches is
+  hidden whole.
+- Haystack: `BoundWardowlRetriever` takes the subject from `subject_provider`, a function such as
+  one reading a contextvar the web layer sets, and has no `subject` input. `WardowlRetriever` takes
+  the subject as a run input, so `ComponentTool` offered it to an agent's model, which could search
+  as anyone; agents must use the bound component.
+- The LangChain, LlamaIndex and Haystack retrievers return no chunk metadata unless named in
+  `metadata_fields`, as the HTTP service and the MCP tool already did. They passed every key,
+  `allowed_users`, `allowed_groups` and `tenant` included, into the documents a model, prompts,
+  callbacks and traces receive. LangChain documents keep `relevance_score`.
+- `Subject.attributes` is a deep copy that cannot be changed (read-only dicts, tuples, frozensets),
+  and a subject's id and groups must be strings. Changing the attributes of a subject already used
+  as a cache key, directly or through a list the caller still held, could hand a later subject the
+  decision cached for the original.
+
+- `FaissBackend.add` keeps only the last document of an id repeated in one call. Each copy used to
+  get its own slot, and the earlier copies stayed in the index, out of reach of `delete` and
+  `set_metadata`, so searches kept returning them with their old metadata after a revocation.
+- `QdrantBackend` and `WeaviateBackend` derive every point or object id from the SHA-256 of the
+  chunk id (`point_id`), a chunk id that is already a UUID included. A UUID used to be kept as it
+  was, so another spelling of it (upper case, braces, `urn:uuid:`), or an id chosen to equal the
+  UUID derived from another, landed on the same point. `set_metadata` and `delete` now act only on a
+  point whose stored `wardowl_id` is the id asked for (Qdrant: a filter on the payload; Weaviate: the
+  property, checked before each update and required by each delete), so they never change or remove
+  a chunk that holds another id. A point or object written by another tool, without `wardowl_id`, is
+  reached by its UUID written exactly as search results report it. Collections must be indexed
+  again, as the rename already requires.
+- `PineconeBackend` stores a chunk id that starts with `sha256-` under its SHA-256, like ids Pinecone
+  cannot hold, so no chunk id can share a record with another's hashed id. `set_metadata` and
+  `delete` fetch the records first (`GET /vectors/fetch`) and leave alone any record that holds
+  another chunk id.
+- `MilvusBackend.delete` and `set_metadata` select rows with `id in {ids}` and the ids as a filter
+  parameter. pymilvus's `get(ids=...)` and `delete(ids=...)` write string ids into the expression
+  between quotes, so an id such as `a','b` selected the chunks `a` and `b` as well.
+- `set_metadata` never writes a whole chunk back. Milvus updates only the metadata and terms with a
+  partial update (Milvus 2.6.2 or newer), LanceDB with an update-only merge of those columns, Chroma
+  with an update (removing stale list fields in the same call), and Qdrant sets only the payload's
+  metadata key. Before, a chunk deleted while `set_metadata` ran could be inserted again with its
+  old text, and a concurrent `add` could have its new text replaced by the old.
+- `CassandraBackend.set_metadata` uses plain writes, like `add` and `delete`, instead of a
+  lightweight transaction. Cassandra orders writes to a row by timestamp, and the transaction's
+  Paxos timestamp does not order with the client timestamps of plain writes, so a permission change
+  could be applied over a later one. Ids are looked up first, so an id that is not stored still
+  creates no row; a chunk deleted between the lookup and the update is left without text or vector,
+  which an ANN search never returns.
+- `PgVectorBackend` matches an integer value only where the stored number reads as that integer, as
+  the reference semantics do: jsonb compares numbers by value, so `In("level", [1])` used to match
+  `{"level": 1.0}`. Metadata keys that are not strings are refused, since JSON turned the key `1`
+  into `"1"`, which a filter on the field `"1"` then matched.
+- Chroma's `filter_to_where` refuses field names that contain `::` or equal `wardowl_metadata`,
+  which addressed the stored list fields or the JSON copy rather than a metadata field.
+
+- `CedarAuthorizer` no longer leaves out metadata values Cedar cannot hold. A float, None or an
+  integer beyond 64 bits used to vanish from a chunk's attributes, so a `forbid ... when { resource
+  has x && ... }` stopped applying and a `permit` could let the chunk through (a `sensitivity` of
+  `3.0` from a store that returns every number as a float, say). Integers, and floats without a
+  fraction, now become Cedar Longs; a chunk whose metadata holds any other such value, directly or
+  in a list or record, is denied without asking Cedar and counted with the evaluation errors in the
+  log; a subject attribute of that kind raises `AuthorizationError`.
+- `CasbinAuthorizer(group_subjects=True)` sends each group as `group_prefix` + the group
+  (`"group:eng"`; the prefix defaults to `"group:"` and cannot be empty). Groups used to be sent as
+  the bare subject, so a group named like a user or a role (`"admin"`, `"ceo@example.com"`) got that
+  user's or role's access. Policies that grant to groups must now name them with the prefix, and a
+  subject id that starts with the prefix raises `AuthorizationError`.
+- `GoogleDriveACL` and `drive_access` no longer count a Drive grant that has an expiry time. Such a
+  grant was kept without its expiry, so the copy on the chunks outlived the share. Pass
+  `expiring_grants=True` to count it until it expires: `Access.expires_at` is then the earliest
+  expiry among the grants that count, and `with_access` writes it to the chunks as
+  `access_expires_at` (UTC, to the second), so the file can be synced again by then. A later sync
+  without one removes the field.
+- `GoogleDriveACL.access` returns `Access()`, readable by nobody, for a file that is gone or no
+  longer visible to the credentials (HTTP 404, or 403 with the reason `notFound` or
+  `insufficientFilePermissions`). It used to raise, so a deleted or unshared file kept its old
+  grants for good. Rate limits, server errors and every other error are still raised, keeping the
+  grants until a sync succeeds.
+- The HTTP authorizers (OPA, OpenFGA, SpiceDB, Cerbos, Keto) never use a kept-alive connection in a
+  process other than the one that opened it. A worker forked after a request (gunicorn `--preload`
+  with a request at start-up, for example) used to share its parent's socket, and the processes
+  could read each other's permission answers.
+- `OpenFGAAuthorizer` refuses, with `AuthorizationError`, a subject id or group name that is empty or
+  contains `:`, `#`, `*` or whitespace. They are written into OpenFGA's `type:id` strings, where
+  `bob#manager` would be a userset and `*` the wildcard. Keto, SpiceDB and Cedar send ids in
+  separate fields and are unaffected.
+- The HTTP authorizers refuse `ssl_context` with an `http://` url, where it was silently ignored,
+  and refuse an `Authorization` header (SpiceDB's `token`, for one) over `http://` unless the url
+  names this machine and no proxy applies. Pass `allow_insecure=True` to send it over a network you
+  trust. Both raise `ValueError` when the authorizer is created.
+- The HTTP authorizers' `timeout` now bounds a whole call: connecting, sending, every read of the
+  answer, and any retry. It used to apply to each socket operation, so a server that sent its
+  answer slowly could hold a retrieval for much longer. Answers larger than the new
+  `max_response_bytes` (10 MiB by default) are refused with `AuthorizationError`.
+
+- `wardowl.server.create_app` runs a synchronous authenticator, such as `OIDCAuthenticator`, in a
+  worker thread, and awaits an async one. It used to call it on the event loop, so one slow fetch of
+  the identity provider's keys stalled every request the service was handling. The MCP search tool
+  does the same for a synchronous `subject_for`.
+- `OIDCAuthenticator` keeps the provider's key set itself instead of in `PyJWKClient`'s per-key
+  cache, which never expired. The set is fetched with a 5-second `timeout` (it was 30) and kept for
+  `lifespan` (300 seconds), so a key the provider rotates out stops verifying within that time. A
+  token naming a key that is not in the set fetches the set again at most once every `cooldown` (30
+  seconds), and until then is refused at once, so tokens with made-up key ids can no longer make the
+  service fetch the keys on every request. A key endpoint that fails answers 503 and is not asked
+  again before the cooldown ends. `lifespan`, `cooldown` and `timeout` are new keyword arguments.
+- `OIDCAuthenticator` verifies a token with its key's own algorithm, which must be one of
+  `algorithms`, rather than the algorithm the token's header names. A token whose header names
+  another algorithm than its key's (ES256 over an RSA key, say), a shared-secret key in the
+  published set, a key set with no usable keys, and any other PyJWT error now answer 401 or 503
+  instead of an internal server error with a traceback in the log. A token must name its key (`kid`).
+- `wardowl.server` refuses a request body over `max_body_bytes` (256 KiB by default) with 413 before
+  it is parsed or the caller is authenticated, by its `Content-Length` and by the bytes received.
+  A `vector` holds at most `max_vector_length` numbers (4,096 by default), and `NaN` and infinities
+  are refused with 422; they used to reach the retriever and fail with a 500.
+- The MCP search tool's `query` holds at most `max_query_length` characters (4,000 by default), a
+  new argument of `add_search_tool`.
+- The `server` extra needs PyJWT 2.14 or later (it allowed 2.10.0, whose issuer check matched
+  substrings, CVE-2024-53861; 2.14.0 also fixes the later advisories in the code `wardowl.server`
+  uses), and the `langchain` extra needs langchain-core 1.3.3 or later (it allowed 1.0 to 1.2.4,
+  open to serialization injection in `dumps` and `loads`, CVE-2025-68664, and releases before the
+  fixes for the later prompt template and `load()` advisories).
+- The Lock workflow resolves in a job with a read-only token and no stored credentials, never builds
+  a source distribution, and refuses a version uploaded less than 7 days ago unless it was named in
+  `upgrade`; only a second job, which runs no package code, can push, and it starts CI on the
+  commit it pushes. The Pinecone tests, the only ones that receive an API key, run in a job of their
+  own with only the packages they need and pytest's plugin autoloading off, on `main` or by hand,
+  never for a pull request.
+- Example gateway (`examples/gateway`): `/v1/chat/completions` accepts at most 20 messages of at
+  most 4,000 characters, and both question endpoints cap model and collection names; the email
+  pattern and the markdown image rule, which run before the policy decides, now take linear time
+  (they were quadratic on inputs such as `a.a.a.a...`). API keys are stored as HMAC-SHA256 digests
+  under a secret the gateway holds (`RAMPART_KEY_SECRET`) instead of scrypt hashes, so a request
+  with a made-up key no longer costs 16 MiB and tens of milliseconds before authentication; existing
+  principals files must be hashed again with `rampart key-hashing` and `rampart hash-key`. The demo
+  principals, whose keys are published, are refused unless `RAMPART_DEMO=1`; the image no longer
+  contains a principals file, and Compose mounts it and publishes the API on `127.0.0.1` only.
+  Prometheus metrics moved from `/metrics` on the API to their own port (9464, not published by
+  Compose), and policy denials are counted by fixed reason codes, so a caller's model name can no
+  longer add label values.
+
+### Fixed
+
+- `max_candidates` bounds every retrieval: a `k` above it raises `ValueError` (pre-filtering searched
+  for, and re-checked, any `k`), the rerank depth is capped at it, and post-filtering checks no more
+  candidates than the fetch it asked for, whatever the backend returns.
+- `In(field, "12")` raises `TypeError` instead of holding the values `"1"` and `"2"`; so do bytes
+  and a mapping.
+- `CachingAuthorizer` no longer caches a `filter_for` or `scope_for` answer that is not `None` or a
+  well-formed filter, as documented.
+- `aretrieve` runs the redactor in a thread, not on the event loop.
+- `PermissionedRetriever(audit_key=...)` refuses a key shorter than 16 bytes, as `RedisCache` does
+  for `signing_key`.
+- `InMemoryBackend` stores and returns copies of the metadata: a caller changing a returned hit's
+  metadata, or the dict it added, changed the permissions of the stored chunk.
+- The conformance kit checks the async paths: every `asearch` result against `search` (ids, order,
+  text, metadata and scores, with and without a filter), retrieval through `aretrieve` as well as
+  `retrieve`, and an authorizer's `acheck`, `afilter_for` and `ascope_for` against the sync methods.
+  `check_authorizer` empties every `CachingAuthorizer` before each call, so a cache cannot hide an
+  authorizer whose answers depend on the batch.
+- The conformance kit's data holds what stores tend to confuse: `"1"` next to `1`, case and Unicode
+  normalisation variants, and field names with a dot or letters outside ASCII next to nested
+  objects. A backend may refuse a filter on such a field name with `ValueError`.
+
+- `VespaBackend.search` raises when the result does not cover every document (`coverage.full`
+  false, or `coverage.degraded` set), instead of returning partial results as complete.
+- `RedisBackend.search` raises when a RESP3 reply carries the Query Engine's timeout warning, which
+  marks partial results. The Redis guide now recommends `search-on-timeout fail`, the only
+  protection for RESP2 clients.
+
+- The email pattern in the redaction guide could take quadratic time on a long run of word
+  characters and dots; it now starts a match only where such a run starts.
+
+### Documentation
+
+- The OPA, OpenFGA, SpiceDB and Cerbos pages say what `recheck=False` requires: the filter alone
+  decides, and `In` matches a list field by any element (and Cerbos's translated `in` and
+  `hasIntersection` match a single value), while `check` denies those shapes. Every chunk must store
+  each field in the shape the policy assumes; the default re-check drops the others as violations.
+  `OpenFGAAuthorizer` and `SpiceDBAuthorizer` deny, without asking, a chunk whose resource field is
+  not one string.
 
 ## [1.6.0] - 2026-10-23
 

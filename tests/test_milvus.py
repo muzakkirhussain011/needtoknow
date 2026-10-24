@@ -211,7 +211,7 @@ def _client():
 
 
 def _new_collection(client):
-    name = f"ntk_{uuid.uuid4().hex}"  # Milvus names allow letters, digits and underscores
+    name = f"wo_{uuid.uuid4().hex}"  # Milvus names allow letters, digits and underscores
     create_collection(client, name, EMBED.dim)
     return name
 
@@ -284,7 +284,7 @@ def test_hostile_group_names_are_only_values():
 
 def test_a_chunk_with_more_terms_than_the_collection_allows_is_refused():
     client = _client()
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_collection(client, name, EMBED.dim, max_terms=2)
     backend = MilvusBackend(client, name, EMBED)
     from pymilvus import MilvusException
@@ -366,7 +366,7 @@ def test_a_subject_in_ten_thousand_groups():
 
 
 def _new_text_collection(client):
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_collection(client, name, EMBED.dim, text_search=True)
     return name
 

@@ -40,12 +40,12 @@ def pgvector_factory(pgvector_pool):
     from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     # No HNSW index here: exact search, so results can be compared with the reference exactly.
-    create_schema(pgvector_pool, EMBED.dim, table="ntk_conformance", hnsw=False)
-    backend = PgVectorBackend(pgvector_pool, EMBED, table="ntk_conformance", iterative_scan=None)
+    create_schema(pgvector_pool, EMBED.dim, table="wo_conformance", hnsw=False)
+    backend = PgVectorBackend(pgvector_pool, EMBED, table="wo_conformance", iterative_scan=None)
 
     def make(docs):
         with pgvector_pool.connection() as conn:
-            conn.execute("TRUNCATE ntk_conformance")
+            conn.execute("TRUNCATE wo_conformance")
         backend.add(docs)
         return backend
 
@@ -65,7 +65,7 @@ def chroma_factory():
         for name in previous:
             with contextlib.suppress(Exception):
                 client.delete_collection(name)
-        previous[:] = [f"ntk_{uuid.uuid4().hex}"]
+        previous[:] = [f"wo_{uuid.uuid4().hex}"]
         collection = client.create_collection(previous[0], embedding_function=None)
         backend = ChromaBackend(collection, EMBED)
         backend.add(docs)
@@ -158,12 +158,12 @@ def test_chroma_set_metadata_never_recreates_a_deleted_chunk_nor_restores_old_te
 def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_pool):
     from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
-    create_schema(pgvector_pool, EMBED.dim, table="ntk_hnsw", hnsw=True)
+    create_schema(pgvector_pool, EMBED.dim, table="wo_hnsw", hnsw=True)
     with pgvector_pool.connection() as conn:
-        conn.execute("TRUNCATE ntk_hnsw")
+        conn.execute("TRUNCATE wo_hnsw")
     docs = [Document(f"hr-{i:03d}", f"leave policy note {i}", {"allowed_groups": ["hr"]}) for i in range(400)]
     docs += [Document(f"bob-{i}", f"leave policy note bob {i}", {"allowed_users": ["bob"]}) for i in range(5)]
-    backend = PgVectorBackend(pgvector_pool, EMBED, table="ntk_hnsw")
+    backend = PgVectorBackend(pgvector_pool, EMBED, table="wo_hnsw")
     backend.add(docs)
     retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
     result = retriever.retrieve("leave policy", Subject("bob"), k=5)
@@ -246,7 +246,7 @@ def test_pgvector_ef_search_holds_for_the_search_only(pgvector_pool):
         def _query(self, query_vector, k, f):
             return sql.SQL("SELECT current_setting('hnsw.ef_search'), '', NULL, 0.0"), []
 
-    [hit] = Probe(pgvector_pool, EMBED, table="ntk_hnsw", ef_search=123).search("anything", 1)
+    [hit] = Probe(pgvector_pool, EMBED, table="wo_hnsw", ef_search=123).search("anything", 1)
     assert hit.id == "123"
     # SET LOCAL ends with the search's transaction: the pooled connection is left as it was.
     with pgvector_pool.connection() as conn:
@@ -264,7 +264,7 @@ def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_facto
     async def run():
         async with psycopg_pool.AsyncConnectionPool(DATABASE_URL, min_size=1, max_size=2, open=False) as apool:
             backend = PgVectorBackend(
-                pgvector_pool, EMBED, table="ntk_conformance", async_pool=apool, iterative_scan=None
+                pgvector_pool, EMBED, table="wo_conformance", async_pool=apool, iterative_scan=None
             )
             retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
             return await retriever.aretrieve("report", subject, k=4), retriever.retrieve("report", subject, k=4)
@@ -301,12 +301,12 @@ def test_pgvector_mode_and_embed_are_checked():
 def pgvector_keyword_table(pgvector_pool):
     from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
-    create_schema(pgvector_pool, EMBED.dim, table="ntk_keyword", hnsw=False, text_search="english")
-    writer = PgVectorBackend(pgvector_pool, EMBED, table="ntk_keyword", iterative_scan=None)
+    create_schema(pgvector_pool, EMBED.dim, table="wo_keyword", hnsw=False, text_search="english")
+    writer = PgVectorBackend(pgvector_pool, EMBED, table="wo_keyword", iterative_scan=None)
 
     def load(docs):
         with pgvector_pool.connection() as conn:
-            conn.execute("TRUNCATE ntk_keyword")
+            conn.execute("TRUNCATE wo_keyword")
         writer.add(docs)
         return writer
 
@@ -316,7 +316,7 @@ def pgvector_keyword_table(pgvector_pool):
 def test_pgvector_keyword_mode_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
     from wardowl.backends.pgvector import PgVectorBackend
 
-    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+    keyword = PgVectorBackend(pgvector_pool, None, table="wo_keyword", mode="keyword")
 
     def make(docs):
         pgvector_keyword_table(docs)
@@ -329,7 +329,7 @@ def test_pgvector_hybrid_search_on_one_table_passes_the_conformance_kit(pgvector
     from wardowl import RankFusion
     from wardowl.backends.pgvector import PgVectorBackend
 
-    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+    keyword = PgVectorBackend(pgvector_pool, None, table="wo_keyword", mode="keyword")
 
     def make(docs):
         return RankFusion(pgvector_keyword_table(docs), keyword)
@@ -343,14 +343,14 @@ def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvecto
     from wardowl.backends.pgvector import PgVectorBackend
 
     pgvector_keyword_table([Document("a", "leave policy", {"allowed_groups": ["*"]})])
-    keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
+    keyword = PgVectorBackend(pgvector_pool, None, table="wo_keyword", mode="keyword")
     # Without a permission condition the full-text index is the only index that can serve the
     # query; with one, the planner may as well start from the metadata index.
     statement, params = keyword._keyword_query("leave", 5, None)
     with pgvector_pool.connection() as conn, conn.transaction():
         conn.execute("SET LOCAL enable_seqscan = off")  # a tiny table would otherwise be scanned
         plan = "\n".join(row[0] for row in conn.execute(sql.SQL("EXPLAIN ") + statement, params))
-    assert "ntk_keyword_content_english_fts" in plan
+    assert "wo_keyword_content_english_fts" in plan
 
 
 # ---- searching with your own vectors -----------------------------------------------------------
@@ -359,12 +359,12 @@ def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvecto
 def test_pgvector_without_embed_searches_with_query_vectors(pgvector_pool):
     from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
-    create_schema(pgvector_pool, EMBED.dim, table="ntk_vectors", hnsw=False)
-    backend = PgVectorBackend(pgvector_pool, table="ntk_vectors", iterative_scan=None)
+    create_schema(pgvector_pool, EMBED.dim, table="wo_vectors", hnsw=False)
+    backend = PgVectorBackend(pgvector_pool, table="wo_vectors", iterative_scan=None)
 
     def make(docs):
         with pgvector_pool.connection() as conn:
-            conn.execute("TRUNCATE ntk_vectors")
+            conn.execute("TRUNCATE wo_vectors")
         backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
         return backend
 
@@ -377,8 +377,8 @@ def test_pgvector_hybrid_search_with_one_query_vector(pgvector_pool, pgvector_ke
     from wardowl import RankFusion
     from wardowl.backends.pgvector import PgVectorBackend
 
-    vector = PgVectorBackend(pgvector_pool, table="ntk_keyword", iterative_scan=None)
-    keyword = PgVectorBackend(pgvector_pool, table="ntk_keyword", mode="keyword")
+    vector = PgVectorBackend(pgvector_pool, table="wo_keyword", iterative_scan=None)
+    keyword = PgVectorBackend(pgvector_pool, table="wo_keyword", mode="keyword")
 
     def make(docs):
         pgvector_keyword_table(docs)
@@ -394,7 +394,7 @@ def test_chroma_searches_with_query_vectors():
     client = chromadb.EphemeralClient()
 
     def make(docs):
-        collection = client.create_collection(f"ntk_{uuid.uuid4().hex}", embedding_function=None)
+        collection = client.create_collection(f"wo_{uuid.uuid4().hex}", embedding_function=None)
         backend = ChromaBackend(collection)
         backend.add(docs, embeddings=[EMBED(d.text) for d in docs])
         return backend

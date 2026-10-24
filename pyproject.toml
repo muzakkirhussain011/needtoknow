@@ -11,10 +11,11 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Syed Muzakkir Hussain" }]
-keywords = ["rag", "retrieval", "authorization", "access-control", "llm", "vector-search", "openfga", "langchain", "llamaindex", "haystack", "mcp", "security"]
+keywords = ["rag", "retrieval-augmented-generation", "retrieval", "permission-aware-retrieval", "authorization", "access-control", "document-level-security", "fine-grained-authorization", "rebac", "llm", "vector-search", "pgvector", "pinecone", "openfga", "spicedb", "opa", "langchain", "llamaindex", "haystack", "mcp", "security"]
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -22,7 +23,9 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Topic :: Database",
   "Topic :: Security",
+  "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Typing :: Typed",
 ]
@@ -63,11 +66,13 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/muzakkirhussain011/wardowl"
-Repository = "https://github.com/muzakkirhussain011/wardowl"
+Homepage = "https://muzakkirhussain011.github.io/wardowl/"
+Source = "https://github.com/muzakkirhussain011/wardowl"
 Issues = "https://github.com/muzakkirhussain011/wardowl/issues"
 Changelog = "https://github.com/muzakkirhussain011/wardowl/blob/main/CHANGELOG.md"
 Documentation = "https://muzakkirhussain011.github.io/wardowl/"
+FAQ = "https://muzakkirhussain011.github.io/wardowl/faq.html"
+Security = "https://github.com/muzakkirhussain011/wardowl/security/policy"
 
 # Used only by CI and the release workflow, which install everything from uv.lock by hash.
 [dependency-groups]

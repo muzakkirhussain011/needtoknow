@@ -355,7 +355,7 @@ def test_a_short_signing_key_is_refused():
 
 @needs_redis
 def test_redis_cache_shares_expires_and_deletes_by_prefix():
-    client, ns = _redis(), f"ntk-{uuid.uuid4().hex}"
+    client, ns = _redis(), f"wo-{uuid.uuid4().hex}"
     cache = RedisCache(client)
     cache.set_many({f"{ns}:a": b"1", f"{ns}:b": b"2", f"{ns}x:c": b"3"}, ttl=30)
     assert cache.get_many([f"{ns}:a", f"{ns}:b", f"{ns}:missing"]) == [b"1", b"2", None]
@@ -367,7 +367,7 @@ def test_redis_cache_shares_expires_and_deletes_by_prefix():
 
 @needs_redis
 def test_redis_cache_ignores_unsigned_tampered_and_foreign_entries():
-    client, ns = _redis(), f"ntk-{uuid.uuid4().hex}"
+    client, ns = _redis(), f"wo-{uuid.uuid4().hex}"
     cache = RedisCache(client, signing_key=b"k" * 32)
     cache.set_many({f"{ns}:a": b"true"}, ttl=30)
     assert cache.get_many([f"{ns}:a"]) == [b"true"]
@@ -382,7 +382,7 @@ def test_redis_cache_ignores_unsigned_tampered_and_foreign_entries():
 
 @needs_redis
 def test_replicas_share_decisions_through_redis():
-    namespace, clock = f"ntk-{uuid.uuid4().hex}", Clock()
+    namespace, clock = f"wo-{uuid.uuid4().hex}", Clock()
     clock.now = time.time()  # shared entries carry wall-clock expiry times
     shared = RedisCache(_redis(), signing_key=b"s" * 32)
     one, two = Counting(), Counting()

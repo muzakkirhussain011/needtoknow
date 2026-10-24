@@ -2,4 +2,3 @@
 *.png binary
 *.webp binary
 # Third-party code: excluded from GitHub language statistics.
-docs/_static/vendor/** linguist-vendored

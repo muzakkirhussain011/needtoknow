@@ -22,8 +22,16 @@
   <a href="https://muzakkirhussain011.github.io/wardowl/integrations/index.html">Integrations</a> ·
   <a href="https://muzakkirhussain011.github.io/wardowl/benchmarks.html">Benchmarks</a> ·
   <a href="https://muzakkirhussain011.github.io/wardowl/security.html">Security model</a> ·
+  <a href="https://muzakkirhussain011.github.io/wardowl/faq.html">FAQ</a> ·
   <a href="https://github.com/muzakkirhussain011/wardowl/blob/main/CHANGELOG.md">Changelog</a>
 </p>
+
+**wardowl** is an open-source Python library for permission-aware retrieval in RAG
+(retrieval-augmented generation). It applies your permission system (OpenFGA, SpiceDB, OPA, Cerbos,
+Cedar, access lists or your own rules) inside your vector store's search (pgvector, Pinecone,
+Qdrant, Elasticsearch, Milvus and more), checks every hit again and fails closed, so each user's
+LLM prompt holds only the documents that user is allowed to read. It was called needtoknow before
+version 2.0.
 
 ```python
 from wardowl import PermissionedRetriever, MetadataACLAuthorizer, Subject

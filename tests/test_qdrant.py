@@ -47,7 +47,7 @@ def _factory(client, *, own_vectors=False):
         # A new collection per example keeps examples independent.
         for name in previous:
             client.delete_collection(name)
-        previous[:] = [f"ntk_{uuid.uuid4().hex}"]
+        previous[:] = [f"wo_{uuid.uuid4().hex}"]
         create_collection(client, previous[0], EMBED.dim)
         backend = QdrantBackend(client, previous[0], None if own_vectors else EMBED)
         backend.add(docs, [EMBED(d.text) for d in docs] if own_vectors else None)
@@ -234,7 +234,7 @@ def test_server_passes_the_conformance_kit():
 @needs_server
 def test_native_async_search_matches_sync():
     client = qdrant_client.QdrantClient(url=URL)
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_collection(client, name, EMBED.dim)
     docs = [Document(f"d{i}", f"leave report {i}", {"allowed_groups": ["*"] if i % 2 else ["hr"]}) for i in range(12)]
     QdrantBackend(client, name, EMBED).add(docs)
@@ -256,7 +256,7 @@ def test_native_async_search_matches_sync():
 
 def test_a_subject_in_ten_thousand_groups():
     client = qdrant_client.QdrantClient(url=URL) if URL else qdrant_client.QdrantClient(":memory:")
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_collection(client, name, EMBED.dim)
     backend = QdrantBackend(client, name, EMBED)
     backend.add(
@@ -303,7 +303,7 @@ def _keyword_factory(client, *, hybrid=False):
     def make(docs):
         for name in previous:
             client.delete_collection(name)
-        previous[:] = [f"ntk_{uuid.uuid4().hex}"]
+        previous[:] = [f"wo_{uuid.uuid4().hex}"]
         create_collection(client, previous[0], EMBED.dim, text_search=True)
         if hybrid:
             vector = QdrantBackend(client, previous[0], EMBED, text_search=True)
@@ -327,7 +327,7 @@ def test_hybrid_search_over_one_collection_passes_the_conformance_kit(any_client
 
 
 def test_keyword_mode_ranks_by_bm25_inside_the_filter(any_client):
-    name = f"ntk_{uuid.uuid4().hex}"
+    name = f"wo_{uuid.uuid4().hex}"
     create_collection(any_client, name, EMBED.dim, text_search=True)
     keyword = QdrantBackend(any_client, name, mode="keyword")
     keyword.add(

@@ -5,16 +5,16 @@
   --sd-color-primary: var(--accent-11);
   --sd-color-primary-highlight: var(--accent-12);
   --sd-color-primary-text: #ffffff;
-  --ntk-radius: 14px;
+  --wo-radius: 14px;
 }
 
 html.dark {
   --sd-color-primary-text: #04201c;
 }
 
-/* ---- landing page: hero (scoped with :has(.ntk-hero), so other pages keep the theme's layout) */
+/* ---- landing page: hero (scoped with :has(.wo-hero), so other pages keep the theme's layout) */
 
-.yue:has(.ntk-hero) > section:first-of-type > h1 {
+.yue:has(.wo-hero) > section:first-of-type > h1 {
   max-width: 13em;
   margin-inline: auto;
   text-align: center;
@@ -22,21 +22,21 @@ html.dark {
   line-height: 1.05;
 }
 
-.ntk-hero {
+.wo-hero {
   max-width: 40rem;
   margin: 0 auto 1.5rem;
   text-align: center;
 }
 
-.ntk-hero__lead {
+.wo-hero__lead {
   margin: 0;
   font-size: 1.25rem;
   line-height: 1.6;
   color: var(--sy-c-text);
 }
 
-.ntk-hero__actions,
-.ntk-cta {
+.wo-hero__actions,
+.wo-cta {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -44,30 +44,30 @@ html.dark {
   margin-top: 1.75rem;
 }
 
-.ntk-cta {
+.wo-cta {
   margin: 3.5rem 0 1rem;
 }
 
-.ntk-hero__actions .sd-btn,
-.ntk-cta .sd-btn {
+.wo-hero__actions .sd-btn,
+.wo-cta .sd-btn {
   padding: 0.7rem 1.4rem;
   font-weight: 600;
 }
 
 /* The install command sits under the buttons, centred and compact. */
-.yue:has(.ntk-hero) > section:first-of-type > .highlight-bash {
+.yue:has(.wo-hero) > section:first-of-type > .highlight-bash {
   max-width: 21rem;
   margin: 0 auto;
 }
 
-.ntk-hero-visual {
+.wo-hero-visual {
   display: flex;
   justify-content: center;
   margin: 1.5rem 0 1rem;
 }
 
-.ntk-hero__actions a,
-.ntk-cta a {
+.wo-hero__actions a,
+.wo-cta a {
   text-decoration: none;
 }
 
@@ -75,34 +75,34 @@ html.dark {
    elements are direct children of the page's first section; everything after them spans both
    columns. */
 @media (min-width: 1100px) {
-  .yue:has(.ntk-hero) > section:first-of-type {
+  .yue:has(.wo-hero) > section:first-of-type {
     display: grid;
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
     column-gap: 3rem;
     align-items: center;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > * {
+  .yue:has(.wo-hero) > section:first-of-type > * {
     grid-column: 1 / -1;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > h1,
-  .yue:has(.ntk-hero) > section:first-of-type > .ntk-hero,
-  .yue:has(.ntk-hero) > section:first-of-type > .highlight-bash {
+  .yue:has(.wo-hero) > section:first-of-type > h1,
+  .yue:has(.wo-hero) > section:first-of-type > .wo-hero,
+  .yue:has(.wo-hero) > section:first-of-type > .highlight-bash {
     grid-column: 1;
     margin-inline: 0;
     text-align: left;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > .ntk-hero {
+  .yue:has(.wo-hero) > section:first-of-type > .wo-hero {
     margin-bottom: 1.25rem;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > .ntk-hero .ntk-hero__actions {
+  .yue:has(.wo-hero) > section:first-of-type > .wo-hero .wo-hero__actions {
     justify-content: flex-start;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > .ntk-hero-visual {
+  .yue:has(.wo-hero) > section:first-of-type > .wo-hero-visual {
     grid-column: 2;
     grid-row: 1 / span 3;
     margin: 0;
@@ -111,15 +111,15 @@ html.dark {
 
 /* ---- landing page: sections -------------------------------------------------------------- */
 
-.yue:has(.ntk-hero) > section:first-of-type > section > h2 {
+.yue:has(.wo-hero) > section:first-of-type > section > h2 {
   margin-top: 4.5rem;
   text-align: center;
   font-size: 2rem;
   letter-spacing: -0.025em;
 }
 
-.yue:has(.ntk-hero) > section:first-of-type > section > p,
-.yue:has(.ntk-hero) > section:first-of-type > section > h2 + p {
+.yue:has(.wo-hero) > section:first-of-type > section > p,
+.yue:has(.wo-hero) > section:first-of-type > section > h2 + p {
   max-width: 42rem;
   margin-inline: auto;
   text-align: center;
@@ -128,7 +128,7 @@ html.dark {
 
 .yue .sd-card {
   border: 1px solid var(--sy-c-border);
-  border-radius: var(--ntk-radius);
+  border-radius: var(--wo-radius);
   background: var(--sy-c-background);
   box-shadow: none;
   transition: border-color 0.2s ease, transform 0.2s ease;
@@ -150,16 +150,16 @@ html.dark {
   padding-left: 1.1rem;
 }
 
-.ntk-step .sd-card-title {
+.wo-step .sd-card-title {
   color: var(--accent-11);
 }
 
-.ntk-stat .sd-card-body {
+.wo-stat .sd-card-body {
   font-size: 0.95rem;
   line-height: 1.45;
 }
 
-.ntk-stat__value {
+.wo-stat__value {
   display: block;
   margin-bottom: 0.35rem;
   color: var(--accent-11);
@@ -169,65 +169,26 @@ html.dark {
   line-height: 1.1;
 }
 
-/* ---- 3D logo stage (see hero3d.js) ------------------------------------------------------- */
-/* The still render shows until the live model has drawn its first frame; then they cross-fade. */
-
-.ntk-hero__stage {
-  position: relative;
-  width: min(100%, 520px);
-  aspect-ratio: 1 / 0.82;
-  cursor: grab;
-  touch-action: pan-y; /* vertical swipes still scroll the page on touch screens */
-}
-
-.ntk-hero__stage.is-dragging {
-  cursor: grabbing;
-}
-
-.ntk-hero__stage > img,
-.ntk-hero__stage > canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  transition: opacity 0.6s ease;
-}
-
-.ntk-hero__stage > canvas {
-  opacity: 0;
-}
-
-.ntk-hero__stage.is-live > canvas {
-  opacity: 1;
-}
-
-.ntk-hero__stage.is-live > img {
-  opacity: 0;
-}
-
 /* ---- small screens and reduced motion ---------------------------------------------------- */
 
 @media (max-width: 640px) {
-  .yue:has(.ntk-hero) > section:first-of-type > h1 {
+  .yue:has(.wo-hero) > section:first-of-type > h1 {
     margin-top: 1.5rem;
     font-size: 2.6rem;
   }
 
-  .ntk-hero__lead {
+  .wo-hero__lead {
     font-size: 1.1rem;
   }
 
-  .yue:has(.ntk-hero) > section:first-of-type > section > h2 {
+  .yue:has(.wo-hero) > section:first-of-type > section > h2 {
     margin-top: 3.5rem;
     font-size: 1.6rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .yue .sd-card,
-  .ntk-hero__stage > img,
-  .ntk-hero__stage > canvas {
+  .yue .sd-card {
     transition: none;
   }
 

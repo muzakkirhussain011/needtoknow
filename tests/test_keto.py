@@ -142,25 +142,25 @@ def write(**relationship):
 
 @pytest.fixture(scope="module")
 def keto():
-    write(namespace="Document", object="ntk-plan", relation="view", subject_id="ann")
+    write(namespace="Document", object="wo-plan", relation="view", subject_id="ann")
     write(
         namespace="Document",
-        object="ntk-pay",
+        object="wo-pay",
         relation="view",
-        subject_set={"namespace": "Group", "object": "ntk-hr", "relation": "members"},
+        subject_set={"namespace": "Group", "object": "wo-hr", "relation": "members"},
     )
-    write(namespace="Group", object="ntk-hr", relation="members", subject_id="hana")
+    write(namespace="Group", object="wo-hr", relation="members", subject_id="hana")
     return KETO_URL
 
 
 @needs_keto
 def test_a_real_keto_follows_direct_and_group_relationships(keto):
     authz = KetoAuthorizer(keto)
-    hits = [hit("c1", "ntk-plan"), hit("c2", "ntk-pay"), hit("c3", "ntk-none")]
+    hits = [hit("c1", "wo-plan"), hit("c2", "wo-pay"), hit("c3", "wo-none")]
     assert authz.check(Subject("ann"), hits) == [True, False, False]
-    assert authz.check(Subject("hana"), hits) == [False, True, False]  # through Group:ntk-hr#members
+    assert authz.check(Subject("hana"), hits) == [False, True, False]  # through Group:wo-hr#members
     grouped = KetoAuthorizer(keto, group_subjects=True)
-    assert grouped.check(Subject("zed", ["ntk-hr"]), hits) == [False, True, False]  # groups from the token
+    assert grouped.check(Subject("zed", ["wo-hr"]), hits) == [False, True, False]  # groups from the token
 
 
 @needs_keto

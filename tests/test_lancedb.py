@@ -34,7 +34,7 @@ def db(tmp_path):
 
 
 def _new_table(db):
-    return create_table(db, f"ntk_{uuid.uuid4().hex}", EMBED.dim)
+    return create_table(db, f"wo_{uuid.uuid4().hex}", EMBED.dim)
 
 
 # ---- translation -------------------------------------------------------------------------------

@@ -1,0 +1,19 @@
+{#- Structured data for search engines, on the front page only. -#}
+{%- if pagename == root_doc %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "wardowl",
+  "description": "Open-source Python library for permission-aware retrieval in RAG: it applies your permission system inside the vector store's search and checks every hit again, so each user gets only the chunks they are allowed to read.",
+  "url": "https://muzakkirhussain011.github.io/wardowl/",
+  "codeRepository": "https://github.com/muzakkirhussain011/wardowl",
+  "programmingLanguage": "Python",
+  "runtimePlatform": "Python 3.11+",
+  "license": "https://opensource.org/license/mit",
+  "version": "{{ release|e }}",
+  "author": {"@type": "Person", "name": "Syed Muzakkir Hussain", "url": "https://github.com/muzakkirhussain011"},
+  "keywords": "RAG, retrieval-augmented generation, access control, authorization, permission-aware retrieval, document-level security, vector search, OpenFGA, OPA, pgvector, LangChain, LlamaIndex"
+}
+</script>
+{%- endif %}
