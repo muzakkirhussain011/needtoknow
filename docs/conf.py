@@ -43,8 +43,13 @@ copybutton_prompt_is_regexp = True
 html_theme = "shibuya"
 html_title = "wardowl"
 html_baseurl = "https://muzakkirhussain011.github.io/wardowl/"
+html_favicon = "_static/brand/favicon.png"
 html_theme_options = {
-    "accent_color": "teal",
+    # Indigo sits with the logo's midnight enamel; its gold appears in the logo itself.
+    "accent_color": "indigo",
+    "light_logo": "_static/brand/wardowl-mark.png",
+    "dark_logo": "_static/brand/wardowl-mark.png",
+    "og_image_url": "https://muzakkirhussain011.github.io/wardowl/_static/brand/social-card.png",
     "github_url": "https://github.com/muzakkirhussain011/wardowl",
     "nav_links": [
         {"title": "Get started", "url": "quickstart"},
@@ -96,7 +101,8 @@ html_context = {
 # _templates/partials/webfonts.html; icons: see _static/wo-icons.js).
 html_sidebars = {"**": ["sidebars/localtoc.html", "sidebars/edit-this-page.html"]}
 
-# Brand assets: the stylesheet, the icons and the diagrams in _static/brand.
+# Brand assets: the stylesheet, the icons, the logo, its 3D model and the diagrams in _static/brand,
+# and the front page's 3D logo (hero.js, with three.js vendored in _static/vendor).
 html_static_path = ["_static"]
 html_css_files = ["brand.css"]
 # The theme's script is added at priority 500; the icons must be registered before it starts.

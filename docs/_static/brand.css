@@ -169,6 +169,55 @@ html.dark {
   line-height: 1.1;
 }
 
+/* ---- 3D logo stage (see hero.js) --------------------------------------------------------- */
+/* The poster shows until the live model has drawn its first frame; then they cross-fade. The
+   soft halo keeps the midnight enamel readable on the dark theme. */
+
+.wo-hero__stage {
+  position: relative;
+  width: min(100%, 440px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(214 224 245 / 0.55), transparent);
+  cursor: grab;
+  touch-action: pan-y; /* vertical swipes still scroll the page on touch screens */
+}
+
+html.dark .wo-hero__stage {
+  background: radial-gradient(closest-side, rgb(90 116 178 / 0.35), transparent);
+}
+
+.wo-hero__stage:focus-visible {
+  outline: 2px solid var(--accent-9);
+  outline-offset: 4px;
+}
+
+.wo-hero__stage.is-dragging {
+  cursor: grabbing;
+}
+
+.wo-hero__stage > img,
+.wo-hero__stage > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity 0.6s ease;
+}
+
+.wo-hero__stage > canvas {
+  opacity: 0;
+}
+
+.wo-hero__stage.is-live > canvas {
+  opacity: 1;
+}
+
+.wo-hero__stage.is-live > img {
+  opacity: 0;
+}
+
 /* ---- small screens and reduced motion ---------------------------------------------------- */
 
 @media (max-width: 640px) {
@@ -188,7 +237,9 @@ html.dark {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .yue .sd-card {
+  .yue .sd-card,
+  .wo-hero__stage > img,
+  .wo-hero__stage > canvas {
     transition: none;
   }
 
