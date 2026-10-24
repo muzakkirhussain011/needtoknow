@@ -6,6 +6,15 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `PineconeBackend` (the `pinecone` extra): dense vector search on a Pinecone index through its
+  data plane API (2026-07), with the permission filter as the query's metadata filter: `$in` on
+  hex-encoded, type-tagged terms, joined with `$and` and `$or`, so Pinecone applies it inside the
+  search. `wait=` makes writes wait until a search sees them, for serverless indexes' eventual
+  consistency; ids that Pinecone cannot store are kept under their SHA-256; the API key never
+  appears in errors. Tested with the conformance kit against a Pinecone serverless index.
+
 ## [1.6.0] - 2026-10-23
 
 Vespa and Apache Cassandra join the stores, each tested with the conformance kit against a real

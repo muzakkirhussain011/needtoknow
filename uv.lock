@@ -3667,6 +3667,9 @@ otel = [
 pgvector = [
     { name = "psycopg", extra = ["binary", "pool"] },
 ]
+pinecone = [
+    { name = "httpx" },
+]
 qdrant = [
     { name = "qdrant-client" },
 ]
@@ -3712,6 +3715,7 @@ requires-dist = [
     { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.15" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
     { name = "haystack-ai", marker = "extra == 'haystack'", specifier = ">=2.12" },
+    { name = "httpx", marker = "extra == 'pinecone'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'vespa'", specifier = ">=0.27" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.40" },
@@ -3737,7 +3741,7 @@ requires-dist = [
     { name = "sphinx-design", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.7" },
     { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.16" },
 ]
-provides-extras = ["casbin", "cassandra", "cedar", "chroma", "dev", "docs", "elasticsearch", "faiss", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "qdrant", "redis", "server", "vespa", "weaviate"]
+provides-extras = ["casbin", "cassandra", "cedar", "chroma", "dev", "docs", "elasticsearch", "faiss", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "pinecone", "qdrant", "redis", "server", "vespa", "weaviate"]
 
 [package.metadata.requires-dev]
 examples = [
