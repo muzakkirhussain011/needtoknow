@@ -17,7 +17,7 @@ release because several of those fixes change behaviour that 1.x code may rely o
 
 - **The project is renamed wardowl.** Install it with `pip install wardowl` and import `wardowl`. The
   repository and the documentation moved to `github.com/muzakkirhussain011/wardowl` and
-  `muzakkirhussain011.github.io/wardowl` (the old addresses redirect). Everything named after the
+  `muzakkirhussain011.github.io/wardowl` (the old repository address redirects). Everything named after the
   project changes with it: classes (`NeedToKnowRetriever` is now `WardowlRetriever`), environment
   variables (`NEEDTOKNOW_*` is now `WARDOWL_*`), the default cache namespace and metric names, and the
   field names the backends store (`needtoknow_terms`, `needtoknow_id` and `needtoknow_metadata` are
