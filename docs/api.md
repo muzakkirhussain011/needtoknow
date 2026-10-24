@@ -165,6 +165,8 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autoclass:: wardowl.InMemoryBackend
    :members: add, set_metadata, search
 
+.. autoexception:: wardowl.backends.NothingMatches
+
 .. autoclass:: wardowl.backends.pgvector.PgVectorBackend
    :members: add, set_metadata, delete, search, asearch
 
@@ -245,7 +247,15 @@ An observer is any callable that takes a `RetrievalEvent`.
 .. autofunction:: wardowl.backends.redis.permission_terms
 
 .. autoclass:: wardowl.backends.lancedb.LanceDBBackend
-   :members: add, delete, search
+   :members: add, set_metadata, delete, search
+
+.. autofunction:: wardowl.backends.lancedb.create_table
+
+.. autofunction:: wardowl.backends.lancedb.create_indexes
+
+.. autofunction:: wardowl.backends.lancedb.filter_to_sql
+
+.. autofunction:: wardowl.backends.lancedb.permission_terms
 
 .. autoclass:: wardowl.backends.faiss.FaissBackend
    :members: add, delete, set_metadata, search, save, load
@@ -255,21 +265,25 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 .. autofunction:: wardowl.backends.vespa.schema
 
+.. autofunction:: wardowl.backends.vespa.filter_to_yql
+
 .. autoclass:: wardowl.backends.cassandra.CassandraBackend
    :members: add, delete, set_metadata, search
 
 .. autofunction:: wardowl.backends.cassandra.create_table
 
+.. autofunction:: wardowl.backends.cassandra.filter_to_conjunctions
+
+.. autofunction:: wardowl.backends.cassandra.required_terms
+
+.. autoexception:: wardowl.backends.cassandra.TooManyQueries
+
 .. autoclass:: wardowl.backends.pinecone.PineconeBackend
    :members: add, delete, set_metadata, search, clear, close
 
-.. autofunction:: wardowl.backends.lancedb.create_table
+.. autofunction:: wardowl.backends.pinecone.filter_to_pinecone
 
-.. autofunction:: wardowl.backends.lancedb.create_indexes
-
-.. autofunction:: wardowl.backends.lancedb.filter_to_sql
-
-.. autofunction:: wardowl.backends.lancedb.permission_terms
+.. autofunction:: wardowl.backends.pinecone.record_id
 ```
 
 ## Frameworks

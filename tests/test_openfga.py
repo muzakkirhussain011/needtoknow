@@ -193,7 +193,7 @@ def _api(path, payload):
 
 
 def _store_for(docs):
-    store = _api("/stores", {"name": f"ntk-{uuid.uuid4().hex[:12]}"})["id"]
+    store = _api("/stores", {"name": f"wo-{uuid.uuid4().hex[:12]}"})["id"]
     model = _api(f"/stores/{store}/authorization-models", MODEL)["authorization_model_id"]
     tuples = []
     for d in docs:

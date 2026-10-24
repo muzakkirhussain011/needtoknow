@@ -173,7 +173,7 @@ def engine(request):
 
 
 def _new_index(engine):
-    name = f"ntk-{uuid.uuid4().hex}"
+    name = f"wo-{uuid.uuid4().hex}"
     engine["create"](engine["client"], name, EMBED.dim)
     return name
 

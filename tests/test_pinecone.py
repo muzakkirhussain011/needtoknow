@@ -226,7 +226,7 @@ def _factory(host, *, vectors=False):
     def make(docs):
         for space in _SPACES:  # a namespace per corpus, cleared when the next one starts
             PineconeBackend(host, KEY, EMBED, namespace=space).clear()
-        _SPACES[:] = [f"ntk-{uuid.uuid4().hex[:12]}"]
+        _SPACES[:] = [f"wo-{uuid.uuid4().hex[:12]}"]
         backend = PineconeBackend(host, KEY, None if vectors else EMBED, namespace=_SPACES[0], wait=60.0)
         backend.add(docs, [EMBED(d.text) for d in docs] if vectors else None)
         return backend

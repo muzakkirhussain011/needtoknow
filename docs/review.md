@@ -53,8 +53,12 @@ separate deployment with its
 - `PermissionedRetriever(recheck=False)`: pre-filtered hits are matched against the filter locally
   but not decided by the authorizer again, so a filter broader than the authorizer's own check goes
   unnoticed.
-- `CachingAuthorizer(shared=...)` with the default `namespace`: two differently configured
-  authorizers sharing one Redis and namespace share answers.
+- `CachingAuthorizer(shared=...)`: the `namespace` is required, and a process refuses a second kind
+  of authorizer under one it already uses, but two processes configured differently under the same
+  Redis and namespace still share answers.
+- `SpanRedactor(required=False)`: a chunk without its spans field is shown in full.
+- `PineconeBackend(wait=None)`: a write returns before searches see it, so a revoked chunk can
+  still be returned for a few seconds.
 - `RedisCache` without `signing_key`: whoever can write to that Redis can plant decisions.
 - `FunctionAuthorizer` with a `filter_for` broader than its `check`: the re-check catches it (as
   violations); `recheck=False` does not.
@@ -117,6 +121,30 @@ published as advisory
 | October 2026 | A subject attribute named `groups` replaced the subject's groups in Cerbos decisions | 1.4.0 |
 | October 2026 | A cancelled retrieval produced no audit event | 1.4.0 |
 | October 2026 | The example gateway stored API keys as unsalted SHA-256 | the gateway example |
+| October 2026 | Two caching authorizers sharing one Redis under the default namespace answered for each other, so `AllOf` could skip one of them | 1.7.0 |
+| October 2026 | Cache keys joined their parts without lengths and compared values loosely, so `1` and `"1"`, or a list and a tuple, could share a cached decision | 1.7.0 |
+| October 2026 | A shared-cache entry with a NaN expiry gave a local copy that never expired | 1.7.0 |
+| October 2026 | `SpanRedactor` showed a chunk in full when its spans field was missing, which `set_metadata` without the field caused | 1.7.0 |
+| October 2026 | Haystack's retriever took the subject as a run input, which an agent's model could set | 1.7.0 |
+| October 2026 | The framework retrievers passed every metadata key, permission fields included, to the model, prompts and traces | 1.7.0 |
+| October 2026 | A subject's attributes could be changed after the subject was used as a cache key | 1.7.0 |
+| October 2026 | FAISS kept earlier copies of an id repeated in one `add`, out of reach of `delete` and `set_metadata` | 1.7.0 |
+| October 2026 | Qdrant and Weaviate kept a UUID chunk id as the point id, so another spelling of it, or a crafted id, landed on the same point | 1.7.0 |
+| October 2026 | Milvus `delete` and `set_metadata` wrote ids into the expression unescaped, so one id could select others | 1.7.0 |
+| October 2026 | `set_metadata` wrote whole chunks back, so a chunk deleted meanwhile could return with its old text | 1.7.0 |
+| October 2026 | Cassandra's `set_metadata` used a lightweight transaction, whose timestamp could put an older permission over a newer one | 1.7.0 |
+| October 2026 | pgvector matched `In("level", [1])` against a stored `1.0` | 1.7.0 |
+| October 2026 | The public filter translators returned `None` or `{}` for a filter that matches nothing, which store clients read as no filter | 1.7.0 |
+| October 2026 | Vespa and Redis returned partial results (degraded coverage, a Query Engine timeout) as complete | 1.7.0 |
+| October 2026 | Cedar dropped float, None and oversized integer attributes, so a `forbid` on them stopped applying | 1.7.0 |
+| October 2026 | Casbin sent groups as bare subjects, so a group named like a user or role got its access | 1.7.0 |
+| October 2026 | Google Drive grants with an expiry were kept without it, and a deleted file kept its grants | 1.7.0 |
+| October 2026 | The HTTP authorizers could share a kept-alive connection with a forked worker, and their timeout bounded each socket operation, not the call | 1.7.0 |
+| October 2026 | OpenFGA accepted subject ids holding `:`, `#` or `*`, which change the meaning of its `type:id` strings | 1.7.0 |
+| October 2026 | The HTTP service ran a synchronous authenticator on the event loop, and the OIDC key cache never expired and could be refetched on every request | 1.7.0 |
+| October 2026 | The OIDC authenticator verified with the algorithm the token named, and malformed tokens gave 500 errors | 1.7.0 |
+| October 2026 | The HTTP service parsed bodies of any size and passed NaN vectors to the retriever | 1.7.0 |
+| October 2026 | The Lock workflow resolved dependencies with a token that could push | 1.7.0 |
 
 ## Reporting
 

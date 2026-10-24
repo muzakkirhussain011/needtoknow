@@ -86,11 +86,11 @@ html_context = {
 }
 # Only sidebars that work offline: the theme's repository-stats sidebar would make every reader's
 # browser call the GitHub API, and the site makes no third-party requests (fonts: see
-# _templates/partials/webfonts.html; icons: see _static/ntk-icons.js).
+# _templates/partials/webfonts.html; icons: see _static/wo-icons.js).
 html_sidebars = {"**": ["sidebars/localtoc.html", "sidebars/edit-this-page.html"]}
 
-# Brand assets and the front page's 3D logo (hero3d.js, with three.js vendored in _static/vendor).
+# Brand assets: the stylesheet, the icons and the diagrams in _static/brand.
 html_static_path = ["_static"]
 html_css_files = ["brand.css"]
 # The theme's script is added at priority 500; the icons must be registered before it starts.
-html_js_files = [("ntk-icons.js", {"priority": 400})]
+html_js_files = [("wo-icons.js", {"priority": 400})]

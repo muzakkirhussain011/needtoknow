@@ -243,7 +243,7 @@ def client():
 
 
 def _new_collection(client):
-    name = f"Ntk{uuid.uuid4().hex}"  # collection names start with an upper-case letter
+    name = f"Wo{uuid.uuid4().hex}"  # collection names start with an upper-case letter
     create_collection(client, name)
     return name
 
