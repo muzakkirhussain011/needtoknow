@@ -46,7 +46,8 @@ class Detector:
 # Order matters: more specific patterns run first so a card number is not also read as a phone.
 # These run on what callers send, before the policy decides, so each runs in linear time: the email
 # pattern may only start where a run of address characters starts, never inside one (from every
-# position of a long run such as "a.a.a.a..." it was quadratic).
+# position of a long run such as "a.a.a.a..." it was quadratic), and the phone pattern only where a
+# number starts (at every "00" inside a long run of digits it tried about 1,400 ways to split it).
 DETECTORS: tuple[Detector, ...] = (
     Detector("SECRET", re.compile(r"\b(?:AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9_\-]{20,}|ghp_[A-Za-z0-9]{36})\b")),
     Detector("EMAIL", re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
@@ -55,7 +56,11 @@ DETECTORS: tuple[Detector, ...] = (
     # Saudi national ID (starts with 1) and Iqama (starts with 2): 10 digits.
     Detector("NATIONAL_ID", re.compile(r"\b[12]\d{9}\b")),
     Detector(
-        "PHONE", re.compile(r"(?:\+|00)\d{1,3}[\s\-]?\d{1,4}(?:[\s\-]?\d{2,4}){2,4}\b|\b05\d[\s\-]?\d{3}[\s\-]?\d{4}\b")
+        "PHONE",
+        re.compile(
+            r"(?<![\d+])(?:\+|00)\d{1,3}[\s\-]?\d{1,4}(?:[\s\-]?\d{2,4}){2,4}\b"
+            r"|\b05\d[\s\-]?\d{3}[\s\-]?\d{4}\b",
+        ),
     ),
     Detector("IP_ADDRESS", re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b")),
 )

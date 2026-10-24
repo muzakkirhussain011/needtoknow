@@ -192,7 +192,10 @@ CLI: `rampart serve`, `rampart ingest <dir>`, `rampart new-key`, `rampart hash-k
 
 Questions are at most 4,000 characters; `/v1/chat/completions` takes at most 20 messages of at
 most 4,000 characters each. Model and collection names are at most 200 characters, and a request
-names at most 50 collections.
+names at most 50 collections. A request body over `RAMPART_MAX_BODY_BYTES` (1 MiB by default) is
+refused with 413 before it is parsed or the caller is authenticated: send a larger set of documents
+to `/v1/documents` in several requests, or load it with `rampart ingest`. A principal marked
+`disabled: true` in the principals file is refused with 403 before its request is screened.
 
 ## Configuration
 
@@ -211,6 +214,7 @@ Environment variables (or a `.env` file):
 | `RAMPART_KEY_SECRET` | unset | Hex secret the key digests are made under (`rampart key-hashing`); required unless `RAMPART_DEMO=1` |
 | `RAMPART_DEMO` | `false` | Accept the demo principals and their published secret. Never in a real deployment. |
 | `RAMPART_METRICS_HOST`, `RAMPART_METRICS_PORT` | `127.0.0.1`, `9464` | Where `rampart serve` serves Prometheus metrics; port `0` turns them off. The image binds them to `0.0.0.0` inside the container, and Compose does not publish the port. |
+| `RAMPART_MAX_BODY_BYTES` | `1048576` (1 MiB) | Larger request bodies are refused with 413 before they are parsed or the caller is authenticated |
 | `RAMPART_TOP_K`, `RAMPART_MAX_CONTEXT_CHARS` | `5`, `6000` | Retrieval depth and context budget |
 | `RAMPART_CHUNK_INJECTION_THRESHOLD` | `0.5` | Chunks scoring at or above this are quarantined |
 | `RAMPART_MINUTES_SAVED_PER_ANSWER` | `6.0` | Only used for the dashboard's time-saved estimate |
