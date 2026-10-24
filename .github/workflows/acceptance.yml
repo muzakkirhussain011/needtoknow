@@ -106,9 +106,12 @@ jobs:
           python -m pip install --require-hashes --no-deps -r acceptance/requirements.txt
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             # An acceptance branch tests its own code: the same dependencies, this checkout's wardowl,
-            # built into a wheel and installed from it, as a release would be.
+            # built into a wheel and installed from it, as a release would be. The wheel is installed
+            # by its hash, like every other package here.
             python -m pip wheel --no-deps --no-build-isolation --wheel-dir "$RUNNER_TEMP/dist" .
-            python -m pip install --no-deps --force-reinstall "$RUNNER_TEMP"/dist/wardowl-*.whl
+            wheel=$(ls "$RUNNER_TEMP"/dist/wardowl-*.whl)
+            echo "wardowl @ file://$wheel --hash=sha256:$(sha256sum "$wheel" | cut -d ' ' -f 1)" > "$RUNNER_TEMP/wardowl.txt"
+            python -m pip install --require-hashes --no-deps --force-reinstall -r "$RUNNER_TEMP/wardowl.txt"
           fi
           python -c "import wardowl; print('wardowl', wardowl.__version__)"
       - name: Wait until every server answers

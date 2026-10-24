@@ -14,8 +14,7 @@ site makes no third-party requests.
 | `examples/jsm/loaders/DRACOLoader.js` | sha256-/a/fSqEbvGXYmtszjv2ES+35QHNwL5BJJA/x8epIrV8= |
 | `examples/jsm/utils/BufferGeometryUtils.js` | sha256-n7Y0J85mQfoU/Quv+cxNG1+cPYX9CEvy6Q6APETsF5c= |
 | `examples/jsm/utils/SkeletonUtils.js` | sha256-sWMqcDIGw9gw3p/L5RVpZ3DQS3GhXua1CvptLDKYyG8= |
-| `examples/jsm/libs/draco/gltf/draco_decoder.wasm` | sha256-poDZJ77Zy4ZN29Y1IYaIka8r++dVCSdhtIN0h2GN+Kw= |
-| `examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js` | sha256-i7KVLSun1n4UFPjfgZQQywQ0pma+U/Zx//dfaIQ9dvY= |
+| `examples/jsm/libs/draco/gltf/draco_decoder.js` | sha256-hiVInaeagF9PKn1RHD5S2LQIVgip0qTV9PneXbCuoE8= |
 | `LICENSE` | sha256-izeOvmDi/lABWMsKxxy16LfZKVPCq8xjoOuQSZZTtbw= |
 | `examples/jsm/libs/draco/LICENSE` | from `google/draco` 1.5.7, sha256-03CbD7S4qUu7HQK4ouSE8liw2cXFoB+UA5Hz/mYs0aQ= |
 
@@ -25,4 +24,6 @@ hashes jsDelivr publishes for the npm package
 and update this table. Dependabot does not watch these files.
 
 The model, `../../brand/wardowl.glb`, uses Draco geometry and WebP textures
-(`KHR_draco_mesh_compression`, `EXT_texture_webp`), which is why the Draco decoder is here.
+(`KHR_draco_mesh_compression`, `EXT_texture_webp`), which is why the Draco decoder is here. It is
+the JavaScript build (`hero.js` sets `setDecoderConfig({ type: "js" })`), not the WebAssembly one,
+so the repository holds no binary files (OpenSSF Scorecard's Binary-Artifacts check).

@@ -1,0 +1,30 @@
+# Advisories in acceptance/requirements.txt that have no fixed release and that the acceptance
+# scenarios cannot reach. OSV-Scanner reads only the config beside the lock file it scans, so the
+# repository root's osv-scanner.toml does not cover this directory; these entries repeat the ones
+# reviewed there on 2026-10-17. OSV-Scanner, and OpenSSF Scorecard's Vulnerabilities check, skip
+# them until `ignoreUntil`; then they count again and each one is looked at afresh.
+
+# ChromaDB 1.5.9, the latest release. The four advisories are in the Chroma server: its HTTP API and
+# its own tenant and RBAC checks. The scenarios run Chroma in process (chromadb.EphemeralClient in
+# s01_stores.py), with no server listening, and wardowl applies permissions itself, as a filter
+# inside each query, never through Chroma's tenants or RBAC.
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-311"
+ignoreUntil = 2027-01-15
+reason = "Chroma server: code injection through the collections endpoint (trust_remote_code). The scenarios run Chroma in process, with no server; no fixed release yet."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3813"
+ignoreUntil = 2027-01-15
+reason = "Chroma server: missing tenant authorization between authenticated users. wardowl does not rely on Chroma's tenants; it filters every query itself; no fixed release yet."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3814"
+ignoreUntil = 2027-01-15
+reason = "Chroma server: code injection by a user with UPDATE_COLLECTION. The scenarios run Chroma in process, with no server; no fixed release yet."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-3815"
+ignoreUntil = 2027-01-15
+reason = "Chroma server: SimpleRBACAuthorizationProvider ignores tenant, database and collection. wardowl does not use Chroma's RBAC; no fixed release yet."

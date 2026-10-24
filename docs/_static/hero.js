@@ -195,7 +195,8 @@ async function init() {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    const draco = new DRACOLoader().setDecoderPath(DRACO);
+    // The JavaScript decoder, not the WebAssembly one, so the repository holds no binary files.
+    const draco = new DRACOLoader().setDecoderPath(DRACO).setDecoderConfig({ type: "js" });
     const gltf = await new GLTFLoader().setDRACOLoader(draco).loadAsync(MODEL);
     draco.dispose();
     model = gltf.scene;
