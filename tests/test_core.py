@@ -202,7 +202,8 @@ def test_postfilter_checks_no_more_candidates_than_it_asked_for():
         return [False] * len(hits)
 
     docs = [Document(f"d{i:03d}", "leave", {}) for i in range(300)]
-    retriever = PermissionedRetriever(Generous(docs), FunctionAuthorizer(deny), strategy="postfilter", max_candidates=20)
+    authz = FunctionAuthorizer(deny)
+    retriever = PermissionedRetriever(Generous(docs), authz, strategy="postfilter", max_candidates=20)
     result = retriever.retrieve("leave", BOB, k=2)
     assert asked == [8, 12] and result.examined == 20 and result.complete is False
 
