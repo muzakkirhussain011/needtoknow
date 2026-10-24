@@ -25,7 +25,7 @@ import ssl
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from wardowl.authorizers._http import CircuitBreaker, JsonClient
+from wardowl.authorizers._http import DEFAULT_MAX_RESPONSE_BYTES, CircuitBreaker, JsonClient
 from wardowl.authz import AuthorizationError
 from wardowl.filters import Filter, filter_from_dict
 from wardowl.types import Hit, Subject
@@ -42,9 +42,12 @@ class OPAAuthorizer:
 
     `decisions_path` is the rule returning one boolean per resource and `filter_path`, if set, the
     rule returning a filter or null. `headers` are sent with every request, for example an
-    `Authorization` header. `retries` is how many times a transient failure is retried,
-    `circuit_breaker` pauses requests to a server that keeps failing, and `ssl_context` sets the
-    TLS trust and client certificates (your own CA, mutual TLS). Every failure raises
+    `Authorization` header. `timeout` bounds each call in total, retries included. `retries` is how
+    many times a transient failure is retried, `circuit_breaker` pauses requests to a server that
+    keeps failing, and `ssl_context` sets the TLS trust and client certificates (your own CA,
+    mutual TLS) of an https:// url; it is refused with http://. An answer larger than
+    `max_response_bytes` (10 MiB by default) is refused. An `Authorization` header is refused over
+    http:// to any host but this machine unless `allow_insecure=True`. Every failure raises
     `AuthorizationError`.
     """
 
@@ -59,6 +62,8 @@ class OPAAuthorizer:
         retries: int = 1,
         circuit_breaker: CircuitBreaker | None = None,
         ssl_context: ssl.SSLContext | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        allow_insecure: bool = False,
     ) -> None:
         self._client = JsonClient(
             url,
@@ -68,6 +73,8 @@ class OPAAuthorizer:
             retries=retries,
             breaker=circuit_breaker,
             ssl_context=ssl_context,
+            max_response_bytes=max_response_bytes,
+            allow_insecure=allow_insecure,
         )
         self.url = self._client.url
         self.decisions_path = decisions_path.strip("/")

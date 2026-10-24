@@ -75,15 +75,22 @@ or float values) and "always allowed" give no filter, and the retriever post-fil
 deciding each candidate. Results stay correct either way; pre-filtering is what keeps recall high
 for users who may read little, so write the rules that decide reading in the subset above.
 
-CEL's `==` compares a list attribute as a whole, while wardowl's `In` matches any element of a
-list. Keep attributes compared with `==` scalar, and use `hasIntersection` or `in` for list
-attributes such as `allowed_groups`; otherwise pre-filtered hits fail the re-check and are reported
-as `violations`.
+CEL's `==` compares a list attribute as a whole, and `in` or `hasIntersection` on an attribute
+holding one value is a CEL error, so Cerbos denies; wardowl's `In` matches any element of a list
+and a single value alike. Keep attributes compared with `==` single values, and attributes read
+with `hasIntersection` or `in` lists, such as `allowed_groups`. A chunk of the other shape passes
+the filter but not `check`: the re-check of pre-filtered hits (`recheck=True`, the default) drops
+it and reports it in `violations`. With `PermissionedRetriever(recheck=False)` the filter alone
+decides and such a chunk is returned, so use `recheck=False` only when every chunk stores each
+attribute in the shape the policy assumes.
 
 ## Failures
 
-Every failure raises `AuthorizationError`, so retrieval returns nothing. Connections are reused,
-transient failures are retried once, and a `CircuitBreaker` can pause requests to a failing PDP (see
+Every failure raises `AuthorizationError`, so retrieval returns nothing. `timeout=` (2 seconds by
+default) bounds the whole call, and an answer larger than `max_response_bytes=` (10 MiB by default)
+is refused. An `Authorization` header over `http://` to another machine needs
+`allow_insecure=True`, as for [OPA](opa.md#failing-closed). Connections are reused, transient
+failures are retried once, and a `CircuitBreaker` can pause requests to a failing PDP (see
 [Operations](../operations.md#resilience-of-remote-permission-services)).
 
 CI runs the authorizer against Cerbos 0.56.0 with the example policy: the policy yields a

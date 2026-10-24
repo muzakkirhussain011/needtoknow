@@ -21,9 +21,13 @@ library.
   anything else, or always allowed                            no filter
   ==========================================================  ====================
 
-  Values must be strings or integers. CEL's `==` compares a list field as a whole, so keep fields
-  compared with `==` scalar; use `hasIntersection` or `in` for list fields such as
-  `allowed_groups`. Example policy: `examples/cerbos/policies/document.yaml`.
+  Values must be strings or integers. CEL's `==` compares a list field as a whole, and `in` or
+  `hasIntersection` on a field holding one value is a CEL error, so Cerbos denies, while `In`
+  matches a list by any element and a single value as itself. Keep fields compared with `==`
+  single values and fields read with `hasIntersection` or `in` lists, such as `allowed_groups`.
+  A chunk of the other shape is dropped as a violation by the re-check (`recheck=True`, the
+  default); with `recheck=False` the retriever trusts the filter alone and returns it. Example
+  policy: `examples/cerbos/policies/document.yaml`.
 
 The principal is `{"id": subject.id, "roles": roles, "attr": {"groups": [...], **attributes}}`; a
 subject attribute named `groups`, which would replace the subject's groups, is refused.
@@ -37,7 +41,7 @@ import ssl
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from wardowl.authorizers._http import CircuitBreaker, JsonClient
+from wardowl.authorizers._http import DEFAULT_MAX_RESPONSE_BYTES, CircuitBreaker, JsonClient
 from wardowl.authz import AuthorizationError
 from wardowl.filters import And, Filter, In, Or, _is_value
 from wardowl.types import Hit, Subject
@@ -116,8 +120,9 @@ class CerbosAuthorizer:
     list of roles for every principal, or a function of the subject (default `["user"]`).
     Resources are of kind `resource_kind`, with the chunk id as id (or `resource_field` from the
     metadata) and the chunk's metadata as attributes. `policy_version` and `scope` are passed to
-    both principal and resources. `retries`, `circuit_breaker` and `ssl_context` work as in
-    `OPAAuthorizer`. Every failure raises `AuthorizationError`.
+    both principal and resources. `timeout`, `retries`, `circuit_breaker`, `ssl_context`,
+    `max_response_bytes` and `allow_insecure` work as in `OPAAuthorizer`. Every failure raises
+    `AuthorizationError`.
     """
 
     def __init__(
@@ -136,6 +141,8 @@ class CerbosAuthorizer:
         retries: int = 1,
         circuit_breaker: CircuitBreaker | None = None,
         ssl_context: ssl.SSLContext | None = None,
+        max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+        allow_insecure: bool = False,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be positive")
@@ -147,6 +154,8 @@ class CerbosAuthorizer:
             retries=retries,
             breaker=circuit_breaker,
             ssl_context=ssl_context,
+            max_response_bytes=max_response_bytes,
+            allow_insecure=allow_insecure,
         )
         self.actions = dict(actions or {"read": "read"})
         self.resource_kind = resource_kind

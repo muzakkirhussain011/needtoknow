@@ -12,7 +12,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from wardowl import AuthorizationError, Hit, InMemoryBackend, PermissionedRetriever, Subject
-from wardowl.authorizers.cedar import _SKIP, CedarAuthorizer, _value
+from wardowl.authorizers.cedar import CedarAuthorizer, _Unrepresentable, _value
 from wardowl.testing import check_authorizer
 
 cedarpy = pytest.importorskip("cedarpy")
@@ -87,11 +87,56 @@ def test_subject_attributes_and_metadata_reach_the_policy_as_cedar_values():
     assert authz.check(Subject("bob", [], {"region": "us"}), [good]) == [False]
 
 
-def test_values_cedar_cannot_hold_are_left_out():
-    assert _value(2**70) is _SKIP and _value(-(2**70)) is _SKIP
-    assert _value(1.5) is _SKIP and _value(None) is _SKIP and _value([1, 1.5]) is _SKIP
-    assert _value((1, "a", True)) == [1, "a", True]
-    assert _value({"a": None, "b": {"c": 2}}) == {"b": {"c": 2}}
+def test_integral_floats_become_longs_and_values_cedar_cannot_hold_are_refused():
+    assert _value(3.0) == 3 and isinstance(_value(3.0), int) and _value(-0.0) == 0
+    assert _value((1, "a", True, 2.0)) == [1, "a", True, 2]
+    assert _value({"b": {"c": 2.0}, "__entity": {"type": "User", "id": "root"}, 7: "x"}) == {"b": {"c": 2}}
+    unrepresentable = [1.5, float("nan"), float("inf"), 1e300, None, 2**70, -(2**70), [1, 1.5], {"a": None}, b"x"]
+    for value in unrepresentable:
+        with pytest.raises(_Unrepresentable):
+            _value(value)
+
+
+def test_a_forbid_still_applies_when_the_store_returns_numbers_as_floats(caplog):
+    # A value Cedar cannot hold used to be left out, so `resource has sensitivity` was false and the
+    # forbid stopped applying. Integral floats are now Longs, and any other such value denies the chunk.
+    policy = """
+    permit (principal, action, resource);
+    forbid (principal, action, resource) when { resource has sensitivity && resource.sensitivity >= 3 };
+    """
+    hits = [
+        hit("a", sensitivity=1.0),
+        hit("b", sensitivity=3.0),
+        hit("c", sensitivity=3.5),
+        hit("d", sensitivity=None),
+        hit("e", sensitivity=[3, None]),
+        hit("f"),
+    ]
+    with caplog.at_level(logging.WARNING, logger="wardowl"):
+        assert CedarAuthorizer(policy).check(ANN, hits) == [True, False, False, False, False, True]
+    assert "3 of 6 chunks" in caplog.text
+
+
+def test_chunks_cedar_cannot_hold_are_denied_without_asking_cedar():
+    asked = []
+
+    def batch(requests, policies, entities, schema=None):
+        asked.append([r["resource"]["id"] for r in requests])
+        return [result(correlation_id=r["correlation_id"]) for r in requests]
+
+    authz = CedarAuthorizer(ACL)
+    authz._cedar = SimpleNamespace(Decision=cedarpy.Decision, is_authorized_batch=batch)
+    assert authz.check(ANN, [hit("a", score=0.5), hit("b"), hit("c", owner=None)]) == [False, True, False]
+    assert asked == [["b"]]
+    assert authz.check(ANN, [hit("a", score=0.5)]) == [False]
+    assert asked == [["b"]]  # nothing left to ask
+
+
+def test_a_subject_attribute_cedar_cannot_hold_raises():
+    with pytest.raises(AuthorizationError, match="cannot hold"):
+        CedarAuthorizer(ACL).check(Subject("ann", ["eng"], {"clearance": 2.5}), [hit("a")])
+    subject = Subject("ann", ["eng"], {"clearance": 2.0})
+    assert CedarAuthorizer(ACL).check(subject, [hit("a", allowed_groups=["eng"])]) == [True]
 
 
 def test_a_chunk_whose_evaluation_errors_is_denied_even_when_a_permit_applies(caplog):

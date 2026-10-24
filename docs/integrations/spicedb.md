@@ -13,6 +13,12 @@ from wardowl.authorizers.spicedb import SpiceDBAuthorizer
 authorizer = SpiceDBAuthorizer("http://localhost:8443", token=SPICEDB_KEY, resource_field="doc_id")
 ```
 
+The token is a bearer token, so it is refused with `ValueError` over `http://` to any host but this
+machine (`localhost`, `127.0.0.1`, `::1`, with no proxy in the way): serve SpiceDB's HTTP gateway
+with TLS (`--http-tls-cert-path` and `--http-tls-key-path`) and use an `https://` url, or pass
+`allow_insecure=True` on a network you trust. `ssl_context=`, for your own CA or mutual TLS, is
+refused with `http://`, where it would not be used.
+
 ## The schema
 
 The authorizer asks whether `user:<subject id>` has a permission (by default `view` for the action
@@ -33,8 +39,11 @@ definition document {
 
 Chunks of one source document share its id in metadata (`doc_id` above), so a relationship is
 written once per document, not once per chunk. With `resource_field=None` the chunk id is the
-resource. A chunk without its resource id is denied. Change the names with `resource_type=`,
-`subject_type=`, `permissions={"read": "view"}`, `group_type=` and `group_relation=`.
+resource. A chunk without its resource id, or whose field holds anything but one string (a list,
+a number), is denied. Change the names with `resource_type=`, `subject_type=`,
+`permissions={"read": "view"}`, `group_type=` and `group_relation=`. Subject ids and group names
+are sent as separate fields of SpiceDB's JSON, never inside a `type:id#relation` string, so a `:`
+or `#` in one cannot change its type or relation.
 
 SpiceDB object ids allow letters, digits and `/_|-=+`. Store such an id in the chunk's
 `resource_field` and use such subject ids (for example a stable user id rather than an email
@@ -64,6 +73,11 @@ is returned and the retriever post-filters instead; it does the same when a look
 conditional on a caveat. Subjects who may read very many documents are therefore post-filtered,
 which stays correct.
 
+`In` matches a list field when any of its elements is listed, while `check` denies a chunk whose
+resource field is not one string. The retriever's re-check of pre-filtered hits (`recheck=True`,
+the default) drops such a chunk and counts it in `violations`. With `recheck=False` the filter
+alone decides, so the resource field must be one string on every chunk.
+
 ## Consistency and revocation
 
 The default consistency, `{"minimizeLatency": True}`, lets SpiceDB answer from a recent snapshot.
@@ -75,7 +89,9 @@ or `{"atLeastAsFresh": {"token": zedtoken}}` with the ZedToken from your last wr
 ## Failures
 
 Every failure raises `AuthorizationError`, so retrieval returns nothing: an unreachable server, a
-timeout, an HTTP error, a malformed answer, a per-item error, or a missing answer. Connections are
+timeout (`timeout=`, 2 seconds by default, for the whole call), an HTTP error, a malformed answer
+or one larger than `max_response_bytes=` (10 MiB by default), a per-item error, or a missing
+answer. Connections are
 reused, transient failures are retried once, and a `CircuitBreaker` can pause requests to a failing
 server (see [Operations](../operations.md#resilience-of-remote-permission-services)).
 

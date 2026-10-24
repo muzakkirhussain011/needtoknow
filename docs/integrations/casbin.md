@@ -46,6 +46,20 @@ identity provider, `group_subjects=True` also asks with each of the subject's gr
 id, and allows a chunk if any answer does. Use it only with allow-only models: with deny effects,
 a deny for one group would not override an allow for another, so keep memberships in `g` instead.
 
+Users, roles and these groups all arrive in Casbin's one subject field, so each group is sent with
+`group_prefix` in front (`"group:"` by default): the group `eng` is asked about as `group:eng`, and
+policies that grant to groups must name them that way.
+
+```text
+p, group:eng, design-doc, read
+p, alice, design-doc, read
+```
+
+Without the prefix, a group named like a user or a role (`admin`, `ceo@example.com`) would be given
+that user's or role's access. A subject whose id starts with the prefix raises
+`AuthorizationError`, since it could pass for a group; pick a prefix your user ids never start with
+(`group_prefix="team/"`, say). An empty prefix is refused.
+
 ## Pre-filtering and failures
 
 Casbin answers yes or no per request and has no reverse lookup, so `filter_for` returns None and

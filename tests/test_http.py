@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
+import ssl
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 
 import pytest
 from helpers import corpora, oracle_top_k, queries, subjects
@@ -14,9 +18,10 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from wardowl import AuthorizationError, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from wardowl.authorizers import CircuitBreaker
+from wardowl.authorizers import CircuitBreaker, _http
 from wardowl.authorizers._http import JsonClient
 from wardowl.authorizers.opa import OPAAuthorizer
+from wardowl.authorizers.spicedb import SpiceDBAuthorizer
 
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 0.5, {"allowed_groups": ["hr"]})]
@@ -46,7 +51,28 @@ class _Handler(BaseHTTPRequestHandler):
             time.sleep(0.4)
         responses = {"503": (503, {}), "400": (400, {}), "302": (302, {"Location": "/elsewhere"})}
         status, extra = responses.get(action, (200, {}))
-        body = b"not json" if action == "badjson" else json.dumps({"result": _decisions(payload)}).encode()
+        answer = {"result": _decisions(payload)}
+        if action.startswith("big"):
+            answer["padding"] = "x" * 2000
+        body = b"not json" if action == "badjson" else json.dumps(answer).encode()
+        if action == "drip":  # a correct answer, status line and headers included, one byte at a time
+            self.close_connection = True
+            head = f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
+            with contextlib.suppress(OSError):  # until the client gives up
+                for byte in head.encode() + body:
+                    self.wfile.write(bytes([byte]))
+                    time.sleep(0.02)
+            return
+        if action == "big-chunked":  # no length announced: the size shows only while reading
+            with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                for piece in (body[:1000], body[1000:]):
+                    self.wfile.write(b"%x\r\n%s\r\n" % (len(piece), piece))
+                self.wfile.write(b"0\r\n\r\n")
+            return
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.send_response(status)
             for key, value in extra.items():
@@ -117,19 +143,23 @@ def test_timeouts_client_errors_bad_answers_and_redirects_are_not_retried(server
 
 
 def test_the_urllib_path_used_behind_a_proxy_behaves_the_same(server):
-    def client():
-        c = JsonClient(server.url, service="test", timeout=0.2, headers={})
+    def client(timeout=0.2):
+        c = JsonClient(server.url, service="test", timeout=timeout, headers={}, max_response_bytes=1000)
         c._proxied = True  # as if a proxy applied; without proxy variables urllib connects directly
         return c
 
     payload = {"input": {"subject": {"id": "bob", "groups": ["eng"]}, "resources": []}}
-    assert client().post_json("/x", payload, "test") == {"result": []}
+    assert client(2).post_json("/x", payload, "test") == {"result": []}  # the deadline covers the retry too
     server.script = ["503"]
-    assert client().post_json("/x", payload, "test") == {"result": []}
-    for fault in ["302", "400", "slow"]:
+    assert client(2).post_json("/x", payload, "test") == {"result": []}
+    for fault in ["302", "400", "slow", "drip", "big", "big-chunked"]:
         server.script = [fault]
         with pytest.raises(AuthorizationError):
             client().post_json("/x", payload, "test")
+    tls = JsonClient(server.url.replace("http://", "https://"), service="test", timeout=1, headers={}, retries=0)
+    tls._proxied = True
+    with pytest.raises(AuthorizationError):  # the test server speaks no TLS
+        tls.post_json("/x", payload, "test")
 
 
 def test_proxy_variables_decide_whether_urllib_is_used(monkeypatch):
@@ -181,6 +211,85 @@ def test_breaker_and_client_validate_their_settings():
         OPAAuthorizer("http://opa:8181", retries=-1)
     with pytest.raises(ValueError):
         OPAAuthorizer("https://")
+    with pytest.raises(ValueError):
+        OPAAuthorizer("http://opa:8181", timeout=0)
+    with pytest.raises(ValueError):
+        OPAAuthorizer("http://opa:8181", max_response_bytes=0)
+
+
+def test_timeout_bounds_the_whole_call_not_each_read(server):
+    # The answer arrives a byte every 20 ms: each read is quick, the whole would take about 2 s.
+    server.script = ["drip"]
+    started = time.monotonic()
+    with pytest.raises(AuthorizationError, match="timed out"):
+        OPAAuthorizer(server.url, timeout=0.3).check(BOB, HITS)
+    assert time.monotonic() - started < 1.0
+    assert len(server.requests) == 1  # a timeout is not retried
+
+
+@pytest.mark.parametrize("fault", ["big", "big-chunked"])
+def test_an_answer_over_max_response_bytes_is_refused(server, fault):
+    server.script = [fault]
+    with pytest.raises(AuthorizationError, match="more than 1000 bytes"):
+        OPAAuthorizer(server.url, max_response_bytes=1000).check(BOB, HITS)
+    assert len(server.requests) == 1  # not retried
+    server.script = [fault]
+    assert OPAAuthorizer(server.url, max_response_bytes=10_000).check(BOB, HITS) == [True, False]
+
+
+def test_a_connection_made_before_fork_is_not_reused_after_it(server, monkeypatch):
+    authz = OPAAuthorizer(server.url)
+    assert authz.check(BOB, HITS) == [True, False]
+    monkeypatch.setattr(_http, "os", SimpleNamespace(getpid=lambda: -1))  # as in a forked child
+    assert authz.check(BOB, HITS) == [True, False]  # on a connection of its own
+    assert authz.check(BOB, HITS) == [True, False]  # which it then keeps
+    assert len(server.requests) == 3 and server.requests[0] != server.requests[1] == server.requests[2]
+
+
+@pytest.mark.skipif(not hasattr(os, "fork") or sys.platform == "darwin", reason="needs fork() (unsafe on macOS)")
+def test_a_forked_child_never_shares_the_parents_connection(server):
+    # With gunicorn --preload, workers forked after a request would otherwise share one socket and
+    # could read each other's permission answers.
+    authz = OPAAuthorizer(server.url)
+    assert authz.check(BOB, HITS) == [True, False]
+    pid = os.fork()
+    if pid == 0:  # the child: always leave at once, without running the rest of the tests
+        code = 1
+        try:
+            code = 0 if authz.check(BOB, HITS) == [True, False] else 2
+        finally:
+            os._exit(code)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 0
+    assert authz.check(BOB, HITS) == [True, False]
+    assert len(server.requests) == 3 and server.requests[0] == server.requests[2] != server.requests[1]
+
+
+def test_tls_settings_and_credentials_are_refused_where_they_would_not_protect(monkeypatch):
+    for name in ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    tls = ssl.create_default_context()
+    with pytest.raises(ValueError, match="ssl_context"):
+        OPAAuthorizer("http://opa.internal:8181", ssl_context=tls)  # it would be ignored
+    OPAAuthorizer("https://opa.internal:8181", ssl_context=tls)
+    token = {"Authorization": "Bearer secret"}
+    for insecure in (
+        lambda: OPAAuthorizer("http://opa.internal:8181", headers=token),
+        lambda: OPAAuthorizer("http://10.0.0.5:8181", headers={"authorization": "Bearer secret"}),
+        lambda: SpiceDBAuthorizer("http://spicedb.internal:8443", "secret"),
+    ):
+        with pytest.raises(ValueError, match="allow_insecure"):
+            insecure()
+    OPAAuthorizer("http://opa.internal:8181", headers=token, allow_insecure=True)
+    SpiceDBAuthorizer("http://spicedb.internal:8443", "secret", allow_insecure=True)
+    SpiceDBAuthorizer("https://spicedb.internal:8443", "secret")
+    SpiceDBAuthorizer("http://spicedb.internal:8443")  # no token to leak
+    for local in ("http://localhost:8181", "http://127.0.0.1:8181", "http://127.8.0.1:8181", "http://[::1]:8181"):
+        OPAAuthorizer(local, headers=token)
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.internal:3128")
+    monkeypatch.setenv("NO_PROXY", "")
+    with pytest.raises(ValueError, match="allow_insecure"):
+        OPAAuthorizer("http://127.0.0.1:8181", headers=token)  # through the proxy, it would leave this machine
 
 
 FAULTS = st.sampled_from(["ok", "503", "reset", "ok-then-close", "400", "badjson", "302"])
