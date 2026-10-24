@@ -16,8 +16,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from test_opa import _Handler
 
-from needtoknow import AuthorizationError, Document, Hit, In, InMemoryBackend, PermissionedRetriever, Subject
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+from wardowl import AuthorizationError, Document, Hit, In, InMemoryBackend, PermissionedRetriever, Subject
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
 
 BOB = Subject("bob", ["eng"])
 
@@ -115,7 +115,7 @@ def test_unknown_consistency_and_a_zero_deadline_are_refused(options):
 
 # ---- against a real OpenFGA ------------------------------------------------------------------
 
-FGA_URL = os.environ.get("NEEDTOKNOW_TEST_OPENFGA_URL")
+FGA_URL = os.environ.get("WARDOWL_TEST_OPENFGA_URL")
 
 MODEL = {
     "schema_version": "1.1",
@@ -170,7 +170,7 @@ def _store_for(docs):
     return store, model
 
 
-@pytest.mark.skipif(not FGA_URL, reason="set NEEDTOKNOW_TEST_OPENFGA_URL to run against a real OpenFGA")
+@pytest.mark.skipif(not FGA_URL, reason="set WARDOWL_TEST_OPENFGA_URL to run against a real OpenFGA")
 @settings(max_examples=40, deadline=None)
 @given(
     docs=corpora(max_size=12),

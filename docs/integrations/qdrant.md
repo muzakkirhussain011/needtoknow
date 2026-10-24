@@ -1,7 +1,7 @@
 # Qdrant
 
 ```bash
-pip install "needtoknow[qdrant]"
+pip install "wardowl[qdrant]"
 ```
 
 The permission filter becomes Qdrant's `query_filter`, so Qdrant returns the nearest points the
@@ -13,7 +13,7 @@ its payload indexes, which suits large collections where a user may read only a 
 ```python
 from qdrant_client import QdrantClient
 
-from needtoknow.backends.qdrant import QdrantBackend, create_collection
+from wardowl.backends.qdrant import QdrantBackend, create_collection
 
 client = QdrantClient(url="http://localhost:6333")  # or QdrantClient(":memory:") for tests
 create_collection(client, "docs", dim=768)
@@ -33,12 +33,12 @@ fields. Pass `content_key=` and `metadata_key=` for another layout, and `vector_
 vector.
 
 Qdrant point ids are unsigned integers or UUIDs. `add` uses a document id that is a UUID as the point
-id, and derives a stable UUID from any other id, keeping the original under `needtoknow_id` in the
+id, and derives a stable UUID from any other id, keeping the original under `wardowl_id` in the
 payload. Search results report that id, or the point id for points written by something else. A
 point without a `metadata` object carries no permissions, so the re-check denies it.
 
 ```python
-from needtoknow import Document
+from wardowl import Document
 
 backend.add([Document("salaries-1", "Salary bands for 2026 ...", {"allowed_groups": ["hr"]})])
 backend.delete(["salaries-1"])
@@ -46,7 +46,7 @@ backend.delete(["salaries-1"])
 
 ## How filters are translated
 
-| needtoknow | Qdrant |
+| wardowl | Qdrant |
 |---|---|
 | `In("allowed_groups", ["hr", "eng"])` | `FieldCondition(key="metadata.allowed_groups", match=MatchAny(any=["eng", "hr"]))` |
 | `In("level", ["a", 1])` | one `MatchAny` for the strings and one for the integers, under `should` |
@@ -59,7 +59,7 @@ query is built rather than left to Qdrant's handling of empty lists. Field names
 may not contain `.`, `[`, `]` or `"`, which Qdrant reads as path syntax; such a filter raises
 `ValueError`, so retrieval fails closed.
 
-The backend passes needtoknow's [conformance kit](../extending.md#test-it-with-the-conformance-kit)
+The backend passes wardowl's [conformance kit](../extending.md#test-it-with-the-conformance-kit)
 in CI against a real Qdrant server (v1.19.2) and against Qdrant's local mode.
 
 ## Search quality and async
@@ -72,13 +72,13 @@ search in a thread.
 ## Keyword search and hybrid search
 
 `mode="keyword"` ranks the chunks by BM25, under the same `query_filter`, with no model to run.
-`create_collection(..., text_search=True)` adds a sparse vector, `needtoknow_bm25`, with Qdrant's
+`create_collection(..., text_search=True)` adds a sparse vector, `wardowl_bm25`, with Qdrant's
 IDF modifier. The backend writes each chunk's BM25 term weights there, and Qdrant multiplies in the
 inverse document frequency of each word at search time, so the score is BM25 and it stays right as
 the collection grows. One collection then serves both halves of [hybrid search](../hybrid.md):
 
 ```python
-from needtoknow import RankFusion
+from wardowl import RankFusion
 
 create_collection(client, "docs", dim=768, text_search=True)
 vector = QdrantBackend(client, "docs", embed=embed, text_search=True)  # writes both vectors

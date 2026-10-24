@@ -13,7 +13,7 @@ set -euo pipefail
 store="${1:?usage: kaggle_stores.sh qdrant|elasticsearch|opensearch|weaviate|lancedb|redis|stop}"
 # The stores' files stay out of /kaggle/working, which Kaggle saves as the notebook's output;
 # only their logs are kept there.
-root=/tmp/needtoknow-stores
+root=/tmp/wardowl-stores
 mkdir -p "$root"
 cd "$root"
 

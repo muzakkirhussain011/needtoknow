@@ -1,11 +1,4 @@
-<h1 align="center">
-  <a href="https://muzakkirhussain011.github.io/needtoknow/">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/lockup-dark.webp">
-      <img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/lockup-light.webp" alt="needtoknow" width="440">
-    </picture>
-  </a>
-</h1>
+<h1 align="center">wardowl</h1>
 
 <p align="center">
   <strong>Permission-aware retrieval for RAG.</strong><br>
@@ -14,26 +7,26 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/needtoknow/"><img src="https://img.shields.io/pypi/v/needtoknow?color=0e9f8e" alt="PyPI version"></a>
-  <a href="https://pypi.org/project/needtoknow/"><img src="https://img.shields.io/pypi/pyversions/needtoknow" alt="Python versions"></a>
-  <a href="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI"></a>
-  <a href="https://muzakkirhussain011.github.io/needtoknow/"><img src="https://github.com/muzakkirhussain011/needtoknow/actions/workflows/docs.yml/badge.svg?branch=main&amp;event=push" alt="Docs"></a>
-  <a href="https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/needtoknow"><img src="https://api.securityscorecards.dev/projects/github.com/muzakkirhussain011/needtoknow/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://pypi.org/project/wardowl/"><img src="https://img.shields.io/pypi/v/wardowl?color=0e9f8e" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/wardowl/"><img src="https://img.shields.io/pypi/pyversions/wardowl" alt="Python versions"></a>
+  <a href="https://github.com/muzakkirhussain011/wardowl/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/wardowl/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI"></a>
+  <a href="https://muzakkirhussain011.github.io/wardowl/"><img src="https://github.com/muzakkirhussain011/wardowl/actions/workflows/docs.yml/badge.svg?branch=main&amp;event=push" alt="Docs"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/wardowl"><img src="https://api.securityscorecards.dev/projects/github.com/muzakkirhussain011/wardowl/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://www.bestpractices.dev/projects/15794"><img src="https://www.bestpractices.dev/projects/15794/badge" alt="OpenSSF Best Practices"></a>
-  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://github.com/muzakkirhussain011/wardowl/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
 <p align="center">
-  <a href="https://muzakkirhussain011.github.io/needtoknow/"><b>Documentation</b></a> ·
-  <a href="https://muzakkirhussain011.github.io/needtoknow/quickstart.html">Quickstart</a> ·
-  <a href="https://muzakkirhussain011.github.io/needtoknow/integrations/index.html">Integrations</a> ·
-  <a href="https://muzakkirhussain011.github.io/needtoknow/benchmarks.html">Benchmarks</a> ·
-  <a href="https://muzakkirhussain011.github.io/needtoknow/security.html">Security model</a> ·
-  <a href="https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md">Changelog</a>
+  <a href="https://muzakkirhussain011.github.io/wardowl/"><b>Documentation</b></a> ·
+  <a href="https://muzakkirhussain011.github.io/wardowl/quickstart.html">Quickstart</a> ·
+  <a href="https://muzakkirhussain011.github.io/wardowl/integrations/index.html">Integrations</a> ·
+  <a href="https://muzakkirhussain011.github.io/wardowl/benchmarks.html">Benchmarks</a> ·
+  <a href="https://muzakkirhussain011.github.io/wardowl/security.html">Security model</a> ·
+  <a href="https://github.com/muzakkirhussain011/wardowl/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
 ```python
-from needtoknow import PermissionedRetriever, MetadataACLAuthorizer, Subject
+from wardowl import PermissionedRetriever, MetadataACLAuthorizer, Subject
 
 retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 result = retriever.retrieve("What are this year's salary bands?", Subject("bob", groups=["engineering"]), k=5)
@@ -47,7 +40,7 @@ ignores who is asking, an engineer can ask the assistant about salaries and get 
 summarised back. Every team building internal RAG has to solve this, and most solve it by hand,
 differently each time.
 
-`needtoknow` is that layer as a small, tested library:
+`wardowl` is that layer as a small, tested library:
 
 - **Works with what you have.** Wrap any search backend and any permission system. The core has
   no dependencies.
@@ -63,7 +56,7 @@ differently each time.
 ## Install
 
 ```bash
-pip install needtoknow
+pip install wardowl
 ```
 
 Python 3.11 or newer: every Python version CPython still supports, each dropped in the first minor
@@ -72,7 +65,7 @@ release after its end of life. Adapters for external systems install as optional
 ## Quickstart
 
 ```python
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 backend = InMemoryBackend(
     [
@@ -94,8 +87,8 @@ print(result.strategy, result.complete)  # prefilter True
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/how-it-works-dark.svg">
-    <img src="https://raw.githubusercontent.com/muzakkirhussain011/needtoknow/main/docs/_static/brand/how-it-works-light.svg" alt="Your app sends the query and the user to needtoknow, which asks the permission system for a filter, runs it inside the vector store's search, checks every hit again and passes only permitted chunks to the LLM prompt" width="820">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/muzakkirhussain011/wardowl/main/docs/_static/brand/how-it-works-dark.svg">
+    <img src="https://raw.githubusercontent.com/muzakkirhussain011/wardowl/main/docs/_static/brand/how-it-works-light.svg" alt="Your app sends the query and the user to wardowl, which asks the permission system for a filter, runs it inside the vector store's search, checks every hit again and passes only permitted chunks to the LLM prompt" width="820">
   </picture>
 </p>
 
@@ -114,46 +107,46 @@ Each integration is an optional extra, so the core stays dependency-free.
 
 | Integration | Kind | Install | Where permissions apply |
 |---|---|---|---|
-| [PostgreSQL + pgvector](https://muzakkirhussain011.github.io/needtoknow/integrations/pgvector.html) | Vector store | `needtoknow[pgvector]` | Inside the SQL query |
-| [Qdrant](https://muzakkirhussain011.github.io/needtoknow/integrations/qdrant.html) | Vector store | `needtoknow[qdrant]` | Qdrant's `query_filter` |
-| [Milvus](https://muzakkirhussain011.github.io/needtoknow/integrations/milvus.html) | Vector store | `needtoknow[milvus]` | Inside the vector search, with parameterized filters |
-| [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/needtoknow/integrations/mongodb.html) | Vector store | `needtoknow[mongodb]` | The `$vectorSearch` pre-filter |
-| [Weaviate](https://muzakkirhussain011.github.io/needtoknow/integrations/weaviate.html) | Vector store | `needtoknow[weaviate]` | Inside the vector search |
-| [Redis](https://muzakkirhussain011.github.io/needtoknow/integrations/redis.html) | Vector store | `needtoknow[redis]` | In the same KNN query, on hex-encoded terms |
-| [LanceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/lancedb.html) | Vector store, embedded | `needtoknow[lancedb]` | Before the vector search ranks, on hex-encoded terms |
-| [FAISS](https://muzakkirhussain011.github.io/needtoknow/integrations/faiss.html) | Vector search library, in process | `needtoknow[faiss]` | Before the search ranks, as an ID selector |
-| [Vespa](https://muzakkirhussain011.github.io/needtoknow/integrations/vespa.html) | Search engine | `needtoknow[vespa]` | In the YQL query, inside the nearest-neighbor search |
-| [Apache Cassandra](https://muzakkirhussain011.github.io/needtoknow/integrations/cassandra.html) | Database with vector search | `needtoknow[cassandra]` | In each ANN query's `WHERE`, as bound parameters |
-| [Pinecone](https://muzakkirhussain011.github.io/needtoknow/integrations/pinecone.html) | Managed vector database | `needtoknow[pinecone]` | The query's metadata filter, on hex-encoded terms |
-| [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/needtoknow/integrations/elasticsearch.html) | Vector store | `needtoknow[elasticsearch]`, `[opensearch]` | Inside the kNN search |
-| [Chroma](https://muzakkirhussain011.github.io/needtoknow/integrations/chroma.html) | Vector store | `needtoknow[chroma]` | Chroma's `where` clause |
-| [OpenFGA](https://muzakkirhussain011.github.io/needtoknow/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
-| [SpiceDB](https://muzakkirhussain011.github.io/needtoknow/integrations/spicedb.html) | Permission system | none | LookupResources pre-filter, bulk checks |
-| [Cerbos](https://muzakkirhussain011.github.io/needtoknow/integrations/cerbos.html) | Permission system | none | Pre-filter from query plans |
-| [Cedar](https://muzakkirhussain011.github.io/needtoknow/integrations/cedar.html) | Permission system, in process | `needtoknow[cedar]` | Post-filter |
-| [Casbin](https://muzakkirhussain011.github.io/needtoknow/integrations/casbin.html) | Permission system, in process | `needtoknow[casbin]` | Post-filter |
-| [Ory Keto](https://muzakkirhussain011.github.io/needtoknow/integrations/keto.html) | Permission system | none | Post-filter |
-| [Open Policy Agent](https://muzakkirhussain011.github.io/needtoknow/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
-| [Google Drive](https://muzakkirhussain011.github.io/needtoknow/integrations/google-drive.html) | Permission sync | none (bring Google's client) | Copies Drive sharing onto the chunks |
-| [LangChain](https://muzakkirhussain011.github.io/needtoknow/integrations/langchain.html) | Framework | `needtoknow[langchain]` | Retriever and agent tools; any store |
-| [LlamaIndex](https://muzakkirhussain011.github.io/needtoknow/integrations/llamaindex.html) | Framework | `needtoknow[llamaindex]` | Retriever and postprocessor; any index |
-| [Haystack](https://muzakkirhussain011.github.io/needtoknow/integrations/haystack.html) | Framework | `needtoknow[haystack]` | Retriever component; any needtoknow backend |
-| [MCP](https://muzakkirhussain011.github.io/needtoknow/integrations/mcp.html) | Agent tool server | `needtoknow[mcp]` | Search tool; the user comes from the verified token |
-| [HTTP service](https://muzakkirhussain011.github.io/needtoknow/integrations/http.html) | Service for any language | `needtoknow[server]` | `POST /v1/retrieve`; the user comes from the verified OIDC token |
+| [PostgreSQL + pgvector](https://muzakkirhussain011.github.io/wardowl/integrations/pgvector.html) | Vector store | `wardowl[pgvector]` | Inside the SQL query |
+| [Qdrant](https://muzakkirhussain011.github.io/wardowl/integrations/qdrant.html) | Vector store | `wardowl[qdrant]` | Qdrant's `query_filter` |
+| [Milvus](https://muzakkirhussain011.github.io/wardowl/integrations/milvus.html) | Vector store | `wardowl[milvus]` | Inside the vector search, with parameterized filters |
+| [MongoDB Atlas Vector Search](https://muzakkirhussain011.github.io/wardowl/integrations/mongodb.html) | Vector store | `wardowl[mongodb]` | The `$vectorSearch` pre-filter |
+| [Weaviate](https://muzakkirhussain011.github.io/wardowl/integrations/weaviate.html) | Vector store | `wardowl[weaviate]` | Inside the vector search |
+| [Redis](https://muzakkirhussain011.github.io/wardowl/integrations/redis.html) | Vector store | `wardowl[redis]` | In the same KNN query, on hex-encoded terms |
+| [LanceDB](https://muzakkirhussain011.github.io/wardowl/integrations/lancedb.html) | Vector store, embedded | `wardowl[lancedb]` | Before the vector search ranks, on hex-encoded terms |
+| [FAISS](https://muzakkirhussain011.github.io/wardowl/integrations/faiss.html) | Vector search library, in process | `wardowl[faiss]` | Before the search ranks, as an ID selector |
+| [Vespa](https://muzakkirhussain011.github.io/wardowl/integrations/vespa.html) | Search engine | `wardowl[vespa]` | In the YQL query, inside the nearest-neighbor search |
+| [Apache Cassandra](https://muzakkirhussain011.github.io/wardowl/integrations/cassandra.html) | Database with vector search | `wardowl[cassandra]` | In each ANN query's `WHERE`, as bound parameters |
+| [Pinecone](https://muzakkirhussain011.github.io/wardowl/integrations/pinecone.html) | Managed vector database | `wardowl[pinecone]` | The query's metadata filter, on hex-encoded terms |
+| [Elasticsearch, OpenSearch](https://muzakkirhussain011.github.io/wardowl/integrations/elasticsearch.html) | Vector store | `wardowl[elasticsearch]`, `[opensearch]` | Inside the kNN search |
+| [Chroma](https://muzakkirhussain011.github.io/wardowl/integrations/chroma.html) | Vector store | `wardowl[chroma]` | Chroma's `where` clause |
+| [OpenFGA](https://muzakkirhussain011.github.io/wardowl/integrations/openfga.html) | Permission system | none | ListObjects pre-filter, batched checks |
+| [SpiceDB](https://muzakkirhussain011.github.io/wardowl/integrations/spicedb.html) | Permission system | none | LookupResources pre-filter, bulk checks |
+| [Cerbos](https://muzakkirhussain011.github.io/wardowl/integrations/cerbos.html) | Permission system | none | Pre-filter from query plans |
+| [Cedar](https://muzakkirhussain011.github.io/wardowl/integrations/cedar.html) | Permission system, in process | `wardowl[cedar]` | Post-filter |
+| [Casbin](https://muzakkirhussain011.github.io/wardowl/integrations/casbin.html) | Permission system, in process | `wardowl[casbin]` | Post-filter |
+| [Ory Keto](https://muzakkirhussain011.github.io/wardowl/integrations/keto.html) | Permission system | none | Post-filter |
+| [Open Policy Agent](https://muzakkirhussain011.github.io/wardowl/integrations/opa.html) | Permission system | none | Pre-filter when the policy returns one |
+| [Google Drive](https://muzakkirhussain011.github.io/wardowl/integrations/google-drive.html) | Permission sync | none (bring Google's client) | Copies Drive sharing onto the chunks |
+| [LangChain](https://muzakkirhussain011.github.io/wardowl/integrations/langchain.html) | Framework | `wardowl[langchain]` | Retriever and agent tools; any store |
+| [LlamaIndex](https://muzakkirhussain011.github.io/wardowl/integrations/llamaindex.html) | Framework | `wardowl[llamaindex]` | Retriever and postprocessor; any index |
+| [Haystack](https://muzakkirhussain011.github.io/wardowl/integrations/haystack.html) | Framework | `wardowl[haystack]` | Retriever component; any wardowl backend |
+| [MCP](https://muzakkirhussain011.github.io/wardowl/integrations/mcp.html) | Agent tool server | `wardowl[mcp]` | Search tool; the user comes from the verified token |
+| [HTTP service](https://muzakkirhussain011.github.io/wardowl/integrations/http.html) | Service for any language | `wardowl[server]` | `POST /v1/retrieve`; the user comes from the verified OIDC token |
 
 Setup for each, with code:
 
 <details>
 <summary><b>PostgreSQL + pgvector</b></summary>
 
-**PostgreSQL + pgvector** (`pip install "needtoknow[pgvector]"`, pgvector 0.8+). The permission
+**PostgreSQL + pgvector** (`pip install "wardowl[pgvector]"`, pgvector 0.8+). The permission
 filter runs inside the SQL query as JSON containment tests, served by a GIN index, and iterative
 index scans keep HNSW returning k rows under selective filters.
 
 ```python
 from psycopg_pool import ConnectionPool
 
-from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
 pool = ConnectionPool("postgresql://localhost/app")
 create_schema(pool, dim=768)
@@ -166,7 +159,7 @@ backend.add(documents)
 <details>
 <summary><b>Chroma</b></summary>
 
-**Chroma** (`pip install "needtoknow[chroma]"`). The filter becomes Chroma's `where` clause. Each
+**Chroma** (`pip install "wardowl[chroma]"`). The filter becomes Chroma's `where` clause. Each
 value in a permission list is stored as its own field rather than as a Chroma array, and an exact
 copy of the metadata is kept for the re-check: in chromadb 1.5.x, deleting a collection leaves its
 array metadata behind for new records in other collections to pick up
@@ -176,7 +169,7 @@ permissions would be a leak.
 ```python
 import chromadb
 
-from needtoknow.backends.chroma import ChromaBackend
+from wardowl.backends.chroma import ChromaBackend
 
 collection = chromadb.PersistentClient(path="./chroma").get_or_create_collection("docs")
 backend = ChromaBackend(collection)  # uses the collection's embedding function
@@ -187,14 +180,14 @@ backend = ChromaBackend(collection)  # uses the collection's embedding function
 <details>
 <summary><b>Qdrant</b></summary>
 
-**Qdrant** (`pip install "needtoknow[qdrant]"`). The filter becomes Qdrant's `query_filter`, served
+**Qdrant** (`pip install "wardowl[qdrant]"`). The filter becomes Qdrant's `query_filter`, served
 by payload indexes on the permission fields. Points use the layout of LangChain's Qdrant
 integration, so a collection built with LangChain can be searched with permissions as it is.
 
 ```python
 from qdrant_client import QdrantClient
 
-from needtoknow.backends.qdrant import QdrantBackend, create_collection
+from wardowl.backends.qdrant import QdrantBackend, create_collection
 
 client = QdrantClient(url="http://localhost:6333")
 create_collection(client, "docs", dim=768)
@@ -210,7 +203,7 @@ search with `RankFusion`.
 <details>
 <summary><b>Milvus</b></summary>
 
-**Milvus** (`pip install "needtoknow[milvus]"`). The filter runs inside Milvus's vector search.
+**Milvus** (`pip install "wardowl[milvus]"`). The filter runs inside Milvus's vector search.
 Permissions are matched on a type-tagged array field, and the values are passed as filter
 parameters, never written into the expression, so a group name cannot change what a filter
 selects.
@@ -218,7 +211,7 @@ selects.
 ```python
 from pymilvus import MilvusClient
 
-from needtoknow.backends.milvus import MilvusBackend, create_collection
+from wardowl.backends.milvus import MilvusBackend, create_collection
 
 client = MilvusClient(uri="http://localhost:19530")
 create_collection(client, "docs", dim=768)
@@ -234,7 +227,7 @@ search with `RankFusion`.
 <details>
 <summary><b>MongoDB Atlas Vector Search</b></summary>
 
-**MongoDB Atlas Vector Search** (`pip install "needtoknow[mongodb]"`). The filter is the
+**MongoDB Atlas Vector Search** (`pip install "wardowl[mongodb]"`). The filter is the
 `$vectorSearch` pre-filter, on a type-tagged array field. Atlas indexes writes a moment after they
 happen, so `add` and `delete` wait until the index shows them, including a chunk's new
 permissions.
@@ -242,7 +235,7 @@ permissions.
 ```python
 from pymongo import MongoClient
 
-from needtoknow.backends.mongodb import MongoDBBackend, create_search_index
+from wardowl.backends.mongodb import MongoDBBackend, create_search_index
 
 collection = MongoClient(MONGODB_URI)["rag"]["chunks"]
 create_search_index(collection, dim=768)
@@ -258,14 +251,14 @@ with `RankFusion`.
 <details>
 <summary><b>Weaviate</b></summary>
 
-**Weaviate** (`pip install "needtoknow[weaviate]"`). The filter runs inside Weaviate's vector
+**Weaviate** (`pip install "wardowl[weaviate]"`). The filter runs inside Weaviate's vector
 search, on a type-tagged `text[]` property with `field` tokenization, so terms match exactly, case
 and whitespace included. The metadata is stored as JSON and returned as written.
 
 ```python
 import weaviate
 
-from needtoknow.backends.weaviate import WeaviateBackend, create_collection
+from wardowl.backends.weaviate import WeaviateBackend, create_collection
 
 client = weaviate.connect_to_local()
 create_collection(client, "Chunks")
@@ -277,14 +270,14 @@ backend = WeaviateBackend(client, "Chunks", embed=my_embedding_model)
 <details>
 <summary><b>Redis</b></summary>
 
-**Redis** (`pip install "needtoknow[redis]"`). A KNN query on the Redis Query Engine (Redis 8 or
+**Redis** (`pip install "wardowl[redis]"`). A KNN query on the Redis Query Engine (Redis 8 or
 later, or Redis Stack) with the permission filter in the same query. Permission terms are stored
 hex-encoded, so no group name can add query syntax and case never merges two values.
 
 ```python
 import redis
 
-from needtoknow.backends.redis import RedisBackend, create_index
+from wardowl.backends.redis import RedisBackend, create_index
 
 client = redis.Redis.from_url(REDIS_URL)
 create_index(client, "chunks", dim=768)
@@ -300,14 +293,14 @@ search with `RankFusion`.
 <details>
 <summary><b>LanceDB</b></summary>
 
-**LanceDB** (`pip install "needtoknow[lancedb]"`). An embedded vector database, on a local directory
+**LanceDB** (`pip install "wardowl[lancedb]"`). An embedded vector database, on a local directory
 or object storage, with no server to run. The permission filter is applied before the vector
 search ranks, on hex-encoded terms, so no group name or user id is ever part of the SQL.
 
 ```python
 import lancedb
 
-from needtoknow.backends.lancedb import LanceDBBackend, create_table
+from wardowl.backends.lancedb import LanceDBBackend, create_table
 
 table = create_table(lancedb.connect("data/chunks"), "chunks", dim=768)
 backend = LanceDBBackend(table, embed=my_embedding_model)
@@ -322,14 +315,14 @@ backend = LanceDBBackend(table, embed=my_embedding_model)
 <details>
 <summary><b>Elasticsearch and OpenSearch</b></summary>
 
-**Elasticsearch and OpenSearch** (`pip install "needtoknow[elasticsearch]"` or `[opensearch]`).
+**Elasticsearch and OpenSearch** (`pip install "wardowl[elasticsearch]"` or `[opensearch]`).
 The filter runs inside the kNN search. Permissions are matched on a type-tagged keyword field, so
 the integer `1` and the string `"1"` stay different values, as the reference semantics require.
 
 ```python
 from elasticsearch import Elasticsearch
 
-from needtoknow.backends.elasticsearch import ElasticsearchBackend, create_index
+from wardowl.backends.elasticsearch import ElasticsearchBackend, create_index
 
 client = Elasticsearch("http://localhost:9200")
 create_index(client, "docs", dim=768)
@@ -338,7 +331,7 @@ backend = ElasticsearchBackend(client, "docs", embed=my_embedding_model)
 
 `mode="keyword"` runs BM25 on the same index under the same filter. `RankFusion(vector, keyword)`
 fuses the two into hybrid search, and fuses any other backends the same way
-([hybrid search](https://muzakkirhussain011.github.io/needtoknow/hybrid.html)).
+([hybrid search](https://muzakkirhussain011.github.io/wardowl/hybrid.html)).
 
 </details>
 
@@ -347,12 +340,12 @@ fuses the two into hybrid search, and fuses any other backends the same way
 
 **Open Policy Agent** (no extra dependency). Your Rego policy returns one decision per chunk, and
 can optionally return a filter so the vector store does the filtering. A complete policy is in
-[`examples/opa/needtoknow.rego`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/opa/needtoknow.rego).
+[`examples/opa/wardowl.rego`](https://github.com/muzakkirhussain011/wardowl/blob/main/examples/opa/wardowl.rego).
 
 ```python
-from needtoknow.authorizers.opa import OPAAuthorizer
+from wardowl.authorizers.opa import OPAAuthorizer
 
-authorizer = OPAAuthorizer("http://localhost:8181", filter_path="needtoknow/filter")
+authorizer = OPAAuthorizer("http://localhost:8181", filter_path="wardowl/filter")
 ```
 
 </details>
@@ -366,7 +359,7 @@ and if that list may have been truncated the retriever post-filters instead. The
 can be sent as contextual tuples, so memberships from your identity provider need no syncing.
 
 ```python
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
 
 authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
 ```
@@ -382,7 +375,7 @@ groups are checked as subject sets (`group:<name>#member`), so memberships from 
 provider need no syncing.
 
 ```python
-from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
+from wardowl.authorizers.spicedb import SpiceDBAuthorizer
 
 authorizer = SpiceDBAuthorizer("http://localhost:8443", token=spicedb_key, resource_field="doc_id")
 ```
@@ -396,10 +389,10 @@ authorizer = SpiceDBAuthorizer("http://localhost:8443", token=spicedb_key, resou
 metadata. Pre-filters come from Cerbos query plans: the conditions a vector store can apply
 exactly are translated into a filter, and anything else is post-filtered with Cerbos deciding each
 chunk. An example policy is in
-[`examples/cerbos`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/cerbos).
+[`examples/cerbos`](https://github.com/muzakkirhussain011/wardowl/tree/main/examples/cerbos).
 
 ```python
-from needtoknow.authorizers.cerbos import CerbosAuthorizer
+from wardowl.authorizers.cerbos import CerbosAuthorizer
 
 authorizer = CerbosAuthorizer("http://localhost:3592")
 ```
@@ -416,8 +409,8 @@ deleted accounts, expired grants, limited-access folders' metadata views and gra
 shuts out grant nothing.
 
 ```python
-from needtoknow.sync import with_access
-from needtoknow.sync.google_drive import GoogleDriveACL
+from wardowl.sync import with_access
+from wardowl.sync.google_drive import GoogleDriveACL
 
 access = GoogleDriveACL(drive_service, domains=["example.com"]).access(file_id)
 backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in chunks.items()})
@@ -428,14 +421,14 @@ backend.set_metadata({cid: with_access(metadata, access) for cid, metadata in ch
 <details>
 <summary><b>LangChain</b></summary>
 
-**LangChain** (`pip install "needtoknow[langchain]"`). `NeedToKnowRetriever` is a LangChain
+**LangChain** (`pip install "wardowl[langchain]"`). `WardowlRetriever` is a LangChain
 retriever, so it works in chains, agents and LangGraph tools; `LangChainVectorStoreBackend` turns
-any LangChain vector store into a needtoknow backend (post-filtered).
+any LangChain vector store into a wardowl backend (post-filtered).
 
 ```python
-from needtoknow.langchain import NeedToKnowRetriever
+from wardowl.langchain import WardowlRetriever
 
-retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, authorizer))
+retriever = WardowlRetriever(retriever=PermissionedRetriever(backend, authorizer))
 docs = retriever.invoke("What are this year's salary bands?", subject=Subject("bob", ["sales"]))
 ```
 
@@ -444,26 +437,26 @@ docs = retriever.invoke("What are this year's salary bands?", subject=Subject("b
 <details>
 <summary><b>LlamaIndex</b></summary>
 
-**LlamaIndex** (`pip install "needtoknow[llamaindex]"`). `NeedToKnowRetriever` for query and chat
+**LlamaIndex** (`pip install "wardowl[llamaindex]"`). `WardowlRetriever` for query and chat
 engines, `PermissionNodePostprocessor` for existing pipelines, and `LlamaIndexBackend` to wrap an
-existing index. Runnable examples for both frameworks are in [`examples/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples).
+existing index. Runnable examples for both frameworks are in [`examples/`](https://github.com/muzakkirhussain011/wardowl/tree/main/examples).
 
 </details>
 
 <details>
 <summary><b>Haystack</b></summary>
 
-**Haystack** (`pip install "needtoknow[haystack]"`). `NeedToKnowRetriever` is a pipeline component
-over any needtoknow backend and authorizer. The authenticated user is a run input, so one pipeline
+**Haystack** (`pip install "wardowl[haystack]"`). `WardowlRetriever` is a pipeline component
+over any wardowl backend and authorizer. The authenticated user is a run input, so one pipeline
 serves every user; it outputs `documents` and `complete`, and has `run_async`.
 
 ```python
 from haystack import Pipeline
 
-from needtoknow.haystack import NeedToKnowRetriever
+from wardowl.haystack import WardowlRetriever
 
 pipeline = Pipeline()
-pipeline.add_component("retriever", NeedToKnowRetriever(PermissionedRetriever(backend, authorizer)))
+pipeline.add_component("retriever", WardowlRetriever(PermissionedRetriever(backend, authorizer)))
 result = pipeline.run({"retriever": {"query": question, "subject": subject}})
 ```
 
@@ -472,12 +465,12 @@ result = pipeline.run({"retriever": {"query": question, "subject": subject}})
 <details>
 <summary><b>MCP</b></summary>
 
-**MCP** (`pip install "needtoknow[mcp]"`). `add_search_tool` gives an MCP server a search tool for
+**MCP** (`pip install "wardowl[mcp]"`). `add_search_tool` gives an MCP server a search tool for
 AI assistants and agents. Whose permissions apply comes from the access token the server verified,
 never from the tool's arguments, and a call without a verified token is refused.
 
 ```python
-from needtoknow.mcp import add_search_tool
+from wardowl.mcp import add_search_tool
 
 
 def subject_for(token):  # the verified token's user, with their groups
@@ -496,8 +489,8 @@ backend's answer identical to the reference semantics, which the test suite chec
 ## Caching, audit, tracing and metrics
 
 ```python
-from needtoknow import CachingAuthorizer, JsonLinesAudit
-from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "needtoknow[otel]"
+from wardowl import CachingAuthorizer, JsonLinesAudit
+from wardowl.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "wardowl[otel]"
 
 retriever = PermissionedRetriever(
     backend,
@@ -553,13 +546,13 @@ for randomly generated corpora, permissions, users and queries, every strategy m
 
 ## Benchmarks
 
-On 57,600 real chunks (BEIR FiQA, Qwen3-Embedding-0.6B), across 33,000 retrievals, no needtoknow
+On 57,600 real chunks (BEIR FiQA, Qwen3-Embedding-0.6B), across 33,000 retrievals, no wardowl
 strategy returned a single forbidden chunk. Filtering inside the search kept recall@10 at 0.949 or
 better on pgvector for users who may read anywhere from 0.06% to 100% of the corpus, including when
 what they may read is far from what they ask about. Filtering after a top-10 search found almost
-nothing for selective permissions. Method, tables and caveats: [Benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html).
+nothing for selective permissions. Method, tables and caveats: [Benchmarks](https://muzakkirhussain011.github.io/wardowl/benchmarks.html).
 
-| Readable (far from the query) | Naive top-k, then filter | needtoknow postfilter | needtoknow prefilter (pgvector) |
+| Readable (far from the query) | Naive top-k, then filter | wardowl postfilter | wardowl prefilter (pgvector) |
 |---|---|---|---|
 | 0.9% | 0.000 | 0.048 | 0.995 |
 | 4.8% | 0.000 | 0.314 | 0.950 |
@@ -571,13 +564,13 @@ one query at a time; the machine served up to 126 requests a second. Open Policy
 permission service cost 8 to 9% of throughput, and `CachingAuthorizer` recovered nearly all of it. No
 retrieval leaked: none of the 185,040 chunks returned under concurrent load, each checked against its
 user's permissions, and none one at a time, there or on Qdrant, Elasticsearch, OpenSearch and
-Weaviate measured the same way on the same million chunks ([benchmarks](https://muzakkirhussain011.github.io/needtoknow/benchmarks.html#every-store-on-the-same-million-chunks)).
+Weaviate measured the same way on the same million chunks ([benchmarks](https://muzakkirhussain011.github.io/wardowl/benchmarks.html#every-store-on-the-same-million-chunks)).
 
 ## Stability and roadmap
 
 1.0 is the stable base: the core, the pgvector and Chroma backends, the OPA and OpenFGA authorizers,
 the LangChain and LlamaIndex integrations, caching, audit events and tracing. The public API in the
-[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) follows semantic
+[API reference](https://muzakkirhussain011.github.io/wardowl/api.html) follows semantic
 versioning: no breaking change without a major version and a deprecation period first.
 
 Since 1.0, 1.1 added resilient connections to remote permission services and signed, verifiable
@@ -591,26 +584,26 @@ Google Drive. 1.5 added an HTTP service for any language, redaction, the Ory Ket
 authorizers and the FAISS backend. 1.6 added the Vespa and Cassandra backends. Next, in rough
 order: the Pinecone backend, permission sync from SharePoint and Confluence, and an Azure AI Search
 backend. Contributions are welcome; see
-[CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
+[CONTRIBUTING.md](https://github.com/muzakkirhussain011/wardowl/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
 
-[`examples/gateway`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/gateway) is a complete, self-hosted, OpenAI-compatible gateway built
+[`examples/gateway`](https://github.com/muzakkirhussain011/wardowl/tree/main/examples/gateway) is a complete, self-hosted, OpenAI-compatible gateway built
 on the same ideas: OPA policies, pgvector hybrid search with the ACL inside the query, PII
 pseudonymisation, prompt-injection quarantine and a hash-chained audit log. It is being ported onto
 this library.
 
 ## Community and support
 
-- **Questions and bugs:** [GitHub issues](https://github.com/muzakkirhussain011/needtoknow/issues).
-- **Security reports:** privately, as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md)
+- **Questions and bugs:** [GitHub issues](https://github.com/muzakkirhussain011/wardowl/issues).
+- **Security reports:** privately, as [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md)
   describes; it also shows how to verify a release's signatures.
-- **Contributing:** [CONTRIBUTING.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md),
-  [GOVERNANCE.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/GOVERNANCE.md) and the
-  [code of conduct](https://github.com/muzakkirhussain011/needtoknow/blob/main/CODE_OF_CONDUCT.md).
-- **Citing:** [CITATION.cff](https://github.com/muzakkirhussain011/needtoknow/blob/main/CITATION.cff),
+- **Contributing:** [CONTRIBUTING.md](https://github.com/muzakkirhussain011/wardowl/blob/main/CONTRIBUTING.md),
+  [GOVERNANCE.md](https://github.com/muzakkirhussain011/wardowl/blob/main/GOVERNANCE.md) and the
+  [code of conduct](https://github.com/muzakkirhussain011/wardowl/blob/main/CODE_OF_CONDUCT.md).
+- **Citing:** [CITATION.cff](https://github.com/muzakkirhussain011/wardowl/blob/main/CITATION.cff),
   or "Cite this repository" on GitHub.
 
 ## License
 
-[MIT](https://github.com/muzakkirhussain011/needtoknow/blob/main/LICENSE)
+[MIT](https://github.com/muzakkirhussain011/wardowl/blob/main/LICENSE)

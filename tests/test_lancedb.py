@@ -12,9 +12,9 @@ pytest.importorskip("lancedb")
 
 import lancedb
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import TERMS_FIELD, tag
-from needtoknow.backends.lancedb import (
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import TERMS_FIELD, tag
+from wardowl.backends.lancedb import (
     KEY_FIELD,
     LanceDBBackend,
     create_indexes,
@@ -22,7 +22,7 @@ from needtoknow.backends.lancedb import (
     filter_to_sql,
     permission_terms,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 
@@ -213,7 +213,7 @@ def test_keyword_mode_passes_the_conformance_kit(db):
 
 
 def test_hybrid_search_over_one_table_passes_the_conformance_kit(db):
-    from needtoknow import RankFusion
+    from wardowl import RankFusion
 
     def make(docs):
         vector = _indexed_for_keywords(LanceDBBackend(_new_table(db), EMBED))

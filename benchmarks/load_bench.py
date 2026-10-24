@@ -40,15 +40,15 @@ from permissions_bench import (
     load_synthetic,
     log,
     measure,
-    needtoknow_run,
     percentile,
     subject_units,
     tags,
     top_rows,
+    wardowl_run,
 )
 from stores import STORES, make_store
 
-from needtoknow import CachingAuthorizer, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import CachingAuthorizer, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 FIELD = "allowed_groups"
 
@@ -264,8 +264,8 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--seconds", type=float, default=20.0, help="duration of each throughput run")
     p.add_argument("--repeat", type=int, default=1, help="runs per throughput row; the row reports their median")
     p.add_argument("--backend", choices=STORES, default="pgvector", help="the vector store to measure")
-    p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"), help="for pgvector")
-    p.add_argument("--url", default=os.environ.get("NEEDTOKNOW_BENCH_URL"), help="for the other stores")
+    p.add_argument("--database-url", default=os.environ.get("WARDOWL_BENCH_DATABASE_URL"), help="for pgvector")
+    p.add_argument("--url", default=os.environ.get("WARDOWL_BENCH_URL"), help="for the other stores")
     p.add_argument("--grpc-port", type=int, default=50051, help="Weaviate's gRPC port")
     p.add_argument("--ef-search", type=int, help="search breadth (pgvector hnsw.ef_search; see stores.py for the rest)")
     p.add_argument("--index-type", help="Elasticsearch's vector index type, such as int8_hnsw or hnsw")
@@ -292,7 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     url = args.database_url if args.backend == "pgvector" else args.url
     if not url:
-        raise SystemExit("pgvector needs --database-url (or NEEDTOKNOW_BENCH_DATABASE_URL); other stores --url")
+        raise SystemExit("pgvector needs --database-url (or WARDOWL_BENCH_DATABASE_URL); other stores --url")
     if args.teams % 100:
         raise SystemExit("--teams must be a multiple of 100")
     if args.repeat < 1:
@@ -324,7 +324,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cases = build_cases(queries, query_vecs, doc_vecs, teams, ids, args.teams, selectivity, args.k, rng)
         for strategy in ("prefilter", "postfilter"):
             row = {"selectivity": f"{selectivity:.1%}", "strategy": strategy}
-            row |= measure(needtoknow_run(single, acl, strategy, 1000), cases, args.k, row_of, 600)
+            row |= measure(wardowl_run(single, acl, strategy, 1000), cases, args.k, row_of, 600)
             scale.append(row)
             log(
                 f"scale {row['selectivity']:>6} {strategy:>10}: recall {row['recall']:.3f}"
@@ -346,10 +346,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     authorizers = []
     if args.opa_url:
-        from needtoknow.authorizers.opa import OPAAuthorizer
+        from wardowl.authorizers.opa import OPAAuthorizer
 
         def opa() -> OPAAuthorizer:
-            return OPAAuthorizer(args.opa_url, filter_path="needtoknow/filter")
+            return OPAAuthorizer(args.opa_url, filter_path="wardowl/filter")
 
         candidates = [
             ("in-process (MetadataACLAuthorizer)", lambda: acl),

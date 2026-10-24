@@ -18,7 +18,7 @@ from helpers import corpora, may_read, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 behaviours = st.fixed_dictionaries(
     {

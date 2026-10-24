@@ -1,7 +1,7 @@
 # Chroma
 
 ```bash
-pip install "needtoknow[chroma]"
+pip install "wardowl[chroma]"
 ```
 
 The permission filter becomes Chroma's `where` clause, so Chroma filters inside the search.
@@ -11,7 +11,7 @@ The permission filter becomes Chroma's `where` clause, so Chroma filters inside 
 ```python
 import chromadb
 
-from needtoknow.backends.chroma import ChromaBackend
+from wardowl.backends.chroma import ChromaBackend
 
 client = chromadb.PersistentClient(path="./chroma")
 collection = client.get_or_create_collection("docs", configuration={"hnsw": {"space": "cosine"}})
@@ -25,7 +25,7 @@ chunks.
 
 ## How metadata is stored
 
-needtoknow does not use Chroma's array metadata, and the reason is a real leak. In chromadb 1.5.x
+wardowl does not use Chroma's array metadata, and the reason is a real leak. In chromadb 1.5.x
 (local mode), deleting a collection leaves its array metadata behind, and because SQLite reuses
 record ids, new records in *other* collections come back with those arrays and are matched by
 `where` filters ([chroma-core/chroma#7594](https://github.com/chroma-core/chroma/issues/7594)).
@@ -37,13 +37,13 @@ So the backend stores metadata in a form that bug cannot affect:
 |---|---|
 | `team: "eng"` (a string or integer) | `team: "eng"`, unchanged |
 | `allowed_groups: ["hr", "eng"]` (a list) | One boolean field per value: `allowed_groups::s:hr: true`, `allowed_groups::s:eng: true` |
-| Everything | An exact JSON copy under `needtoknow_metadata` |
+| Everything | An exact JSON copy under `wardowl_metadata` |
 
 Search results are rebuilt from the JSON copy, never from the fields Chroma returns, so the
 retriever's re-check always sees the true permissions. Records written by something other than
-needtoknow have no copy and are treated as having no permissions: the re-check denies them.
+wardowl have no copy and are treated as having no permissions: the re-check denies them.
 
-Field names may not contain `::`, and `needtoknow_metadata` is reserved. Values that are not
+Field names may not contain `::`, and `wardowl_metadata` is reserved. Values that are not
 strings or integers are kept in the JSON copy only, which matches the reference semantics: no filter
 matches them.
 
@@ -69,7 +69,7 @@ number of groups in the filter. So:
 
 ## Chroma's own tenants and access control
 
-needtoknow applies permissions itself, as a filter inside each query and a check of each result, so
+wardowl applies permissions itself, as a filter inside each query and a check of each result, so
 it never relies on Chroma's tenants, databases or authorization providers. Do not rely on them to
 separate your tenants either: as of October 2026, Chroma 1.5.9 (the latest release) has unfixed
 advisories in which an authenticated user can reach any tenant's collections

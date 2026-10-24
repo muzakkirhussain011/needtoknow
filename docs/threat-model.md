@@ -1,6 +1,6 @@
 # Threat model
 
-This is the threat model of the needtoknow library: what it protects, where the trust boundaries
+This is the threat model of the wardowl library: what it protects, where the trust boundaries
 are, what can go wrong at each, and what stops it. The example gateway in `examples/gateway` has
 its own threat model, for a deployed service. [Security model](security.md) states the guarantees
 and the invariants (S1 to S10) these threats refer to; [Revocation and consistency](revocation.md)
@@ -16,12 +16,12 @@ covers how quickly permission changes take effect.
 | Cached decisions and filters | A decision that outlives its permission grants access after revocation. |
 | Subjects: user ids, groups, tenant and other attributes | Who is asking. A wrong subject is a wrong answer. |
 | Queries | Reveal what people look for; audit events must not store them. |
-| Credentials for stores, permission services and Redis | Give direct access around needtoknow. |
+| Credentials for stores, permission services and Redis | Give direct access around wardowl. |
 
 ## Trust boundaries
 
 ```text
- end user / agent ──▶ your application ──▶ needtoknow ──▶ vector store
+ end user / agent ──▶ your application ──▶ wardowl ──▶ vector store
  (untrusted)          authenticates,        (in process)   (trusted to search,
                       builds the Subject         │          checked for filtering)
                                                  ├──▶ permission service (OPA, OpenFGA, SpiceDB, Cerbos)
@@ -33,16 +33,16 @@ covers how quickly permission changes take effect.
                                                       (see counts and ids, never content)
 ```
 
-- **User or agent to your application.** Untrusted. needtoknow does not authenticate anyone: your
+- **User or agent to your application.** Untrusted. wardowl does not authenticate anyone: your
   application builds the `Subject` from a verified session or token. A language model is on the
   untrusted side; it chooses what to search for, never whose permissions apply.
-- **needtoknow to the vector store.** The store is trusted to search and to return each chunk's
+- **wardowl to the vector store.** The store is trusted to search and to return each chunk's
   metadata as stored. It is not trusted to apply the permission filter correctly: every pre-filtered
   hit is checked again.
-- **needtoknow to the permission service.** Trusted for its answers, never for their shape: a
+- **wardowl to the permission service.** Trusted for its answers, never for their shape: a
   missing, partial, malformed or late answer fails closed.
-- **needtoknow to the shared cache.** Trusted with decisions only when values are signed.
-- **needtoknow to the reranker and the model.** They receive permitted chunks only, after the check.
+- **wardowl to the shared cache.** Trusted with decisions only when values are signed.
+- **wardowl to the reranker and the model.** They receive permitted chunks only, after the check.
 - **Ingestion and permission sync.** Outside the request path: whatever writes permissions onto
   chunks (`set_metadata`, the Google Drive sync, your pipeline) is trusted, and its delay is a
   revocation delay.
@@ -56,7 +56,7 @@ it, staleness within a stated bound, or metadata disclosure), **low** (hints, co
 
 | Id | Threat | Severity | Mitigation | Remaining risk | Tests |
 |---|---|---|---|---|---|
-| T1 | Subject impersonation: the client or a model chooses whose permissions apply | Critical | No API takes the subject from the client. The MCP tool reads it from the verified access token; LangChain and LlamaIndex bind it per session. | Your application must build the `Subject` from authentication; needtoknow cannot tell. | `test_mcp.py`, `test_frameworks.py` |
+| T1 | Subject impersonation: the client or a model chooses whose permissions apply | Critical | No API takes the subject from the client. The MCP tool reads it from the verified access token; LangChain and LlamaIndex bind it per session. | Your application must build the `Subject` from authentication; wardowl cannot tell. | `test_mcp.py`, `test_frameworks.py` |
 | T2 | The store ignores or mistranslates the filter | High | Every pre-filtered hit is checked again with the authorizer (`recheck=True`) or, with `recheck=False`, against the filter locally; stray hits are dropped and counted as `violations`. The conformance kit checks every store. | With `recheck=False`, a filter broader than the authorizer's own check goes unnoticed. | S1, S5 |
 | T3 | The permission service fails, times out or is unreachable | High | `AuthorizationError`; no fallback to unfiltered results. Retries only for transient failures, a circuit breaker for a failing service. | Availability: retrieval stops while the service is down. | S2 |
 | T4 | A malformed, partial or misordered answer: wrong count, non-boolean, an unknown permissionship, a truncated list | High | Decisions are validated for count and exact `bool` type; SpiceDB answers are matched by request, not position; a list that reached its limit or the deadline gives no filter. | An authorizer that returns well-formed wrong answers is trusted (it is the source of truth). | S2, S7 |
@@ -76,13 +76,13 @@ it, staleness within a stated bound, or metadata disclosure), **low** (hints, co
 
 ## Out of scope
 
-These are real risks for a RAG system; needtoknow does not address them:
+These are real risks for a RAG system; wardowl does not address them:
 
 - **Authentication.** Verifying users, tokens and sessions.
 - **The model's output.** A model can repeat, summarise or be steered into misusing a chunk the
   user was allowed to read.
 - **Prompt injection in permitted content.** A readable chunk can carry instructions for the model.
-- **The permission policy itself.** If the policy or the tuples grant too much, needtoknow enforces
+- **The permission policy itself.** If the policy or the tuples grant too much, wardowl enforces
   too much.
 - **Infrastructure.** TLS, network isolation and access control for the stores, the permission
   service and Redis.

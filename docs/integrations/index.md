@@ -5,36 +5,36 @@ SpiceDB and Cerbos authorizers need no extra at all: they use the standard libra
 
 | Integration | Kind | Install | Pre-filters |
 |---|---|---|---|
-| [PostgreSQL + pgvector](pgvector.md) | Backend | `needtoknow[pgvector]` | Yes, inside the SQL query |
-| [Chroma](chroma.md) | Backend | `needtoknow[chroma]` | Yes, as a `where` clause |
-| [Elasticsearch](elasticsearch.md#elasticsearch) | Backend | `needtoknow[elasticsearch]` | Yes, inside the kNN search |
-| [OpenSearch](elasticsearch.md#opensearch) | Backend | `needtoknow[opensearch]` | Yes, inside the k-NN search |
-| [Qdrant](qdrant.md) | Backend | `needtoknow[qdrant]` | Yes, as a `query_filter` |
-| [Milvus](milvus.md) | Backend | `needtoknow[milvus]` | Yes, inside the vector search, with parameterized filters |
-| [MongoDB Atlas Vector Search](mongodb.md) | Backend | `needtoknow[mongodb]` | Yes, as the `$vectorSearch` pre-filter |
-| [Weaviate](weaviate.md) | Backend | `needtoknow[weaviate]` | Yes, inside the vector search |
-| [Redis](redis.md) | Backend | `needtoknow[redis]` | Yes, in the same KNN query |
-| [LanceDB](lancedb.md) | Backend | `needtoknow[lancedb]` | Yes, before the vector search ranks |
-| [FAISS](faiss.md) | Backend, in process | `needtoknow[faiss]` | Yes, an ID selector inside the search |
-| [Vespa](vespa.md) | Backend | `needtoknow[vespa]` | Yes, in the YQL query, inside the nearest-neighbor search |
-| [Apache Cassandra](cassandra.md) | Backend | `needtoknow[cassandra]` | Yes, in each ANN query's `WHERE` |
-| [Pinecone](pinecone.md) | Backend | `needtoknow[pinecone]` | Yes, as the query's metadata filter |
+| [PostgreSQL + pgvector](pgvector.md) | Backend | `wardowl[pgvector]` | Yes, inside the SQL query |
+| [Chroma](chroma.md) | Backend | `wardowl[chroma]` | Yes, as a `where` clause |
+| [Elasticsearch](elasticsearch.md#elasticsearch) | Backend | `wardowl[elasticsearch]` | Yes, inside the kNN search |
+| [OpenSearch](elasticsearch.md#opensearch) | Backend | `wardowl[opensearch]` | Yes, inside the k-NN search |
+| [Qdrant](qdrant.md) | Backend | `wardowl[qdrant]` | Yes, as a `query_filter` |
+| [Milvus](milvus.md) | Backend | `wardowl[milvus]` | Yes, inside the vector search, with parameterized filters |
+| [MongoDB Atlas Vector Search](mongodb.md) | Backend | `wardowl[mongodb]` | Yes, as the `$vectorSearch` pre-filter |
+| [Weaviate](weaviate.md) | Backend | `wardowl[weaviate]` | Yes, inside the vector search |
+| [Redis](redis.md) | Backend | `wardowl[redis]` | Yes, in the same KNN query |
+| [LanceDB](lancedb.md) | Backend | `wardowl[lancedb]` | Yes, before the vector search ranks |
+| [FAISS](faiss.md) | Backend, in process | `wardowl[faiss]` | Yes, an ID selector inside the search |
+| [Vespa](vespa.md) | Backend | `wardowl[vespa]` | Yes, in the YQL query, inside the nearest-neighbor search |
+| [Apache Cassandra](cassandra.md) | Backend | `wardowl[cassandra]` | Yes, in each ANN query's `WHERE` |
+| [Pinecone](pinecone.md) | Backend | `wardowl[pinecone]` | Yes, as the query's metadata filter |
 | [Open Policy Agent](opa.md) | Authorizer | none | When the policy returns a filter |
 | [OpenFGA](openfga.md) | Authorizer | none | Yes, through ListObjects |
 | [SpiceDB](spicedb.md) | Authorizer | none | Yes, through LookupResources |
 | [Cerbos](cerbos.md) | Authorizer | none | Yes, from query plans |
-| [Cedar](cedar.md) | Authorizer, in process | `needtoknow[cedar]` | No: post-filters, every candidate decided by Cedar |
-| [Casbin](casbin.md) | Authorizer, in process | `needtoknow[casbin]` | No: post-filters, every candidate decided by Casbin |
+| [Cedar](cedar.md) | Authorizer, in process | `wardowl[cedar]` | No: post-filters, every candidate decided by Cedar |
+| [Casbin](casbin.md) | Authorizer, in process | `wardowl[casbin]` | No: post-filters, every candidate decided by Casbin |
 | [Ory Keto](keto.md) | Authorizer | none | No: post-filters, Keto has no reverse lookup |
 | [Google Drive](google-drive.md) | Permission sync onto the chunks | none (bring Google's client) | Through `MetadataACLAuthorizer` |
-| [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `needtoknow[langchain]` | Wrapped stores post-filter |
-| [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `needtoknow[llamaindex]` | Wrapped indexes post-filter |
-| [Haystack](haystack.md) | Framework | `needtoknow[haystack]` | Through any needtoknow backend |
-| [MCP](mcp.md) | Agent tool server | `needtoknow[mcp]` | Through any needtoknow backend |
-| [Agent frameworks](agents.md) | OpenAI Agents SDK, Pydantic AI, CrewAI, AutoGen, Semantic Kernel, DSPy, through MCP | none (the framework's MCP client) | Through any needtoknow backend |
-| [HTTP service](http.md) | Retrieval for any language, OIDC tokens | `needtoknow[server]` | Through any needtoknow backend |
-| [FastAPI](fastapi.md) | Reference RAG service: verified tokens, tenants, safe errors | none (your app's FastAPI) | Through any needtoknow backend |
-| [OpenTelemetry](../operations.md#tracing) | Observer | `needtoknow[otel]` | |
+| [LangChain](langchain.md) | Framework, and any LangChain vector store as a backend | `wardowl[langchain]` | Wrapped stores post-filter |
+| [LlamaIndex](llamaindex.md) | Framework, and any LlamaIndex index as a backend | `wardowl[llamaindex]` | Wrapped indexes post-filter |
+| [Haystack](haystack.md) | Framework | `wardowl[haystack]` | Through any wardowl backend |
+| [MCP](mcp.md) | Agent tool server | `wardowl[mcp]` | Through any wardowl backend |
+| [Agent frameworks](agents.md) | OpenAI Agents SDK, Pydantic AI, CrewAI, AutoGen, Semantic Kernel, DSPy, through MCP | none (the framework's MCP client) | Through any wardowl backend |
+| [HTTP service](http.md) | Retrieval for any language, OIDC tokens | `wardowl[server]` | Through any wardowl backend |
+| [FastAPI](fastapi.md) | Reference RAG service: verified tokens, tenants, safe errors | none (your app's FastAPI) | Through any wardowl backend |
+| [OpenTelemetry](../operations.md#tracing) | Observer | `wardowl[otel]` | |
 
 ## Choosing a store
 
@@ -66,4 +66,4 @@ Elasticsearch, OpenSearch and Weaviate.
 
 Backends and authorizers combine freely: pgvector with OpenFGA, Chroma with OPA, a LangChain
 store with permissions on the chunks. A store not listed here needs only a `search` method; see
-[Extending needtoknow](../extending.md).
+[Extending wardowl](../extending.md).

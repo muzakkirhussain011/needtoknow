@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from needtoknow import (
+from wardowl import (
     AllOf,
     AuthorizationError,
     CachingAuthorizer,
@@ -19,7 +19,7 @@ from needtoknow import (
     Subject,
     TenantAuthorizer,
 )
-from needtoknow.caching import RedisCache
+from wardowl.caching import RedisCache
 
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})]

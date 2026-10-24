@@ -1,10 +1,10 @@
-# Advisories in uv.lock that have no fixed release and that needtoknow's code cannot reach.
+# Advisories in uv.lock that have no fixed release and that wardowl's code cannot reach.
 # OSV-Scanner, and OpenSSF Scorecard's Vulnerabilities check, skip them until `ignoreUntil`; then
 # they count again and each one is looked at afresh. Dependabot proposes the fixed release as soon
 # as there is one. Reviewed 2026-10-17.
 
 # ChromaDB 1.5.9, the latest release. The four advisories are in the Chroma server: its HTTP API and
-# its own tenant and RBAC checks. needtoknow's Chroma backend is a client that applies permissions
+# its own tenant and RBAC checks. wardowl's Chroma backend is a client that applies permissions
 # itself, as a filter inside each query; it never relies on Chroma's tenants or RBAC, and its tests
 # use Chroma's in-process client, with no server listening. If you run a Chroma server, its own
 # exposure to these advisories is yours to manage.
@@ -12,26 +12,26 @@
 [[IgnoredVulns]]
 id = "PYSEC-2026-311"
 ignoreUntil = 2027-01-15
-reason = "Chroma server: code injection through the collections endpoint (trust_remote_code). needtoknow is a Chroma client and runs no Chroma server; no fixed release yet."
+reason = "Chroma server: code injection through the collections endpoint (trust_remote_code). wardowl is a Chroma client and runs no Chroma server; no fixed release yet."
 
 [[IgnoredVulns]]
 id = "PYSEC-2026-3813"
 ignoreUntil = 2027-01-15
-reason = "Chroma server: missing tenant authorization between authenticated users. needtoknow does not rely on Chroma's tenants; it filters every query itself; no fixed release yet."
+reason = "Chroma server: missing tenant authorization between authenticated users. wardowl does not rely on Chroma's tenants; it filters every query itself; no fixed release yet."
 
 [[IgnoredVulns]]
 id = "PYSEC-2026-3814"
 ignoreUntil = 2027-01-15
-reason = "Chroma server: code injection by a user with UPDATE_COLLECTION. needtoknow is a Chroma client and runs no Chroma server; no fixed release yet."
+reason = "Chroma server: code injection by a user with UPDATE_COLLECTION. wardowl is a Chroma client and runs no Chroma server; no fixed release yet."
 
 [[IgnoredVulns]]
 id = "PYSEC-2026-3815"
 ignoreUntil = 2027-01-15
-reason = "Chroma server: SimpleRBACAuthorizationProvider ignores tenant, database and collection. needtoknow does not use Chroma's RBAC; no fixed release yet."
+reason = "Chroma server: SimpleRBACAuthorizationProvider ignores tenant, database and collection. wardowl does not use Chroma's RBAC; no fixed release yet."
 
 # NLTK 3.10.3, the latest release, comes in only through llama-index-core (the llamaindex extra).
 
 [[IgnoredVulns]]
 id = "GHSA-8mgp-746c-j5xp"
 ignoreUntil = 2027-01-15
-reason = "NLTK model save and load APIs bypass path security. needtoknow never calls NLTK; it is a dependency of llama-index-core. No fixed release yet."
+reason = "NLTK model save and load APIs bypass path security. wardowl never calls NLTK; it is a dependency of llama-index-core. No fixed release yet."

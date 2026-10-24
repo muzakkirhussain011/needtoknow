@@ -42,10 +42,10 @@ jobs:
             exit 1
           fi
           echo "VERSION=${version}" >> "$GITHUB_ENV"
-          wheel="needtoknow-${version}-py3-none-any.whl"
+          wheel="wardowl-${version}-py3-none-any.whl"
           gh release download "v${version}" --repo "$GITHUB_REPOSITORY" --pattern "$wheel" --dir "$RUNNER_TEMP"
           digest="$(sha256sum "$RUNNER_TEMP/$wheel" | cut -d' ' -f1)"
-          echo "needtoknow==${version} --hash=sha256:${digest}" > "$RUNNER_TEMP/requirements.txt"
+          echo "wardowl==${version} --hash=sha256:${digest}" > "$RUNNER_TEMP/requirements.txt"
           for attempt in 1 2 3 4 5 6; do
             pip install --no-cache-dir --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt" && exit 0
             sleep 20
@@ -57,10 +57,10 @@ jobs:
           python - <<'EOF'
           import os
 
-          import needtoknow
-          from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+          import wardowl
+          from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
-          assert needtoknow.__version__ == os.environ["VERSION"], needtoknow.__version__
+          assert wardowl.__version__ == os.environ["VERSION"], wardowl.__version__
           backend = InMemoryBackend(
               [
                   Document("handbook", "Annual leave is 25 days.", {"allowed_groups": ["*"]}),
@@ -71,7 +71,7 @@ jobs:
               "leave salary bands", Subject("bob", ["engineering"]), k=3
           )
           assert [h.id for h in result.hits] == ["handbook"], result
-          print(f"needtoknow {needtoknow.__version__} from PyPI works")
+          print(f"wardowl {wardowl.__version__} from PyPI works")
           EOF
       # The security suites of the released version, run against the installed package rather than
       # the source. The tests come from the release's source distribution, not from a git checkout of
@@ -87,9 +87,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sdist="needtoknow-${VERSION}.tar.gz"
+          sdist="wardowl-${VERSION}.tar.gz"
           if ! gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' |
-            grep -qx "needtoknow-${VERSION}.intoto.jsonl"; then
+            grep -qx "wardowl-${VERSION}.intoto.jsonl"; then
             echo "::notice::v${VERSION} has no build provenance; the security tests run from 1.4.0 on"
             exit 0
           fi
@@ -103,7 +103,7 @@ jobs:
           import time
           import urllib.request
 
-          url = f"https://pypi.org/pypi/needtoknow/{os.environ['VERSION']}/json"
+          url = f"https://pypi.org/pypi/wardowl/{os.environ['VERSION']}/json"
           for attempt in range(6):
               try:
                   with urllib.request.urlopen(url, timeout=30) as response:
@@ -120,7 +120,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/sdist/$sdist" -C "$RUNNER_TEMP/src"
       - name: Run the security tests against the installed package
         run: |
-          tests="$RUNNER_TEMP/src/needtoknow-${VERSION}/tests"
+          tests="$RUNNER_TEMP/src/wardowl-${VERSION}/tests"
           if [ ! -d "$tests" ]; then
             echo "::notice::no released tests to run for v${VERSION}"
             exit 0
@@ -129,7 +129,7 @@ jobs:
           pip install --require-hashes --no-deps -r "$RUNNER_TEMP/test-requirements.txt"
           cp -r "$tests" "$RUNNER_TEMP/release-tests"
           cd "$RUNNER_TEMP"
-          python -c "import needtoknow; assert 'site-packages' in needtoknow.__file__, needtoknow.__file__"
+          python -c "import wardowl; assert 'site-packages' in wardowl.__file__, wardowl.__file__"
           suites=""
           for name in test_properties test_invariants test_core test_composition test_caching_events test_shared_cache test_revocation; do
             if [ -f "release-tests/$name.py" ]; then suites="$suites release-tests/$name.py"; fi

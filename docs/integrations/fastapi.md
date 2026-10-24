@@ -1,13 +1,13 @@
 # FastAPI
 
-[`examples/fastapi_rag`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/fastapi_rag)
+[`examples/fastapi_rag`](https://github.com/muzakkirhussain011/wardowl/tree/main/examples/fastapi_rag)
 is a reference RAG service: a FastAPI app whose `/search` and `/ask` endpoints use only chunks the
 caller may read. Copy its structure rather than its demo parts (an in-memory index and a stand-in
 model). Its tests run in CI against the real app over HTTP.
 
 ```bash
-pip install needtoknow fastapi uvicorn pyjwt
-export NEEDTOKNOW_DEMO_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+pip install wardowl fastapi uvicorn pyjwt
+export WARDOWL_DEMO_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
 uvicorn --factory rag_service:create_app --app-dir examples/fastapi_rag
 ```
 

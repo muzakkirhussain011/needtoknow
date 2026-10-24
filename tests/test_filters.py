@@ -6,7 +6,7 @@ import pytest
 from helpers import filters
 from hypothesis import given
 
-from needtoknow import And, In, Or, filter_from_dict, filter_to_dict, matches
+from wardowl import And, In, Or, filter_from_dict, filter_to_dict, matches
 
 
 @given(filters)

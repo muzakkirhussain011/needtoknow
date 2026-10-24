@@ -6,15 +6,15 @@ it at ingestion, and again whenever a file's sharing changes. No extra dependenc
 Drive service from Google's client, which you install yourself.
 
 ```bash
-pip install needtoknow google-api-python-client google-auth
+pip install wardowl google-api-python-client google-auth
 ```
 
 ```python
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-from needtoknow.sync import with_access
-from needtoknow.sync.google_drive import GoogleDriveACL
+from wardowl.sync import with_access
+from wardowl.sync.google_drive import GoogleDriveACL
 
 credentials = service_account.Credentials.from_service_account_file(
     "sync-account.json",
@@ -139,7 +139,7 @@ drives, limited-access folders and files shared by link.
 Use it to test your own data, or with permissions you already fetched:
 
 ```python
-from needtoknow.sync.google_drive import drive_access
+from wardowl.sync.google_drive import drive_access
 
 permissions = [{"type": "group", "role": "reader", "emailAddress": "eng@example.com"}]
 assert drive_access(permissions).groups == {"eng@example.com"}

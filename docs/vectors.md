@@ -4,7 +4,7 @@ A text query is embedded by the backend's `embed` function. When you already hav
 vector, pass a `Query` instead of a string:
 
 ```python
-from needtoknow import Query
+from wardowl import Query
 
 vector = embedding_service.embed(question)  # your model, service or cache
 result = retriever.retrieve(Query(text=question, vector=vector), subject, k=5)
@@ -28,8 +28,8 @@ This covers:
 ## A store whose vectors you compute
 
 ```python
-from needtoknow import PermissionedRetriever, Query
-from needtoknow.backends.qdrant import QdrantBackend
+from wardowl import PermissionedRetriever, Query
+from wardowl.backends.qdrant import QdrantBackend
 
 backend = QdrantBackend(client, "pages")  # no embed function
 backend.add(pages, embeddings=[image_model.embed(p.image) for p in pages])
@@ -38,7 +38,7 @@ retriever = PermissionedRetriever(backend, authorizer)
 result = retriever.retrieve(Query(vector=image_model.embed(photo)), subject, k=10)
 ```
 
-`image_model` stands for whatever multimodal model you use; needtoknow only sees the numbers. The
+`image_model` stands for whatever multimodal model you use; wardowl only sees the numbers. The
 query vector must come from the same model, and have the same dimensions, as the stored vectors.
 On a vector backend built without `embed`, a text query raises `ValueError` rather than being
 searched some other way (Chroma is the exception: it falls back to the collection's own embedding
@@ -47,8 +47,8 @@ function).
 ## Hybrid search with one embedding
 
 ```python
-from needtoknow import PermissionedRetriever, Query, RankFusion
-from needtoknow.backends.pgvector import PgVectorBackend
+from wardowl import PermissionedRetriever, Query, RankFusion
+from wardowl.backends.pgvector import PgVectorBackend
 
 vector = PgVectorBackend(pool)  # vectors come with each query
 keyword = PgVectorBackend(pool, mode="keyword")
@@ -86,7 +86,7 @@ with it, and by its vector otherwise. Equal vectors give equal fingerprints; see
 takes only strings keeps working with string queries. To accept vectors:
 
 ```python
-from needtoknow import Query
+from wardowl import Query
 
 
 class MyBackend:

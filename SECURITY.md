@@ -1,6 +1,6 @@
 # Security policy
 
-needtoknow decides what data people may see, so security reports are taken seriously and are very
+wardowl decides what data people may see, so security reports are taken seriously and are very
 welcome.
 
 ## Reporting a vulnerability
@@ -32,7 +32,7 @@ already published below is kept.
 1. **Acknowledge** within 3 working days, and confirm or rule out the problem, with a status
    update, within 10.
 2. **Assess severity** with CVSS 4.0 in the GitHub advisory, read against the
-   [threat model](https://muzakkirhussain011.github.io/needtoknow/threat-model.html): anything that
+   [threat model](https://muzakkirhussain011.github.io/wardowl/threat-model.html): anything that
    lets a subject receive a chunk they may not read, crosses tenants, or makes a failure return
    results is high or critical.
 3. **Fix** in a private fork of the advisory, with a regression test, and release patch versions
@@ -40,7 +40,7 @@ already published below is kept.
 4. **Publish** the GitHub Security Advisory, with a CVE assigned through GitHub, when the fixed
    versions are on PyPI. The advisory, the release notes and the changelog's *Security* section say
    what was affected, which versions, how to upgrade, and any workaround. Dependabot alerts reach
-   projects that depend on needtoknow from the advisory. The aim is to publish within 90 days of the
+   projects that depend on wardowl from the advisory. The aim is to publish within 90 days of the
    report, sooner for anything actively exploited.
 
 Problems found by the maintainers themselves go through the same steps.
@@ -63,7 +63,7 @@ below.
 
 ## Scope
 
-In scope: the `needtoknow` package and its adapters. The example deployment in `examples/gateway`
+In scope: the `wardowl` package and its adapters. The example deployment in `examples/gateway`
 is a demonstration; its threat model and known limits are in
 [examples/gateway/threat-model.md](examples/gateway/threat-model.md). The demo keys and passwords
 in that example are public on purpose and are not vulnerabilities.
@@ -83,10 +83,10 @@ To check a downloaded file against its signature, with the version you downloade
 ```bash
 python -m pip install sigstore
 python -m sigstore verify identity \
-  --cert-identity "https://github.com/muzakkirhussain011/needtoknow/.github/workflows/release.yml@refs/tags/v1.1.0" \
+  --cert-identity "https://github.com/muzakkirhussain011/wardowl/.github/workflows/release.yml@refs/tags/v1.1.0" \
   --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
-  --bundle needtoknow-1.1.0-py3-none-any.whl.sigstore.json \
-  needtoknow-1.1.0-py3-none-any.whl
+  --bundle wardowl-1.1.0-py3-none-any.whl.sigstore.json \
+  wardowl-1.1.0-py3-none-any.whl
 ```
 
 A file from PyPI and the same file from the GitHub release are byte-identical: both come from one
@@ -95,9 +95,9 @@ GitHub release's wheel, runs the quickstart, and, from 1.4.0, runs the security 
 version against the installed package. Those tests come from the release's source distribution, after
 its provenance and its PyPI hash are checked, never from a git checkout of the tag.
 
-From 1.4.0, each release also carries SLSA build provenance (`needtoknow-<version>.intoto.jsonl`),
+From 1.4.0, each release also carries SLSA build provenance (`wardowl-<version>.intoto.jsonl`),
 also stored as a GitHub attestation. With the GitHub CLI:
 
 ```bash
-gh attestation verify needtoknow-1.6.0-py3-none-any.whl --repo muzakkirhussain011/needtoknow
+gh attestation verify wardowl-1.6.0-py3-none-any.whl --repo muzakkirhussain011/wardowl
 ```

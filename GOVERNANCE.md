@@ -1,6 +1,6 @@
 # Governance
 
-needtoknow is an open-source project under the MIT license. This document describes how it is run
+wardowl is an open-source project under the MIT license. This document describes how it is run
 today and how that changes as the community grows.
 
 ## Roles

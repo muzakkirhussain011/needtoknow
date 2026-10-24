@@ -13,9 +13,9 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import AuthorizationError, Document, Hit, In, InMemoryBackend, PermissionedRetriever, Subject
-from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
-from needtoknow.testing import check_authorizer
+from wardowl import AuthorizationError, Document, Hit, In, InMemoryBackend, PermissionedRetriever, Subject
+from wardowl.authorizers.spicedb import SpiceDBAuthorizer
+from wardowl.testing import check_authorizer
 
 ANN = Subject("ann", ["eng"])
 HITS = [Hit("c1", "t", 1.0, {"doc_id": "d1"}), Hit("c2", "t", 1.0, {"doc_id": "d2"}), Hit("c3", "t", 1.0, {})]
@@ -186,9 +186,9 @@ def test_an_unreachable_spicedb_fails_closed():
 
 # ---- a real SpiceDB --------------------------------------------------------------------------
 
-SPICEDB_URL = os.environ.get("NEEDTOKNOW_TEST_SPICEDB_URL")
-SPICEDB_TOKEN = os.environ.get("NEEDTOKNOW_TEST_SPICEDB_TOKEN", "")
-needs_spicedb = pytest.mark.skipif(not SPICEDB_URL, reason="set NEEDTOKNOW_TEST_SPICEDB_URL to run against SpiceDB")
+SPICEDB_URL = os.environ.get("WARDOWL_TEST_SPICEDB_URL")
+SPICEDB_TOKEN = os.environ.get("WARDOWL_TEST_SPICEDB_TOKEN", "")
+needs_spicedb = pytest.mark.skipif(not SPICEDB_URL, reason="set WARDOWL_TEST_SPICEDB_URL to run against SpiceDB")
 
 SCHEMA = """
 definition user {}

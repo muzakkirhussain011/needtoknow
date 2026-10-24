@@ -2,7 +2,7 @@
 
 Short records of decisions that shape the project, in the format: context, decision,
 consequences. ADRs 0001 to 0004 were written for Rampart, the gateway that is now the example in
-`examples/gateway`; 0005 records the move to the needtoknow library.
+`examples/gateway`; 0005 records the move to the wardowl library.
 
 | # | Decision | Status |
 |---|---|---|

@@ -1,9 +1,9 @@
 # Supported configurations
 
-What needtoknow is tested with, in CI, on every change. This is library compatibility: it says the
+What wardowl is tested with, in CI, on every change. This is library compatibility: it says the
 code passes its tests against these versions, not that a deployment of yours has been verified.
-Versions are as of October 2026; the [CI workflow](https://github.com/muzakkirhussain011/needtoknow/blob/main/.github/workflows/ci.yml)
-and [`uv.lock`](https://github.com/muzakkirhussain011/needtoknow/blob/main/uv.lock) are the current
+Versions are as of October 2026; the [CI workflow](https://github.com/muzakkirhussain011/wardowl/blob/main/.github/workflows/ci.yml)
+and [`uv.lock`](https://github.com/muzakkirhussain011/wardowl/blob/main/uv.lock) are the current
 record.
 
 ## Python
@@ -92,7 +92,7 @@ The HTTP authorizers use only the standard library to reach these services; the 
 
 ## Versions, support and deprecation
 
-needtoknow follows [semantic versioning](https://semver.org). The public API is what the
+wardowl follows [semantic versioning](https://semver.org). The public API is what the
 [API reference](api.md) documents; names starting with an underscore are private.
 
 - **Patch releases** (1.3.3) fix bugs and security problems. They change no documented behaviour,
@@ -104,7 +104,7 @@ needtoknow follows [semantic versioning](https://semver.org). The public API is 
   is deprecated first: it emits a `DeprecationWarning` naming its replacement for at least one minor
   release and at least six months, and the changelog lists it under Deprecated.
 - **Security fixes** reach the latest minor release and, for six months after its successor came
-  out, the one before it, as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md)
+  out, the one before it, as [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md)
   describes. Each advisory names the fixed versions of both.
 - **Python versions** are supported until their upstream end of life; the first minor release after
   that date drops them.

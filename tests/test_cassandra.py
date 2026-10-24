@@ -7,19 +7,19 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import tag
-from needtoknow.backends.cassandra import (
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import tag
+from wardowl.backends.cassandra import (
     CassandraBackend,
     TooManyQueries,
     create_table,
     filter_to_conjunctions,
     required_terms,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-HOST = os.environ.get("NEEDTOKNOW_TEST_CASSANDRA_HOST")
+HOST = os.environ.get("WARDOWL_TEST_CASSANDRA_HOST")
 
 
 # ---- the OR of ANDs and settings (no server) ---------------------------------------------------
@@ -78,7 +78,7 @@ def test_settings_and_searches_that_need_no_query():
 
 # ---- a real Cassandra --------------------------------------------------------------------------
 
-needs_cassandra = pytest.mark.skipif(not HOST, reason="set NEEDTOKNOW_TEST_CASSANDRA_HOST to run against Cassandra")
+needs_cassandra = pytest.mark.skipif(not HOST, reason="set WARDOWL_TEST_CASSANDRA_HOST to run against Cassandra")
 _TABLES: list[str] = []
 
 
@@ -88,7 +88,7 @@ def session():
     cluster = cluster_module.Cluster([HOST])
     session = cluster.connect()
     session.execute(
-        "CREATE KEYSPACE IF NOT EXISTS needtoknow_test "
+        "CREATE KEYSPACE IF NOT EXISTS wardowl_test "
         "WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}"
     )
     yield session
@@ -99,11 +99,11 @@ def _factory(session, *, vectors=False):
     def make(docs):
         # A new table for each corpus: rows deleted from the one before must not linger in its index.
         for old in _TABLES:
-            session.execute(f"DROP TABLE IF EXISTS needtoknow_test.{old}")
+            session.execute(f"DROP TABLE IF EXISTS wardowl_test.{old}")
         _TABLES[:] = [f"chunks_{uuid.uuid4().hex[:12]}"]
-        create_table(session, "needtoknow_test", _TABLES[0], EMBED.dim)
+        create_table(session, "wardowl_test", _TABLES[0], EMBED.dim)
         # The kit's deeply nested filters pass max_queries, so they also take the one-query path.
-        backend = CassandraBackend(session, "needtoknow_test", _TABLES[0], None if vectors else EMBED)
+        backend = CassandraBackend(session, "wardowl_test", _TABLES[0], None if vectors else EMBED)
         backend.add(docs, [EMBED(d.text) for d in docs] if vectors else None)
         return backend
 

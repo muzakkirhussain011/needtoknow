@@ -7,8 +7,8 @@ another, and inside a customer, documents are shared through groups, an OpenFGA 
 ## Tenant isolation
 
 ```python
-from needtoknow import AllOf, PermissionedRetriever, Subject, TenantAuthorizer
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+from wardowl import AllOf, PermissionedRetriever, Subject, TenantAuthorizer
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
 
 authorizer = AllOf(TenantAuthorizer(), OpenFGAAuthorizer(url, store_id))
 retriever = PermissionedRetriever(backend, authorizer)
@@ -36,11 +36,11 @@ is never asked about another tenant's chunks. Every part must answer well: a wro
 decisions or a non-boolean from any of them raises `AuthorizationError`.
 
 ```python
-from needtoknow import AnyOf, MetadataACLAuthorizer
-from needtoknow.authorizers.opa import OPAAuthorizer
+from wardowl import AnyOf, MetadataACLAuthorizer
+from wardowl.authorizers.opa import OPAAuthorizer
 
 # Shared directly on the document, or allowed by policy.
-authorizer = AnyOf(MetadataACLAuthorizer(), OPAAuthorizer(opa_url, filter_path="needtoknow/filter"))
+authorizer = AnyOf(MetadataACLAuthorizer(), OPAAuthorizer(opa_url, filter_path="wardowl/filter"))
 ```
 
 ## Scoped post-filtering
@@ -63,7 +63,7 @@ its filter again, so wrap remote parts in `CachingAuthorizer` to keep that to on
 ## Testing a combination
 
 ```python
-from needtoknow.testing import check_authorizer
+from wardowl.testing import check_authorizer
 
 check_authorizer(AllOf(TenantAuthorizer(), MetadataACLAuthorizer()), subjects, hits)
 ```

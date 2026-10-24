@@ -13,8 +13,8 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import CachingAuthorizer, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.caching import RedisCache, SharedCache
+from wardowl import CachingAuthorizer, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.caching import RedisCache, SharedCache
 
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 1.0, {"allowed_groups": ["hr"]})]
@@ -122,7 +122,7 @@ def test_invalidate_reaches_every_replica():
     assert two.checks == 2  # bob was asked again, ann still came from the shared cache
     a.invalidate()
     # Every entry is gone; the epochs stay (everyone's and bob's), and refuse late writes.
-    assert len(shared.data) == 2 and all(key.startswith("needtoknow!epoch") for key in shared.data)
+    assert len(shared.data) == 2 and all(key.startswith("wardowl!epoch") for key in shared.data)
 
 
 def test_invalidate_reaches_a_replica_holding_its_own_copy_within_local_ttl():
@@ -166,7 +166,7 @@ def test_a_global_epoch_read_in_flight_cannot_put_back_the_epoch_invalidate_repl
 
         def get_many(self, keys):
             values = super().get_many(keys)
-            if self.during is not None and keys == ["needtoknow!epoch"]:
+            if self.during is not None and keys == ["wardowl!epoch"]:
                 during, self.during = self.during, None
                 during()  # invalidate() runs after the old epoch was read, before it is kept
             return values
@@ -189,7 +189,7 @@ def test_invalidating_everyone_never_deletes_the_epoch_of_an_id():
     shared = FakeShared()
     _, _, (a, _b) = _replicas(shared)
     a.invalidate(BOB)
-    bobs = {key: value for key, value in shared.data.items() if key != "needtoknow!epoch"}
+    bobs = {key: value for key, value in shared.data.items() if key != "wardowl!epoch"}
     a.invalidate()  # while it deletes, an invalidate() of bob may have just written bob's epoch
     assert bobs and bobs.items() <= shared.data.items()
 
@@ -284,8 +284,8 @@ def test_sharing_never_changes_the_answer(docs, subject, query, k, strategy):
 
 # ---- RedisCache against a real Redis -------------------------------------------------------
 
-REDIS_URL = os.environ.get("NEEDTOKNOW_TEST_REDIS_URL")
-needs_redis = pytest.mark.skipif(not REDIS_URL, reason="set NEEDTOKNOW_TEST_REDIS_URL to run against Redis")
+REDIS_URL = os.environ.get("WARDOWL_TEST_REDIS_URL")
+needs_redis = pytest.mark.skipif(not REDIS_URL, reason="set WARDOWL_TEST_REDIS_URL to run against Redis")
 
 
 def _redis():

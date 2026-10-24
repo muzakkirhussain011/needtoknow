@@ -1,7 +1,7 @@
 name: Scorecard
 
 # OpenSSF Scorecard checks the repository's security practices and publishes the result:
-# https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/needtoknow
+# https://scorecard.dev/viewer/?uri=github.com/muzakkirhussain011/wardowl
 # Publishing requires this job to use only Scorecard's approved actions and no env or defaults.
 
 on:

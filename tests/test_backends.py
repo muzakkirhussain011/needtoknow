@@ -1,6 +1,6 @@
 """Every backend must agree with the reference semantics and never leak through the retriever.
 
-The in-memory backend always runs. pgvector runs when NEEDTOKNOW_TEST_DATABASE_URL points at a
+The in-memory backend always runs. pgvector runs when WARDOWL_TEST_DATABASE_URL points at a
 PostgreSQL with pgvector; Chroma runs when chromadb is installed. CI runs all three.
 """
 
@@ -16,19 +16,19 @@ from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labe
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from needtoknow import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject
-from needtoknow.testing import QUERY as KIT_QUERY
-from needtoknow.testing import check_backend
+from wardowl import Document, In, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Query, Subject
+from wardowl.testing import QUERY as KIT_QUERY
+from wardowl.testing import check_backend
 
 EMBED = HashingEmbedder()
-DATABASE_URL = os.environ.get("NEEDTOKNOW_TEST_DATABASE_URL")
+DATABASE_URL = os.environ.get("WARDOWL_TEST_DATABASE_URL")
 EXAMPLES = settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 
 
 @pytest.fixture(scope="module")
 def pgvector_pool():
     if not DATABASE_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_DATABASE_URL to run the pgvector tests")
+        pytest.skip("set WARDOWL_TEST_DATABASE_URL to run the pgvector tests")
     psycopg_pool = pytest.importorskip("psycopg_pool")
     pool = psycopg_pool.ConnectionPool(DATABASE_URL, min_size=1, max_size=4, open=True)
     yield pool
@@ -37,7 +37,7 @@ def pgvector_pool():
 
 @pytest.fixture(scope="module")
 def pgvector_factory(pgvector_pool):
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     # No HNSW index here: exact search, so results can be compared with the reference exactly.
     create_schema(pgvector_pool, EMBED.dim, table="ntk_conformance", hnsw=False)
@@ -55,7 +55,7 @@ def pgvector_factory(pgvector_pool):
 @pytest.fixture(scope="module")
 def chroma_factory():
     chromadb = pytest.importorskip("chromadb")
-    from needtoknow.backends.chroma import ChromaBackend
+    from wardowl.backends.chroma import ChromaBackend
 
     client = chromadb.EphemeralClient()
     previous: list[str] = []
@@ -110,7 +110,7 @@ def test_retriever_on_backend_never_leaks_and_is_complete(factory, docs, subject
 
 
 def test_backend_passes_the_public_conformance_kit(factory):
-    # The checks third-party adapters run (needtoknow.testing), on every built-in backend.
+    # The checks third-party adapters run (wardowl.testing), on every built-in backend.
     check_backend(factory)
 
 
@@ -131,7 +131,7 @@ def test_chroma_chunk_without_permissions_never_inherits_another_chunks(chroma_f
 
 
 def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_pool):
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     create_schema(pgvector_pool, EMBED.dim, table="ntk_hnsw", hnsw=True)
     with pgvector_pool.connection() as conn:
@@ -149,7 +149,7 @@ def test_pgvector_iterative_scan_fills_k_under_a_very_selective_filter(pgvector_
 
 
 def test_pgvector_sends_many_values_as_two_array_parameters():
-    from needtoknow.backends.pgvector import MANY_VALUES, filter_to_sql
+    from wardowl.backends.pgvector import MANY_VALUES, filter_to_sql
 
     sql, params = filter_to_sql(In("allowed_groups", [f"g{i}" for i in range(MANY_VALUES + 1)] + [7]))
     assert sql.count("%s") == 4 and len(params) == 4
@@ -173,7 +173,7 @@ def test_pgvector_serves_a_subject_in_forty_thousand_groups(pgvector_factory):
 
 @pytest.mark.parametrize("bad", [0, 1001, 1.5, True, "100"])
 def test_pgvector_ef_search_must_be_an_integer_from_1_to_1000(bad):
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     with pytest.raises(ValueError, match="ef_search"):
         PgVectorBackend(None, EMBED, ef_search=bad)
@@ -182,7 +182,7 @@ def test_pgvector_ef_search_must_be_an_integer_from_1_to_1000(bad):
 def test_pgvector_ef_search_holds_for_the_search_only(pgvector_pool):
     from psycopg import sql
 
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     class Probe(PgVectorBackend):
         # Returns the setting the search query sees, in place of rows.
@@ -198,7 +198,7 @@ def test_pgvector_ef_search_holds_for_the_search_only(pgvector_pool):
 
 def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_factory):
     psycopg_pool = pytest.importorskip("psycopg_pool")
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     docs = [Document(f"d{i}", f"doc report {i}", {"allowed_groups": ["*"] if i % 2 else ["hr"]}) for i in range(12)]
     pgvector_factory(docs)
@@ -221,7 +221,7 @@ def test_pgvector_native_async_search_matches_sync(pgvector_pool, pgvector_facto
 
 @pytest.mark.parametrize("config", ["English", "english; DROP TABLE x", "", "pg catalog"])
 def test_pgvector_text_search_configuration_must_be_a_plain_name(config):
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     with pytest.raises(ValueError):
         PgVectorBackend(None, None, mode="keyword", text_search=config)
@@ -230,7 +230,7 @@ def test_pgvector_text_search_configuration_must_be_a_plain_name(config):
 
 
 def test_pgvector_mode_and_embed_are_checked():
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     with pytest.raises(ValueError):
         PgVectorBackend(None, EMBED, mode="semantic")
@@ -242,7 +242,7 @@ def test_pgvector_mode_and_embed_are_checked():
 
 @pytest.fixture(scope="module")
 def pgvector_keyword_table(pgvector_pool):
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     create_schema(pgvector_pool, EMBED.dim, table="ntk_keyword", hnsw=False, text_search="english")
     writer = PgVectorBackend(pgvector_pool, EMBED, table="ntk_keyword", iterative_scan=None)
@@ -257,7 +257,7 @@ def pgvector_keyword_table(pgvector_pool):
 
 
 def test_pgvector_keyword_mode_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
 
@@ -269,8 +269,8 @@ def test_pgvector_keyword_mode_passes_the_conformance_kit(pgvector_pool, pgvecto
 
 
 def test_pgvector_hybrid_search_on_one_table_passes_the_conformance_kit(pgvector_pool, pgvector_keyword_table):
-    from needtoknow import RankFusion
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl import RankFusion
+    from wardowl.backends.pgvector import PgVectorBackend
 
     keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
 
@@ -283,7 +283,7 @@ def test_pgvector_hybrid_search_on_one_table_passes_the_conformance_kit(pgvector
 def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvector_keyword_table):
     from psycopg import sql
 
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl.backends.pgvector import PgVectorBackend
 
     pgvector_keyword_table([Document("a", "leave policy", {"allowed_groups": ["*"]})])
     keyword = PgVectorBackend(pgvector_pool, None, table="ntk_keyword", mode="keyword")
@@ -300,7 +300,7 @@ def test_pgvector_keyword_search_uses_the_full_text_index(pgvector_pool, pgvecto
 
 
 def test_pgvector_without_embed_searches_with_query_vectors(pgvector_pool):
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
     create_schema(pgvector_pool, EMBED.dim, table="ntk_vectors", hnsw=False)
     backend = PgVectorBackend(pgvector_pool, table="ntk_vectors", iterative_scan=None)
@@ -317,8 +317,8 @@ def test_pgvector_without_embed_searches_with_query_vectors(pgvector_pool):
 
 
 def test_pgvector_hybrid_search_with_one_query_vector(pgvector_pool, pgvector_keyword_table):
-    from needtoknow import RankFusion
-    from needtoknow.backends.pgvector import PgVectorBackend
+    from wardowl import RankFusion
+    from wardowl.backends.pgvector import PgVectorBackend
 
     vector = PgVectorBackend(pgvector_pool, table="ntk_keyword", iterative_scan=None)
     keyword = PgVectorBackend(pgvector_pool, table="ntk_keyword", mode="keyword")
@@ -332,7 +332,7 @@ def test_pgvector_hybrid_search_with_one_query_vector(pgvector_pool, pgvector_ke
 
 def test_chroma_searches_with_query_vectors():
     chromadb = pytest.importorskip("chromadb")
-    from needtoknow.backends.chroma import ChromaBackend
+    from wardowl.backends.chroma import ChromaBackend
 
     client = chromadb.EphemeralClient()
 

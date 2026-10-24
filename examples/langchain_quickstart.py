@@ -1,10 +1,10 @@
-"""needtoknow inside LangChain.
+"""wardowl inside LangChain.
 
-Run with `pip install "needtoknow[langchain]"`, then `python examples/langchain_quickstart.py`.
+Run with `pip install "wardowl[langchain]"`, then `python examples/langchain_quickstart.py`.
 """
 
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.langchain import NeedToKnowRetriever
+from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.langchain import WardowlRetriever
 
 backend = InMemoryBackend(
     [
@@ -12,7 +12,7 @@ backend = InMemoryBackend(
         Document("salaries", "Leave payouts follow the 2026 salary bands.", {"allowed_groups": ["hr"]}),
     ]
 )
-retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()))
+retriever = WardowlRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()))
 
 engineer = [d.id for d in retriever.invoke("leave", subject=Subject("bob", ["engineering"]))]
 hr = [d.id for d in retriever.invoke("leave", subject=Subject("alice", ["hr"]))]

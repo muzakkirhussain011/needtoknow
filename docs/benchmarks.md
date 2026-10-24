@@ -11,14 +11,14 @@ For every backend, strategy and permission setting:
 
 Recall@10
 : The share of the true top 10 among the chunks the user may read that came back. The truth is
-  computed by brute force over the same vectors, independently of needtoknow.
+  computed by brute force over the same vectors, independently of wardowl.
 
 Leaks
-: Returned chunks the user may not read. For every needtoknow strategy this must be zero.
+: Returned chunks the user may not read. For every wardowl strategy this must be zero.
 
 Complete
-: How often needtoknow reported the result as complete (`RetrievalResult.complete`). It is `False`
-  when needtoknow knows results may be missing; it cannot see what an approximate index missed.
+: How often wardowl reported the result as complete (`RetrievalResult.complete`). It is `False`
+  when wardowl knows results may be missing; it cannot see what an approximate index missed.
 
 Latency
 : Median and 95th percentile per retrieval. Query embedding is excluded: queries are embedded once,
@@ -31,7 +31,7 @@ Latency
 | Corpus | FiQA from BEIR (financial questions and answers): 57,600 non-empty chunks, 200 queries |
 | Embeddings | Qwen3-Embedding-0.6B (1024 dimensions), on a Kaggle T4 GPU |
 | Backends | `exact` (brute force, NumPy), Chroma (HNSW), PostgreSQL + pgvector 0.8.7 (HNSW) |
-| Strategies | needtoknow `prefilter` and `postfilter` (`max_candidates=1000`) |
+| Strategies | wardowl `prefilter` and `postfilter` (`max_candidates=1000`) |
 | Baselines | `naive top-k`: take the top 10, then drop what the user may not read. `unprotected`: no permission check |
 
 Permissions are hierarchical, as in most organisations. Each chunk belongs to one of 1,000 teams;
@@ -56,16 +56,16 @@ misaligned
 
 Run on 2026-10-16: 165 settings, 200 queries each, 33,000 retrievals. Indexes use their default
 settings. Every number below, with p95 latencies and candidate counts, is in the
-[full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/fiqa-qwen3-embedding-0.6b.md).
+[full results](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/fiqa-qwen3-embedding-0.6b.md).
 
-**No leaks.** Across all 21,000 retrievals through needtoknow (both strategies, every backend,
+**No leaks.** Across all 21,000 retrievals through wardowl (both strategies, every backend,
 layout and selectivity), not one returned chunk was forbidden. Without a permission check, the
 results are mostly forbidden: at 1% readable, 1,980 of 2,000 returned chunks were documents the user
 may not read.
 
 ### Recall@10
 
-The share of the true top 10 that came back. `postfilter` and `prefilter` are needtoknow; *naive*
+The share of the true top 10 that came back. `postfilter` and `prefilter` are wardowl; *naive*
 takes the top 10 and drops what the user may not read. Postfilter and naive are shown on pgvector;
 they behave the same on the other backends.
 
@@ -117,7 +117,7 @@ brute-force search in NumPy, for scale.
 
 **Filtering after the search does not work for selective permissions.** Naive top-k never leaks,
 but its recall is roughly the share of the corpus the user may read, and zero when the readable
-documents are far from the query. needtoknow's post-filtering widens the search and does far
+documents are far from the query. wardowl's post-filtering widens the search and does far
 better, yet at 1,000 candidates it still finds almost nothing for a user who may read 0.1% of a
 corpus, or 1% of one whose readable documents are unrelated to the question. It reports those
 results as incomplete (`complete=False` for 100% of them) rather than passing them off as an
@@ -136,7 +136,7 @@ and an exact scan over HNSW for filters that selective (the query plans were not
 `PgVectorBackend` turns iterative scans on by default.
 
 **An approximate index can silently return fewer results.** In those rows the result still said
-`complete=True`, because needtoknow cannot tell "the user may read only 2 chunks" from "the index
+`complete=True`, because wardowl cannot tell "the user may read only 2 chunks" from "the index
 stopped after 2". This is the documented meaning of `complete` (see
 [Concepts](concepts.md#what-a-result-tells-you)); measuring recall against exact search, as here, is
 how to see it.
@@ -152,12 +152,12 @@ For users who may read most of a Chroma collection, `strategy="postfilter"` is m
 their documents.
 
 **PostgreSQL row-level security is exact but slows down as users may read more.** A second run
-enforced the same permissions with a row-level security policy instead of needtoknow
-([results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/fiqa-row-level-security.md)).
+enforced the same permissions with a row-level security policy instead of wardowl
+([results](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/fiqa-row-level-security.md)).
 It never leaked and its recall stayed at 0.998 or better, but its median latency rose with the
 readable share: 2 to 11 ms up to 1% readable, about 40 ms at 5%, 160 ms at 20% and 600 ms at 100%,
-against 3 to 82 ms for needtoknow's pre-filtering on the same table. Row-level security is a strong
-boundary when the permissions live in PostgreSQL; needtoknow gives the same guarantee for the
+against 3 to 82 ms for wardowl's pre-filtering on the same table. Row-level security is a strong
+boundary when the permissions live in PostgreSQL; wardowl gives the same guarantee for the
 other stores and permission services, at the HNSW index's recall.
 
 ## At a million chunks, under load
@@ -175,7 +175,7 @@ chunks in PostgreSQL, several users at once, and the permission service over HTT
 | Machine | Kaggle, 4 CPUs, shared by PostgreSQL, Open Policy Agent and the benchmark's client threads |
 
 Run on 2026-10-22. Every number, with p95 and p99 latencies, is in the
-[full load results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
+[full load results](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
 
 **Loading.** A binary `COPY` loaded the million rows in 36 s. The GIN index on the permission
 metadata took 3 s and the HNSW index 4 min 23 s; table and indexes take 4.1 GB.
@@ -241,7 +241,7 @@ up to 1,000 candidates for them.
 **One machine saturated at four users.** Throughput grew with users up to 126 requests/s at 4,
 then fell slightly as further users queued: at 16, latency rose to 131 ms median and 439 ms at the
 99th percentile. PostgreSQL and the benchmark's client shared the machine's 4 CPUs, so this is the
-capacity of that machine, not a limit of needtoknow; more database cores or read replicas add
+capacity of that machine, not a limit of wardowl; more database cores or read replicas add
 capacity.
 
 **A permission service over HTTP cost 8 to 9% of throughput, and caching recovered nearly all of it.**
@@ -253,15 +253,15 @@ permission can take up to the `ttl` to apply (see [Operations](operations.md)).
 
 ## Every store on the same million chunks
 
-The same million vectors, questions and permissions, loaded through each store's needtoknow backend
+The same million vectors, questions and permissions, loaded through each store's wardowl backend
 at the store's own default settings, and measured the same way on a Kaggle machine with 4 CPUs
 shared by the store and the benchmark's client. Qdrant, Elasticsearch, OpenSearch, Weaviate, LanceDB
 and Redis ran one after another in one session on one machine, on 2026-10-22, with
-[`kaggle_stores.ipynb`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/kaggle_stores.ipynb);
+[`kaggle_stores.ipynb`](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/kaggle_stores.ipynb);
 each throughput setting ran three times, and every chunk returned under load was checked against
 the subject's permissions. pgvector ran in its own session. Every number is in the full results:
-[six stores](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-every-store.md),
-[pgvector](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
+[six stores](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/msmarco-1m-every-store.md),
+[pgvector](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/msmarco-1m-bge-small.md).
 
 Pre-filtered recall@10, by the share of the corpus the user may read:
 
@@ -301,14 +301,14 @@ Median latency of a pre-filtered retrieval, one query at a time, in milliseconds
   with `num_candidates=500`, `int8_hnsw` reached 0.988, 0.983, 0.932 and 0.966 pre-filtered recall
   (0.1% to 100% readable) in the same 2.2 GiB, and full-precision `hnsw` 1.000, 1.000, 0.933 and
   0.988 in 2.5 GiB, at similar median latency except `hnsw` at 0.1% readable (161 ms)
-  ([full results](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-elasticsearch-index-types.md)).
+  ([full results](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/msmarco-1m-elasticsearch-index-types.md)).
   The index type and the candidate count changed together, so part of the gain is the larger count.
 - **Redis's recall falls as users may read more**, from 0.998 at 0.1% readable to 0.769 at 100%:
   its HNSW search keeps 10 candidates (`EF_RUNTIME`) by default, which a broad filter leaves too
   few of. Set `ef_runtime` on `RedisBackend` higher for users who may read most of the corpus.
 - **LanceDB, embedded, found about half the true top 10 at its defaults** (IVF_PQ without
   `refine_factor`), at every share readable, so pre-filtering cost it no recall; a
-  [tuning run](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/results/msmarco-1m-lancedb.md)
+  [tuning run](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/results/msmarco-1m-lancedb.md)
   shows what `nprobes` and `refine_factor` buy.
 - **Post-filtering collapses for selective users on every store** (0.082 to 0.095 of the top 10 at
   0.1% readable): it is a property of post-filtering, not of any store, and the reason
@@ -343,9 +343,9 @@ Elasticsearch's has been measured here.
 ## Reproduce it
 
 The harnesses are
-[`benchmarks/permissions_bench.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/permissions_bench.py)
+[`benchmarks/permissions_bench.py`](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/permissions_bench.py)
 and
-[`benchmarks/load_bench.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/load_bench.py).
-[`benchmarks/README.md`](https://github.com/muzakkirhussain011/needtoknow/blob/main/benchmarks/README.md)
+[`benchmarks/load_bench.py`](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/load_bench.py).
+[`benchmarks/README.md`](https://github.com/muzakkirhussain011/wardowl/blob/main/benchmarks/README.md)
 explains how to run both on Kaggle, or small versions anywhere without a model. CI runs the small
 versions against real Chroma, PostgreSQL and OPA on every change, and fails if any strategy leaks.

@@ -8,7 +8,7 @@ from helpers import FilterIgnoringBackend, corpora, may_read, oracle_top_k, quer
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import FunctionAuthorizer, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever
+from wardowl import FunctionAuthorizer, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever
 
 strategies = st.sampled_from(["auto", "prefilter", "postfilter"])
 ks = st.integers(min_value=1, max_value=8)

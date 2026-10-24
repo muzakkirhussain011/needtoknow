@@ -1,17 +1,17 @@
-# FiQA: needtoknow on pgvector against PostgreSQL row-level security
+# FiQA: wardowl on pgvector against PostgreSQL row-level security
 
 Run on 2026-10-22 with [`kaggle_benchmark.ipynb`](../kaggle_benchmark.ipynb) at commit `42fcca6`
 (Kaggle version 2 of the notebook, 4,331 s in total), on the corpus, embeddings, permissions and
 hardware of the [full FiQA results](fiqa-qwen3-embedding-0.6b.md). That run's other rows repeated the
 first run's within noise; only the new baseline is listed here.
 
-*Row-level security* enforces the same permissions inside PostgreSQL instead of in needtoknow: a
+*Row-level security* enforces the same permissions inside PostgreSQL instead of in wardowl: a
 policy on the table (`metadata -> 'allowed_groups' ?| ` the subject's groups, set per transaction),
 a GIN index on the groups, the same HNSW index with iterative scans, and searches run as a role
 without `BYPASSRLS`. Nothing is checked outside the database, so *Examined* does not apply.
 *Complete* is the share of the 200 queries that returned 10 results. Leaks were 0 in every row.
 
-| Layout | Readable | needtoknow prefilter: recall | p50 ms | Row-level security: recall | Complete | p50 ms | p95 ms |
+| Layout | Readable | wardowl prefilter: recall | p50 ms | Row-level security: recall | Complete | p50 ms | p95 ms |
 |---|---|---|---|---|---|---|---|
 | random | 0.10% | 1.000 | 4.2 | 1.000 | 100% | 3.4 | 4.3 |
 | random | 1.00% | 1.000 | 11.3 | 1.000 | 100% | 10.8 | 13.2 |

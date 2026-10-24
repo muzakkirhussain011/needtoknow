@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("faiss")
 
-from needtoknow import (
+from wardowl import (
     Document,
     In,
     MetadataACLAuthorizer,
@@ -14,8 +14,8 @@ from needtoknow import (
     Query,
     Subject,
 )
-from needtoknow.backends.faiss import FaissBackend
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.backends.faiss import FaissBackend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 DOCS = [

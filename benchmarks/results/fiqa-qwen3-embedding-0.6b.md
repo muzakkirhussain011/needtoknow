@@ -11,7 +11,7 @@ Run on 2026-10-16 with [`kaggle_benchmark.ipynb`](../kaggle_benchmark.ipynb) at 
 | Retrieval | k = 10, `max_candidates` = 1000, `overfetch` = 4 |
 | Indexes | Default settings: pgvector HNSW (m 16, ef_construction 64, ef_search 40); Chroma HNSW (cosine) |
 | Hardware | Kaggle, 4 CPUs, Tesla T4 (embeddings only; all searches on CPU) |
-| Software | Python 3.13.15, needtoknow 1.0.0.dev0, NumPy 2.1.3, sentence-transformers 5.7.0, PyTorch 2.11.0, chromadb 1.5.9, PostgreSQL 16.15, pgvector 0.8.7 |
+| Software | Python 3.13.15, wardowl 1.0.0.dev0, NumPy 2.1.3, sentence-transformers 5.7.0, PyTorch 2.11.0, chromadb 1.5.9, PostgreSQL 16.15, pgvector 0.8.7 |
 
 Recall@10 is measured against the exact top 10 among the chunks the subject may read, computed by
 brute force over the same vectors. *Examined* is the mean number of candidates the authorizer

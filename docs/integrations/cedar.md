@@ -5,12 +5,12 @@ Cedar policies in your process with cedarpy, Cedar's Python bindings, so there i
 to run or reach.
 
 ```bash
-pip install "needtoknow[cedar]"
+pip install "wardowl[cedar]"
 ```
 
 ```python
-from needtoknow import PermissionedRetriever
-from needtoknow.authorizers.cedar import CedarAuthorizer
+from wardowl import PermissionedRetriever
+from wardowl.authorizers.cedar import CedarAuthorizer
 
 POLICIES = """
 permit (principal, action == Action::"read", resource)
@@ -25,7 +25,7 @@ retriever = PermissionedRetriever(backend, CedarAuthorizer(POLICIES))
 
 ## What a policy sees
 
-| Cedar | needtoknow |
+| Cedar | wardowl |
 |---|---|
 | `principal` | `User::"<subject.id>"`, with attributes `id`, `groups` (a set) and the subject's attributes; each group is a parent `Group` entity |
 | `action` | `Action::"read"` (map other actions with `actions={"read": "view"}`) |
@@ -53,8 +53,8 @@ authorizer = CedarAuthorizer(POLICIES, entities=[payroll])
   decided by Cedar, which is exact but searches more for users who may read little. Cedar's partial
   evaluation, which could produce pre-filters, is experimental upstream.
 - **Errors deny.** Cedar skips a policy whose evaluation errors, for example on a missing attribute,
-  and that includes a `forbid`. needtoknow therefore denies any chunk whose evaluation reported an
-  error, and logs how many on the `needtoknow` logger. Guard optional attributes with `has`.
+  and that includes a `forbid`. wardowl therefore denies any chunk whose evaluation reported an
+  error, and logs how many on the `wardowl` logger. Guard optional attributes with `has`.
 - **Values Cedar cannot hold**, such as floats and None, are left out of a chunk's attributes, so a
   policy reading them errors and the chunk is denied.
 - **Configuration** is checked when the authorizer is created: policies Cedar cannot parse raise

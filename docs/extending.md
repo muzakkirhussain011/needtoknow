@@ -1,4 +1,4 @@
-# Extending needtoknow
+# Extending wardowl
 
 Any vector store and any permission system can be plugged in. Both sides are small protocols, so
 there is nothing to subclass.
@@ -8,7 +8,7 @@ there is nothing to subclass.
 A backend is any object with a `search` method and a `supports_filters` attribute:
 
 ```python
-from needtoknow import Filter, Hit
+from wardowl import Filter, Hit
 
 
 class MyBackend:
@@ -39,7 +39,7 @@ to search with either way. See [Your own vectors](vectors.md#in-your-own-backend
 ## An authorizer
 
 ```python
-from needtoknow import Filter, Hit, Subject
+from wardowl import Filter, Hit, Subject
 
 
 class MyAuthorizer:
@@ -59,14 +59,14 @@ For rules that fit in a function, `FunctionAuthorizer(check, filter_for=None)` w
 
 ## Test it with the conformance kit
 
-`needtoknow.testing` checks a backend or an authorizer the way the built-in ones are checked in
-needtoknow's CI. It generates documents, permission metadata and nested filters from a seed (with
+`wardowl.testing` checks a backend or an authorizer the way the built-in ones are checked in
+wardowl's CI. It generates documents, permission metadata and nested filters from a seed (with
 scalar and list fields, mixed value types and missing fields: the cases where filter translations
 tend to go wrong) and compares your implementation with the reference semantics. It needs no extra
 packages, no model and no network.
 
 ```python
-from needtoknow.testing import HashingEmbedder, check_authorizer, check_backend
+from wardowl.testing import HashingEmbedder, check_authorizer, check_backend
 
 
 def make_backend(documents):
@@ -95,8 +95,8 @@ two disagree, pre-filtered and post-filtered results differ.
 
 A failure raises `ConformanceError` with the seed, the example number, the documents, the filter
 and what came back. For shrinking to a minimal failing example, the same properties can be written
-with [Hypothesis](https://hypothesis.readthedocs.io), as needtoknow's own
-[`tests/test_backends.py`](https://github.com/muzakkirhussain011/needtoknow/blob/main/tests/test_backends.py)
+with [Hypothesis](https://hypothesis.readthedocs.io), as wardowl's own
+[`tests/test_backends.py`](https://github.com/muzakkirhussain011/wardowl/blob/main/tests/test_backends.py)
 does.
 
 ## Contributing an adapter
@@ -104,4 +104,4 @@ does.
 New backends and authorizers are welcome. An adapter goes in its own module behind an optional
 extra, passes `check_backend` or `check_authorizer` against the real service in CI, and fails
 closed on every error. See the
-[contributing guide](https://github.com/muzakkirhussain011/needtoknow/blob/main/CONTRIBUTING.md).
+[contributing guide](https://github.com/muzakkirhussain011/wardowl/blob/main/CONTRIBUTING.md).

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "needtoknow"
+name = "wardowl"
 dynamic = ["version"]
 description = "Permission-aware retrieval for RAG: every user gets only the chunks they are allowed to read."
 readme = "README.md"
@@ -63,11 +63,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/muzakkirhussain011/needtoknow"
-Repository = "https://github.com/muzakkirhussain011/needtoknow"
-Issues = "https://github.com/muzakkirhussain011/needtoknow/issues"
-Changelog = "https://github.com/muzakkirhussain011/needtoknow/blob/main/CHANGELOG.md"
-Documentation = "https://muzakkirhussain011.github.io/needtoknow/"
+Homepage = "https://github.com/muzakkirhussain011/wardowl"
+Repository = "https://github.com/muzakkirhussain011/wardowl"
+Issues = "https://github.com/muzakkirhussain011/wardowl/issues"
+Changelog = "https://github.com/muzakkirhussain011/wardowl/blob/main/CHANGELOG.md"
+Documentation = "https://muzakkirhussain011.github.io/wardowl/"
 
 # Used only by CI and the release workflow, which install everything from uv.lock by hash.
 [dependency-groups]
@@ -80,16 +80,16 @@ examples = ["fastapi>=0.115", "httpx>=0.27", "pyjwt>=2.9"]
 default-groups = []
 
 [tool.hatch.version]
-path = "needtoknow/__init__.py"
+path = "wardowl/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["needtoknow"]
+packages = ["wardowl"]
 
 [tool.hatch.build.targets.sdist]
 # The source distribution carries the library and its tests only, not the example deployments.
 # Patterns follow .gitignore rules, so they are anchored with "/": a bare "tests" would also match
 # examples/gateway/tests.
-include = ["/needtoknow", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+include = ["/wardowl", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
@@ -101,11 +101,11 @@ ignore = ["S101"]
 
 [tool.ruff.lint.per-file-ignores]
 # Seeded random test data, not secrets.
-"needtoknow/testing.py" = ["S311"]
+"wardowl/testing.py" = ["S311"]
 # Query text that holds only names checked against a pattern and hex digits: Cassandra binds every
 # value as a parameter, and Vespa's filter values are hex-encoded terms.
-"needtoknow/backends/cassandra.py" = ["S608"]
-"needtoknow/backends/vespa.py" = ["S608"]
+"wardowl/backends/cassandra.py" = ["S608"]
+"wardowl/backends/vespa.py" = ["S608"]
 "tests/test_vespa.py" = ["S608"]
 
 [tool.pytest.ini_options]
@@ -113,7 +113,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.mypy]
-files = ["needtoknow"]
+files = ["wardowl"]
 python_version = "3.11"
 strict = true
 warn_unreachable = true
@@ -139,7 +139,7 @@ module = ["cassandra", "cassandra.*"]
 ignore_missing_imports = true  # cassandra-driver has no py.typed marker
 
 [tool.coverage.run]
-source = ["needtoknow"]
+source = ["wardowl"]
 branch = true
 
 [tool.coverage.report]

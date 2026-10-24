@@ -15,7 +15,7 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 
-from needtoknow import (
+from wardowl import (
     Document,
     FunctionAuthorizer,
     InMemoryBackend,
@@ -23,7 +23,7 @@ from needtoknow import (
     PermissionedRetriever,
     Subject,
 )
-from needtoknow.mcp import add_search_tool
+from wardowl.mcp import add_search_tool
 
 DOCS = [
     Document("handbook", "leave policy for all staff", {"allowed_groups": ["*"], "source": "hr-handbook.pdf"}),

@@ -1,13 +1,13 @@
 # Elasticsearch and OpenSearch
 
 ```bash
-pip install "needtoknow[elasticsearch]"   # or "needtoknow[opensearch]"
+pip install "wardowl[elasticsearch]"   # or "wardowl[opensearch]"
 ```
 
 Both backends run an approximate kNN search with the permission filter applied *during* the
 search, so the k nearest chunks the subject may read come back however few of the index's
 documents that is. Elasticsearch 8.12 or newer and OpenSearch 2.9 or newer are supported; CI runs
-needtoknow's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against
+wardowl's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against
 Elasticsearch 9.5.5 and OpenSearch 3.9.0.
 
 ## Elasticsearch
@@ -15,7 +15,7 @@ Elasticsearch 9.5.5 and OpenSearch 3.9.0.
 ```python
 from elasticsearch import Elasticsearch
 
-from needtoknow.backends.elasticsearch import ElasticsearchBackend, create_index
+from wardowl.backends.elasticsearch import ElasticsearchBackend, create_index
 
 client = Elasticsearch("http://localhost:9200")
 create_index(client, "docs", dim=768)
@@ -24,7 +24,7 @@ backend = ElasticsearchBackend(client, "docs", embed=embed)  # embed: str -> lis
 
 The filter goes in the `knn` clause's `filter`. Elasticsearch documents that this filter "is
 applied during approximate kNN search to ensure that k matching documents are returned"; a filter
-placed beside the `knn` clause would apply afterwards and could return fewer, so needtoknow never
+placed beside the `knn` clause would apply afterwards and could return fewer, so wardowl never
 does that. `num_candidates=` (default 100, at least k, at most 10,000) is how many neighbours each
 shard considers: higher finds more of the true nearest chunks and takes longer.
 
@@ -42,7 +42,7 @@ latency (11 ms against 13), in the same 2.2 GiB, and full-precision `hnsw` found
 ```python
 from opensearchpy import OpenSearch
 
-from needtoknow.backends.opensearch import OpenSearchBackend, create_index
+from wardowl.backends.opensearch import OpenSearchBackend, create_index
 
 client = OpenSearch(hosts=["http://localhost:9200"])
 create_index(client, "docs", dim=768)  # engine="lucene" (default) or "faiss"
@@ -59,10 +59,10 @@ and HNSW; pass `parameters={"m": 16, "ef_construction": 128}` to tune the graph.
 Keyword fields in both engines hold strings, so a `terms` query for the integer `1` also matches the
 string `"1"`, and a field's type is fixed by the first document that used it. The reference
 semantics keep `1` and `"1"` apart and never match booleans or floats. So both backends index one
-keyword field, `needtoknow_terms`, with a type-tagged term for every string and integer in the
+keyword field, `wardowl_terms`, with a type-tagged term for every string and integer in the
 chunk's metadata, scalars and list elements alike:
 
-| Metadata | `needtoknow_terms` |
+| Metadata | `wardowl_terms` |
 |---|---|
 | `{"allowed_groups": ["hr", "eng"]}` | `allowed_groups␟s:eng`, `allowed_groups␟s:hr` |
 | `{"level": 1}` | `level␟i:1` |
@@ -78,17 +78,17 @@ index. The index uses `dynamic: false` for the same reason.
 
 ## Indexes written by other tools
 
-A document without `needtoknow_terms` is invisible to a pre-filtered search: its metadata may say it
+A document without `wardowl_terms` is invisible to a pre-filtered search: its metadata may say it
 is readable, but no tag matches. Post-filtering still finds it and checks its metadata. To make such
 an index fully searchable, add the field to each document in your ingestion pipeline:
 
 ```python
-from needtoknow.backends.elasticsearch import TERMS_FIELD, permission_terms
+from wardowl.backends.elasticsearch import TERMS_FIELD, permission_terms
 
 document[TERMS_FIELD] = permission_terms(document["metadata"])
 ```
 
-and map `needtoknow_terms` as `keyword`. A document without a `metadata` object carries no
+and map `wardowl_terms` as `keyword`. A document without a `metadata` object carries no
 permissions, so the re-check denies it.
 
 ## Limits

@@ -1,7 +1,7 @@
 # PostgreSQL + pgvector
 
 ```bash
-pip install "needtoknow[pgvector]"
+pip install "wardowl[pgvector]"
 ```
 
 Needs PostgreSQL with pgvector 0.8 or newer. The permission filter runs inside the SQL query, so
@@ -13,14 +13,14 @@ is.
 ```python
 from psycopg_pool import ConnectionPool
 
-from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
 pool = ConnectionPool("postgresql://localhost/app")
 create_schema(pool, dim=768)
 backend = PgVectorBackend(pool, embed=embed)  # embed: str -> list[float], your embedding model
 ```
 
-`create_schema(pool, dim, table="needtoknow_chunks", hnsw=True)` creates, if they do not exist:
+`create_schema(pool, dim, table="wardowl_chunks", hnsw=True)` creates, if they do not exist:
 
 - the `vector` extension;
 - a table with `id text PRIMARY KEY`, `content text`, `metadata jsonb` and `embedding vector(dim)`;
@@ -33,7 +33,7 @@ To use an existing table, give it those four columns and pass `table=`.
 ## Write and delete
 
 ```python
-from needtoknow import Document
+from wardowl import Document
 
 backend.add([Document("salaries-1", "Salary bands for 2026 ...", {"allowed_groups": ["hr"], "doc_id": "salaries"})])
 backend.add(documents, embeddings=vectors)  # if you computed the embeddings already

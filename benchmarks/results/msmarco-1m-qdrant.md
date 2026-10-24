@@ -14,7 +14,7 @@ measured on the same million vectors, queries and permissions.
 | Store | Qdrant 1.19.2 from its release build; collection made by `create_collection` (cosine, keyword payload indexes on the permission fields), loaded through `QdrantBackend`, at Qdrant's default HNSW and search settings |
 | Load | Throughput runs: 20 s per setting, users pre-filtering at 1% readable, cycling through the 300 questions |
 | Hardware | Kaggle, 4 CPUs, shared by Qdrant and the benchmark's client threads |
-| Software | Python 3.13.15, needtoknow at `1d8348e`, NumPy 2.1.3 |
+| Software | Python 3.13.15, wardowl at `1d8348e`, NumPy 2.1.3 |
 
 Recall@10 is measured against the exact top 10 among the chunks the subject may read, computed by
 brute force over the same vectors. *Leaks* is the total number of returned chunks the subject may

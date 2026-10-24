@@ -5,14 +5,14 @@ searches through the index's data plane API (version 2026-07), with the permissi
 query, so Pinecone applies it inside the search: pre-filtering is exact.
 
 ```bash
-pip install "needtoknow[pinecone]"
+pip install "wardowl[pinecone]"
 ```
 
 ```python
 import os
 
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever
-from needtoknow.backends.pinecone import PineconeBackend
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever
+from wardowl.backends.pinecone import PineconeBackend
 
 backend = PineconeBackend(
     "my-index-abc123.svc.aped-1234.pinecone.io",  # the index's host, from the console
@@ -31,7 +31,7 @@ reserved `_values` field). Document indexes do not serve the vector API.
 
 Each record's metadata holds the chunk's id, its text, its metadata as JSON (returned exactly as
 written), and a tagged term for every string or integer in its metadata (the field name, the
-value's type and the value), hex-encoded, in the list `needtoknow_terms`. A filter becomes `$in`
+value's type and the value), hex-encoded, in the list `wardowl_terms`. A filter becomes `$in`
 conditions on those terms joined with `$and` and `$or`. The terms keep `1` and `"1"` apart, as the
 reference semantics do, and no metadata value can change the filter's structure.
 

@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- A single-node Vespa application for needtoknow's tests and examples. -->
+<!-- A single-node Vespa application for wardowl's tests and examples. -->
 <services version="1.0">
     <container id="default" version="1.0">
         <document-api/>
         <search/>
     </container>
-    <content id="needtoknow" version="1.0">
+    <content id="wardowl" version="1.0">
         <min-redundancy>1</min-redundancy>
         <documents>
-            <document type="needtoknow" mode="index"/>
+            <document type="wardowl" mode="index"/>
         </documents>
     </content>
 </services>

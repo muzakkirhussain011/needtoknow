@@ -8,13 +8,13 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
-from needtoknow.backends._engines import TERMS_FIELD, EngineBackend, _raise_for_items, filter_to_query, tag, terms
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
+from wardowl.backends._engines import TERMS_FIELD, EngineBackend, _raise_for_items, filter_to_query, tag, terms
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-ES_URL = os.environ.get("NEEDTOKNOW_TEST_ELASTICSEARCH_URL")
-OS_URL = os.environ.get("NEEDTOKNOW_TEST_OPENSEARCH_URL")
+ES_URL = os.environ.get("WARDOWL_TEST_ELASTICSEARCH_URL")
+OS_URL = os.environ.get("WARDOWL_TEST_OPENSEARCH_URL")
 
 
 # ---- terms and translation (no server) ---------------------------------------------------------
@@ -84,8 +84,8 @@ class Recorder:
 
 
 def test_keyword_mode_sends_a_bm25_query_under_the_same_filter_and_needs_no_embed():
-    from needtoknow.backends.elasticsearch import ElasticsearchBackend
-    from needtoknow.backends.opensearch import OpenSearchBackend
+    from wardowl.backends.elasticsearch import ElasticsearchBackend
+    from wardowl.backends.opensearch import OpenSearchBackend
 
     terms_filter = {"terms": {TERMS_FIELD: [tag("team", "hr")]}}
     es, os_client = Recorder(), Recorder()
@@ -111,9 +111,9 @@ def test_keyword_mode_sends_a_bm25_query_under_the_same_filter_and_needs_no_embe
 
 def _elasticsearch():
     if not ES_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_ELASTICSEARCH_URL to run against Elasticsearch")
+        pytest.skip("set WARDOWL_TEST_ELASTICSEARCH_URL to run against Elasticsearch")
     es = pytest.importorskip("elasticsearch")
-    from needtoknow.backends.elasticsearch import ElasticsearchBackend, create_index, permission_terms
+    from wardowl.backends.elasticsearch import ElasticsearchBackend, create_index, permission_terms
 
     def write_raw(client, index, doc_id, document):
         client.index(index=index, id=doc_id, document=document, refresh="wait_for")
@@ -130,9 +130,9 @@ def _elasticsearch():
 
 def _opensearch():
     if not OS_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_OPENSEARCH_URL to run against OpenSearch")
+        pytest.skip("set WARDOWL_TEST_OPENSEARCH_URL to run against OpenSearch")
     opensearchpy = pytest.importorskip("opensearchpy")
-    from needtoknow.backends.opensearch import OpenSearchBackend, create_index, permission_terms
+    from wardowl.backends.opensearch import OpenSearchBackend, create_index, permission_terms
 
     def write_raw(client, index, doc_id, document):
         client.index(index=index, id=doc_id, body=document, refresh="wait_for")

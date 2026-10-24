@@ -4,7 +4,7 @@ Relationship-based access control in the style of Google Zanzibar. No extra depe
 use the standard library.
 
 ```python
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
 
 authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
 ```

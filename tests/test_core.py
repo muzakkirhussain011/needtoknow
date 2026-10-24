@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from needtoknow import (
+from wardowl import (
     And,
     AuthorizationError,
     Document,

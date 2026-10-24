@@ -9,7 +9,7 @@ from helpers import corpora, may_read, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import (
+from wardowl import (
     AllOf,
     And,
     AnyOf,
@@ -25,7 +25,7 @@ from needtoknow import (
     Subject,
     TenantAuthorizer,
 )
-from needtoknow.testing import check_authorizer
+from wardowl.testing import check_authorizer
 
 TENANTS = ["acme", "globex"]
 

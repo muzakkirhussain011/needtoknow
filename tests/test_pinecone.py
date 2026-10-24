@@ -9,14 +9,14 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import tag
-from needtoknow.backends.pinecone import TERMS_FIELD, PineconeBackend, filter_to_pinecone, record_id
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import tag
+from wardowl.backends.pinecone import TERMS_FIELD, PineconeBackend, filter_to_pinecone, record_id
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-KEY = os.environ.get("NEEDTOKNOW_TEST_PINECONE_API_KEY")
-INDEX = "needtoknow-ci"
+KEY = os.environ.get("WARDOWL_TEST_PINECONE_API_KEY")
+INDEX = "wardowl-ci"
 
 
 def _h(field, value):
@@ -77,7 +77,7 @@ class Fake:
 
 
 def _match(doc_id, metadata=None, score=0.5):
-    meta = {"needtoknow_id": doc_id, "needtoknow_text": doc_id, "needtoknow_metadata": json.dumps(metadata or {})}
+    meta = {"wardowl_id": doc_id, "wardowl_text": doc_id, "wardowl_metadata": json.dumps(metadata or {})}
     return {"id": record_id(doc_id), "score": score, "metadata": meta}
 
 
@@ -95,7 +95,7 @@ def test_requests_carry_the_key_namespace_filter_and_batches():
     upserts = [fake.body(i) for i in range(1, 4)]
     assert sorted(len(u["vectors"]) for u in upserts) == [50, 100, 100]
     again = next(v for u in upserts for v in u["vectors"] if v["id"] == "d0")
-    assert again["metadata"]["needtoknow_text"] == "again"  # the last of a repeated id wins
+    assert again["metadata"]["wardowl_text"] == "again"  # the last of a repeated id wins
     backend.set_metadata({"d1": {"team": ["y"]}})
     assert fake.body(4)["setMetadata"][TERMS_FIELD] == [_h("team", "y")]
     backend.delete(["d1", "missing"])
@@ -146,7 +146,7 @@ def test_wait_polls_until_a_search_shows_the_writes():
 
 # ---- the Pinecone service ----------------------------------------------------------------------
 
-needs_pinecone = pytest.mark.skipif(not KEY, reason="set NEEDTOKNOW_TEST_PINECONE_API_KEY to run against Pinecone")
+needs_pinecone = pytest.mark.skipif(not KEY, reason="set WARDOWL_TEST_PINECONE_API_KEY to run against Pinecone")
 _SPACES: list[str] = []
 
 

@@ -1,11 +1,11 @@
 """Sphinx configuration. Build with: sphinx-build -W -b html docs docs/_build/html"""
 
-import needtoknow
+import wardowl
 
-project = "needtoknow"
+project = "wardowl"
 author = "Syed Muzakkir Hussain"
 copyright = "2026, Syed Muzakkir Hussain"
-release = needtoknow.__version__
+release = wardowl.__version__
 version = release
 
 extensions = [
@@ -34,14 +34,11 @@ copybutton_prompt_text = r"\$ |>>> |\.\.\. "
 copybutton_prompt_is_regexp = True
 
 html_theme = "shibuya"
-html_title = "needtoknow"
-html_baseurl = "https://muzakkirhussain011.github.io/needtoknow/"
+html_title = "wardowl"
+html_baseurl = "https://muzakkirhussain011.github.io/wardowl/"
 html_theme_options = {
     "accent_color": "teal",
-    "light_logo": "_static/brand/mark.webp",
-    "dark_logo": "_static/brand/mark.webp",
-    "github_url": "https://github.com/muzakkirhussain011/needtoknow",
-    "og_image_url": "https://muzakkirhussain011.github.io/needtoknow/_static/brand/social-preview.png",
+    "github_url": "https://github.com/muzakkirhussain011/wardowl",
     "nav_links": [
         {"title": "Get started", "url": "quickstart"},
         {
@@ -83,7 +80,7 @@ html_theme_options = {
 html_context = {
     "source_type": "github",
     "source_user": "muzakkirhussain011",
-    "source_repo": "needtoknow",
+    "source_repo": "wardowl",
     "source_version": "main",
     "source_docs_path": "/docs/",
 }
@@ -97,4 +94,3 @@ html_static_path = ["_static"]
 html_css_files = ["brand.css"]
 # The theme's script is added at priority 500; the icons must be registered before it starts.
 html_js_files = [("ntk-icons.js", {"priority": 400})]
-html_favicon = "_static/brand/favicon.svg"

@@ -9,9 +9,9 @@ from functools import partial
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import TERMS_FIELD, tag, terms
-from needtoknow.backends.mongodb import (
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import TERMS_FIELD, tag, terms
+from wardowl.backends.mongodb import (
     WRITE_FIELD,
     MongoDBBackend,
     create_search_index,
@@ -20,10 +20,10 @@ from needtoknow.backends.mongodb import (
     filter_to_search,
     permission_terms,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-MONGODB_URL = os.environ.get("NEEDTOKNOW_TEST_MONGODB_URL")
+MONGODB_URL = os.environ.get("WARDOWL_TEST_MONGODB_URL")
 
 
 # ---- translation and pipelines (no server) -----------------------------------------------------
@@ -93,7 +93,7 @@ def test_the_pipeline_searches_inside_the_filter_with_enough_candidates():
     MongoDBBackend(collection, EMBED, exact=True, index="docs").search("leave", 3)
     (filtered, project), (capped, _), (exact, _) = collection.pipelines
     stage = filtered["$vectorSearch"]
-    assert stage["index"] == "needtoknow" and stage["path"] == "embedding" and len(stage["queryVector"]) == EMBED.dim
+    assert stage["index"] == "wardowl" and stage["path"] == "embedding" and len(stage["queryVector"]) == EMBED.dim
     assert stage["limit"] == 80 and stage["numCandidates"] == 80  # raised to k
     assert stage["filter"] == {TERMS_FIELD: {"$in": [tag("team", "hr")]}}
     assert project["$project"] == {"content": 1, "metadata": 1, "score": {"$meta": "vectorSearchScore"}}
@@ -249,12 +249,12 @@ def test_keyword_pipelines_search_the_text_inside_the_filter():
     backend.search("leave", 3)
     filtered, unfiltered = collection.pipelines
     search = filtered[0]["$search"]
-    assert search["index"] == "needtoknow_text"
+    assert search["index"] == "wardowl_text"
     assert search["compound"]["must"] == [{"text": {"query": "leave policy", "path": "content"}}]
     assert search["compound"]["filter"] == [{"in": {"path": TERMS_FIELD, "value": [tag("team", "hr")]}}]
     projection = {"content": 1, "metadata": 1, "score": {"$meta": "searchScore"}}
     assert filtered[1:] == [{"$limit": 7}, {"$project": projection}]
-    assert unfiltered[0]["$search"] == {"index": "needtoknow_text", "text": {"query": "leave", "path": "content"}}
+    assert unfiltered[0]["$search"] == {"index": "wardowl_text", "text": {"query": "leave", "path": "content"}}
     assert backend.search("?! --", 5) == [] and backend.search("leave", 5, In("team", [])) == []
     assert len(collection.pipelines) == 2
     with pytest.raises(ValueError):
@@ -280,7 +280,7 @@ def test_a_keyword_backend_waits_for_the_text_index_only_and_needs_no_embed():
 def test_a_vector_backend_given_a_text_index_waits_for_both():
     pytest.importorskip("pymongo")
     collection = FakeTextCollection(lag=1, text_lag=1)
-    MongoDBBackend(collection, EMBED, text_index="needtoknow_text").add([Document("a", "leave", {})])
+    MongoDBBackend(collection, EMBED, text_index="wardowl_text").add([Document("a", "leave", {})])
     assert collection.probes == 2 and collection.text_probes == 2
     plain = FakeTextCollection(lag=1, text_lag=1)
     MongoDBBackend(plain, EMBED).add([Document("a", "leave", {})])
@@ -292,10 +292,10 @@ def test_a_vector_backend_given_a_text_index_waits_for_both():
 
 def _collection():
     if not MONGODB_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_MONGODB_URL to run against MongoDB Atlas Vector Search")
+        pytest.skip("set WARDOWL_TEST_MONGODB_URL to run against MongoDB Atlas Vector Search")
     pymongo = pytest.importorskip("pymongo")
     client = pymongo.MongoClient(MONGODB_URL)
-    collection = client["needtoknow_test"][f"c_{uuid.uuid4().hex}"]
+    collection = client["wardowl_test"][f"c_{uuid.uuid4().hex}"]
     create_search_index(collection, EMBED.dim)
     return collection
 
@@ -430,11 +430,11 @@ def test_server_keyword_mode_passes_the_conformance_kit():
 
 
 def test_server_hybrid_search_over_one_collection_passes_the_conformance_kit():
-    from needtoknow import RankFusion
+    from wardowl import RankFusion
 
     collection = _text_collection()
     # The vector backend writes, and waits for both indexes; the keyword backend only searches.
-    vector = MongoDBBackend(collection, EMBED, text_index="needtoknow_text")
+    vector = MongoDBBackend(collection, EMBED, text_index="wardowl_text")
     hybrid, previous = RankFusion(vector, MongoDBBackend(collection, mode="keyword")), []
 
     def make(docs):

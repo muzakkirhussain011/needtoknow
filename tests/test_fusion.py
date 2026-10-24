@@ -10,7 +10,7 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import (
+from wardowl import (
     Document,
     Hit,
     In,
@@ -20,7 +20,7 @@ from needtoknow import (
     RankFusion,
     Subject,
 )
-from needtoknow.testing import check_backend
+from wardowl.testing import check_backend
 
 
 class Fixed:
@@ -71,7 +71,7 @@ def test_every_backend_gets_the_filter_and_the_depth():
 
 def test_a_chunk_with_different_metadata_in_two_backends_is_left_out(caplog):
     current, stale = Fixed(_hit("a", {"allowed_groups": ["hr"]}), _hit("b")), Fixed(_hit("a"), _hit("b"))
-    with caplog.at_level(logging.WARNING, logger="needtoknow"):
+    with caplog.at_level(logging.WARNING, logger="wardowl"):
         hits = RankFusion(current, stale).search("q", 5)
     assert [h.id for h in hits] == ["b"]
     assert "1 chunks whose metadata differs" in caplog.text

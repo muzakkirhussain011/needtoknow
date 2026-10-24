@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 380" width="920" height="380" role="img" aria-labelledby="t d">
-  <title id="t">How needtoknow works</title>
-  <desc id="d">Your app or agent sends a query and the user to needtoknow. needtoknow asks the permission system for a filter or a check per chunk, runs the filter inside the vector store's search, checks every hit again, and passes only permitted chunks to the LLM prompt.</desc>
+  <title id="t">How wardowl works</title>
+  <desc id="d">Your app or agent sends a query and the user to wardowl. wardowl asks the permission system for a filter or a check per chunk, runs the filter inside the vector store's search, checks every hit again, and passes only permitted chunks to the LLM prompt.</desc>
   <style>
     .box { fill: #151b23; stroke: #3d444d; stroke-width: 1.5; }
     .core { fill: #0d1117; stroke: #3dd6c0; stroke-width: 2; }

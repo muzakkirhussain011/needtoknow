@@ -1,13 +1,13 @@
 # Agent frameworks
 
-Agent frameworks that speak [MCP](https://modelcontextprotocol.io) use needtoknow through its
-[MCP search tool](mcp.md), with no adapter: the framework is an MCP client, and needtoknow's server
+Agent frameworks that speak [MCP](https://modelcontextprotocol.io) use wardowl through its
+[MCP search tool](mcp.md), with no adapter: the framework is an MCP client, and wardowl's server
 decides whose permissions apply from the access token on each request. The model never chooses the
 subject, and the framework never sees a chunk the user may not read.
 
 ## The pattern
 
-1. Run the needtoknow MCP server over streamable HTTP with a token verifier, as in [MCP](mcp.md).
+1. Run the wardowl MCP server over streamable HTTP with a token verifier, as in [MCP](mcp.md).
 2. In your application, get an access token **for the user** the agent is acting for (for example
    through OAuth token exchange), not a shared service token.
 3. Connect the framework's MCP client to the server's URL with that token in the
@@ -55,12 +55,12 @@ so follow its current documentation:
   streamable HTTP client and a `ClientSession`, then wrap each tool with `dspy.Tool.from_mcp_tool`;
   run the agent inside the session, since the tools call back into it.
 
-For LangChain and LangGraph, LlamaIndex and Haystack, needtoknow also has in-process integrations
+For LangChain and LangGraph, LlamaIndex and Haystack, wardowl also has in-process integrations
 that bind the subject per session: [LangChain](langchain.md), [LlamaIndex](llamaindex.md),
 [Haystack](haystack.md).
 
 ## Check it
 
 Call the tool once with a token for a user who may read nothing: it must return no results. A
-call without a token must fail. Both are covered by needtoknow's own MCP tests, but they also prove
+call without a token must fail. Both are covered by wardowl's own MCP tests, but they also prove
 that your client sends the header you intended.

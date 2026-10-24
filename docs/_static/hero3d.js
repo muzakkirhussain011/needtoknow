@@ -154,7 +154,7 @@ function start(THREE, stage) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   const canvas = renderer.domElement;
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", still ? still.alt : "needtoknow logo");
+  canvas.setAttribute("aria-label", still ? still.alt : "wardowl logo");
   stage.appendChild(canvas);
   const { scene, camera, update } = buildLogo(THREE, renderer);
 

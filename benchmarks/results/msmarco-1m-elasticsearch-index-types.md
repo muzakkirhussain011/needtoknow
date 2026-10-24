@@ -21,7 +21,7 @@ throughput with these only loosely.
 | Store | Elasticsearch 9.5.5, release build, loaded through `ElasticsearchBackend`; `create_index(..., index_options={"type": "int8_hnsw"})`, then `{"type": "hnsw"}` |
 | Load | Throughput runs: 20 s per setting, users pre-filtering at 1% readable, cycling through the 300 questions |
 | Hardware | Kaggle, 4 CPUs, no GPU, shared by the store and the benchmark's client threads |
-| Software | needtoknow at `07ced7a`, on Kaggle's Python image |
+| Software | wardowl at `07ced7a`, on Kaggle's Python image |
 
 Recall@10 is measured against the exact top 10 among the chunks the subject may read, computed by
 brute force over the same vectors. *Leaks* is the total number of returned chunks the subject may

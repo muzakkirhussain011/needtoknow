@@ -1,10 +1,10 @@
-"""needtoknow inside LlamaIndex.
+"""wardowl inside LlamaIndex.
 
-Run with `pip install "needtoknow[llamaindex]"`, then `python examples/llamaindex_quickstart.py`.
+Run with `pip install "wardowl[llamaindex]"`, then `python examples/llamaindex_quickstart.py`.
 """
 
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.llamaindex import NeedToKnowRetriever
+from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.llamaindex import WardowlRetriever
 
 backend = InMemoryBackend(
     [
@@ -14,7 +14,7 @@ backend = InMemoryBackend(
 )
 permissioned = PermissionedRetriever(backend, MetadataACLAuthorizer())
 
-retriever = NeedToKnowRetriever(permissioned, Subject("bob", ["engineering"]))
+retriever = WardowlRetriever(permissioned, Subject("bob", ["engineering"]))
 engineer = [n.node.node_id for n in retriever.retrieve("leave")]
 print("engineer sees:", engineer)
 assert engineer == ["handbook"]

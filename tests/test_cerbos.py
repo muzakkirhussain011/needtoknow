@@ -12,9 +12,9 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import And, AuthorizationError, Hit, In, InMemoryBackend, Or, PermissionedRetriever, Subject, matches
-from needtoknow.authorizers.cerbos import CerbosAuthorizer, plan_to_filter
-from needtoknow.testing import check_authorizer
+from wardowl import And, AuthorizationError, Hit, In, InMemoryBackend, Or, PermissionedRetriever, Subject, matches
+from wardowl.authorizers.cerbos import CerbosAuthorizer, plan_to_filter
+from wardowl.testing import check_authorizer
 
 ANN = Subject("ann", ["eng"], {"region": "eu"})
 
@@ -68,7 +68,7 @@ def test_supported_plans_become_exact_filters(condition, expected):
         expr("ne", var("team"), val("eng")),
         expr("not", expr("eq", var("team"), val("eng"))),
         expr("lt", var("level"), val(3)),
-        expr("eq", var("public"), val(True)),  # booleans never match a needtoknow filter
+        expr("eq", var("public"), val(True)),  # booleans never match a wardowl filter
         expr("eq", var("score"), val(0.5)),
         expr("eq", {"variable": "request.resource.attr.owner.id"}, val("ann")),  # a nested path
         expr("eq", {"variable": "request.principal.attr.region"}, val("eu")),
@@ -84,7 +84,7 @@ def test_anything_else_gives_no_filter_so_the_retriever_post_filters(condition):
 
 def test_always_denied_matches_nothing_and_always_allowed_gives_no_filter():
     nothing = plan_to_filter({"kind": "KIND_ALWAYS_DENIED"})
-    assert nothing is not None and not matches(nothing, {"needtoknow:nothing": "x", "team": "eng"})
+    assert nothing is not None and not matches(nothing, {"wardowl:nothing": "x", "team": "eng"})
     assert plan_to_filter({"kind": "KIND_ALWAYS_ALLOWED"}) is None
 
 
@@ -207,8 +207,8 @@ def test_configuration_errors():
 
 # ---- a real Cerbos running examples/cerbos/policies -----------------------------------------
 
-CERBOS_URL = os.environ.get("NEEDTOKNOW_TEST_CERBOS_URL")
-needs_cerbos = pytest.mark.skipif(not CERBOS_URL, reason="set NEEDTOKNOW_TEST_CERBOS_URL to run against Cerbos")
+CERBOS_URL = os.environ.get("WARDOWL_TEST_CERBOS_URL")
+needs_cerbos = pytest.mark.skipif(not CERBOS_URL, reason="set WARDOWL_TEST_CERBOS_URL to run against Cerbos")
 
 
 @needs_cerbos

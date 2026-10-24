@@ -13,10 +13,10 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from needtoknow import AuthorizationError, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.authorizers import CircuitBreaker
-from needtoknow.authorizers._http import JsonClient
-from needtoknow.authorizers.opa import OPAAuthorizer
+from wardowl import AuthorizationError, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.authorizers import CircuitBreaker
+from wardowl.authorizers._http import JsonClient
+from wardowl.authorizers.opa import OPAAuthorizer
 
 BOB = Subject("bob", ["eng"])
 HITS = [Hit("a", "t", 1.0, {"allowed_groups": ["eng"]}), Hit("b", "t", 0.5, {"allowed_groups": ["hr"]})]

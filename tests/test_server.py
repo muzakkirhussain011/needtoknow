@@ -13,7 +13,7 @@ rsa = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.rsa")
 from fastapi.testclient import TestClient  # noqa: E402
 from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError  # noqa: E402
 
-from needtoknow import (  # noqa: E402
+from wardowl import (  # noqa: E402
     AuthorizationError,
     Document,
     InMemoryBackend,
@@ -21,7 +21,7 @@ from needtoknow import (  # noqa: E402
     PermissionedRetriever,
     Subject,
 )
-from needtoknow.server import InvalidToken, OIDCAuthenticator, create_app  # noqa: E402
+from wardowl.server import InvalidToken, OIDCAuthenticator, create_app  # noqa: E402
 
 DOCS = [
     Document("eng-plan", "the engineering plan for the launch", {"allowed_groups": ["eng"], "source": "wiki"}),

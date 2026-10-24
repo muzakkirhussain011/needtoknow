@@ -1,11 +1,11 @@
 # Compliance mapping
 
-Which controls of common frameworks needtoknow helps you meet, and what stays with you. needtoknow is
+Which controls of common frameworks wardowl helps you meet, and what stays with you. wardowl is
 a library, not a service: it is not certified or attested against any framework, and using it does
 not make a system compliant. An auditor assesses your whole system; this page shows where
-needtoknow is the mechanism and where the evidence comes from.
+wardowl is the mechanism and where the evidence comes from.
 
-## What needtoknow provides
+## What wardowl provides
 
 - **Access control at retrieval.** Every chunk reaching a reranker, a model or a tool is permitted
   for the subject, decided by your authorizer and checked again after a pre-filtered search
@@ -22,7 +22,7 @@ needtoknow is the mechanism and where the evidence comes from.
 
 ## Framework mapping
 
-| Framework | Control | How needtoknow helps | Your part |
+| Framework | Control | How wardowl helps | Your part |
 |---|---|---|---|
 | ISO/IEC 27001:2022 | 5.15 Access control, 8.3 Information access restriction | Enforces your access rules on every retrieval, in every supported store | The access policy, and keeping permissions on chunks current |
 | ISO/IEC 27001:2022 | 5.18 Access rights | `invalidate()` and `ttl` bound how long a removed right keeps working | Calling `invalidate()` when rights change, and the review process |
@@ -38,7 +38,7 @@ The HIPAA rows refer to the Security Rule in force. Proposed amendments have not
 
 ## Retention and deletion
 
-needtoknow stores no documents and keeps no history of its own:
+wardowl stores no documents and keeps no history of its own:
 
 - **Chunks** live in your vector store. Deleting a document there removes it from retrieval at once.
 - **Cached decisions and filters** hold permission answers for a subject, never document content,
@@ -50,7 +50,7 @@ needtoknow stores no documents and keeps no history of its own:
 To erase a person's data, delete their documents from the store and their entries from your audit
 log under your retention rules; nothing else needs clearing once `ttl` has passed.
 
-## What needtoknow does not cover
+## What wardowl does not cover
 
 Authentication, encryption at rest and in transit, the security of the stores and permission
 services, the content of model output, and the organizational controls every framework requires.

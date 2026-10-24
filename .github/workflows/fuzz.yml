@@ -7,7 +7,7 @@ name: Fuzz
 on:
   pull_request:
     paths:
-      - "needtoknow/**"
+      - "wardowl/**"
       - "fuzz/**"
       - ".clusterfuzzlite/**"
       - ".github/workflows/fuzz.yml"

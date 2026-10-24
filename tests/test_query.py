@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from needtoknow import (
+from wardowl import (
     Document,
     Hit,
     InMemoryBackend,
@@ -19,8 +19,8 @@ from needtoknow import (
     RankFusion,
     Subject,
 )
-from needtoknow.events import query_fingerprint
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.events import query_fingerprint
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
 BOB = Subject("bob", ["eng"])

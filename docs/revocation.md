@@ -1,6 +1,6 @@
 # Revocation and consistency
 
-When someone loses access to a document, how soon does needtoknow stop returning it? The delay is
+When someone loses access to a document, how soon does wardowl stop returning it? The delay is
 the sum of what each layer adds. This page lists the layers, then two ways to configure them: a
 stated bound on staleness, which suits most workloads, and strict revocation, for access that must
 stop as soon as it is withdrawn.
@@ -27,7 +27,7 @@ stop as soon as it is withdrawn.
 4. **The store's visibility delay**, when permissions live on chunks: some stores show an update
    to searches only after a refresh (Elasticsearch and OpenSearch refresh every second by default).
 5. **Requests already running.** A retrieval that started before the revocation may finish with the
-   decision it already had. needtoknow never caches such an answer after `invalidate()`, but it
+   decision it already had. wardowl never caches such an answer after `invalidate()`, but it
    cannot recall a result already returned, or what a model has already been given.
 
 ## Bounded staleness

@@ -1,31 +1,31 @@
 # API reference
 
-The core is importable from `needtoknow` and has no dependencies. Adapters live in their own
+The core is importable from `wardowl` and has no dependencies. Adapters live in their own
 modules and need their extra.
 
 ## Retrieval
 
 ```{eval-rst}
-.. autoclass:: needtoknow.PermissionedRetriever
+.. autoclass:: wardowl.PermissionedRetriever
    :members: retrieve, aretrieve
 
-.. autoclass:: needtoknow.RetrievalResult
+.. autoclass:: wardowl.RetrievalResult
    :members:
 
-.. autoclass:: needtoknow.SearchBackend
+.. autoclass:: wardowl.SearchBackend
    :members: search
 
-.. autoclass:: needtoknow.Redactor
+.. autoclass:: wardowl.Redactor
    :members: redact
 
-.. autoclass:: needtoknow.SpanRedactor
+.. autoclass:: wardowl.SpanRedactor
 
-.. autoclass:: needtoknow.PatternRedactor
+.. autoclass:: wardowl.PatternRedactor
 
-.. autoclass:: needtoknow.Reranker
+.. autoclass:: wardowl.Reranker
    :members: rerank
 
-.. autoclass:: needtoknow.RankFusion
+.. autoclass:: wardowl.RankFusion
    :members: search, asearch
 ```
 
@@ -34,19 +34,19 @@ modules and need their extra.
 ## Subjects, documents, hits and queries
 
 ```{eval-rst}
-.. autoclass:: needtoknow.Subject
+.. autoclass:: wardowl.Subject
    :members:
    :undoc-members:
 
-.. autoclass:: needtoknow.Document
+.. autoclass:: wardowl.Document
    :members:
    :undoc-members:
 
-.. autoclass:: needtoknow.Hit
+.. autoclass:: wardowl.Hit
    :members:
    :undoc-members:
 
-.. autoclass:: needtoknow.Query
+.. autoclass:: wardowl.Query
    :members: of, embedded, keywords
 ```
 
@@ -55,67 +55,67 @@ modules and need their extra.
 `Filter` is `In | And | Or`.
 
 ```{eval-rst}
-.. autoclass:: needtoknow.In
+.. autoclass:: wardowl.In
 
-.. autoclass:: needtoknow.And
+.. autoclass:: wardowl.And
 
-.. autoclass:: needtoknow.Or
+.. autoclass:: wardowl.Or
 
-.. autofunction:: needtoknow.matches
+.. autofunction:: wardowl.matches
 
-.. autofunction:: needtoknow.filter_to_dict
+.. autofunction:: wardowl.filter_to_dict
 
-.. autofunction:: needtoknow.filter_from_dict
+.. autofunction:: wardowl.filter_from_dict
 ```
 
 ## Authorizers
 
 ```{eval-rst}
-.. autoclass:: needtoknow.Authorizer
+.. autoclass:: wardowl.Authorizer
    :members: check, filter_for
 
-.. autoexception:: needtoknow.AuthorizationError
+.. autoexception:: wardowl.AuthorizationError
 
-.. autoclass:: needtoknow.MetadataACLAuthorizer
+.. autoclass:: wardowl.MetadataACLAuthorizer
 
-.. autoclass:: needtoknow.FunctionAuthorizer
+.. autoclass:: wardowl.FunctionAuthorizer
 
-.. autoclass:: needtoknow.TenantAuthorizer
+.. autoclass:: wardowl.TenantAuthorizer
 
-.. autoclass:: needtoknow.AllOf
+.. autoclass:: wardowl.AllOf
    :members: scope_for
 
-.. autoclass:: needtoknow.AnyOf
+.. autoclass:: wardowl.AnyOf
    :members: scope_for
 
-.. autoclass:: needtoknow.CachingAuthorizer
+.. autoclass:: wardowl.CachingAuthorizer
    :members: invalidate, stats
 
-.. autoclass:: needtoknow.caching.CacheStats
+.. autoclass:: wardowl.caching.CacheStats
    :members:
 
-.. autoclass:: needtoknow.caching.SharedCache
+.. autoclass:: wardowl.caching.SharedCache
    :members: get_many, set_many, delete_prefix
 
-.. autoclass:: needtoknow.caching.RedisCache
+.. autoclass:: wardowl.caching.RedisCache
 
-.. autoclass:: needtoknow.authorizers.opa.OPAAuthorizer
+.. autoclass:: wardowl.authorizers.opa.OPAAuthorizer
 
-.. autoclass:: needtoknow.authorizers.openfga.OpenFGAAuthorizer
+.. autoclass:: wardowl.authorizers.openfga.OpenFGAAuthorizer
 
-.. autoclass:: needtoknow.authorizers.spicedb.SpiceDBAuthorizer
+.. autoclass:: wardowl.authorizers.spicedb.SpiceDBAuthorizer
 
-.. autoclass:: needtoknow.authorizers.cerbos.CerbosAuthorizer
+.. autoclass:: wardowl.authorizers.cerbos.CerbosAuthorizer
 
-.. autofunction:: needtoknow.authorizers.cerbos.plan_to_filter
+.. autofunction:: wardowl.authorizers.cerbos.plan_to_filter
 
-.. autoclass:: needtoknow.authorizers.cedar.CedarAuthorizer
+.. autoclass:: wardowl.authorizers.cedar.CedarAuthorizer
 
-.. autoclass:: needtoknow.authorizers.casbin.CasbinAuthorizer
+.. autoclass:: wardowl.authorizers.casbin.CasbinAuthorizer
 
-.. autoclass:: needtoknow.authorizers.keto.KetoAuthorizer
+.. autoclass:: wardowl.authorizers.keto.KetoAuthorizer
 
-.. autoclass:: needtoknow.authorizers.CircuitBreaker
+.. autoclass:: wardowl.authorizers.CircuitBreaker
    :members: is_open
 ```
 
@@ -124,35 +124,35 @@ modules and need their extra.
 See [Google Drive](integrations/google-drive.md).
 
 ```{eval-rst}
-.. autoclass:: needtoknow.sync.Access
+.. autoclass:: wardowl.sync.Access
    :members: metadata
 
-.. autofunction:: needtoknow.sync.with_access
+.. autofunction:: wardowl.sync.with_access
 
-.. autoclass:: needtoknow.sync.google_drive.GoogleDriveACL
+.. autoclass:: wardowl.sync.google_drive.GoogleDriveACL
    :members: access, permissions
 
-.. autofunction:: needtoknow.sync.google_drive.drive_access
+.. autofunction:: wardowl.sync.google_drive.drive_access
 
-.. autodata:: needtoknow.sync.google_drive.FIELDS
+.. autodata:: wardowl.sync.google_drive.FIELDS
 
-.. autodata:: needtoknow.sync.google_drive.READ_ROLES
+.. autodata:: wardowl.sync.google_drive.READ_ROLES
 ```
 
 ## Events, audit and tracing
 
 ```{eval-rst}
-.. autoclass:: needtoknow.RetrievalEvent
+.. autoclass:: wardowl.RetrievalEvent
    :members:
    :undoc-members:
 
-.. autoclass:: needtoknow.JsonLinesAudit
+.. autoclass:: wardowl.JsonLinesAudit
 
-.. autofunction:: needtoknow.events.query_fingerprint
+.. autofunction:: wardowl.events.query_fingerprint
 
-.. autoclass:: needtoknow.otel.OpenTelemetryObserver
+.. autoclass:: wardowl.otel.OpenTelemetryObserver
 
-.. autoclass:: needtoknow.otel.OpenTelemetryMetrics
+.. autoclass:: wardowl.otel.OpenTelemetryMetrics
 ```
 
 An observer is any callable that takes a `RetrievalEvent`.
@@ -160,157 +160,157 @@ An observer is any callable that takes a `RetrievalEvent`.
 ## Backends
 
 ```{eval-rst}
-.. autoclass:: needtoknow.InMemoryBackend
+.. autoclass:: wardowl.InMemoryBackend
    :members: add, set_metadata, search
 
-.. autoclass:: needtoknow.backends.pgvector.PgVectorBackend
+.. autoclass:: wardowl.backends.pgvector.PgVectorBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.pgvector.create_schema
+.. autofunction:: wardowl.backends.pgvector.create_schema
 
-.. autofunction:: needtoknow.backends.pgvector.filter_to_sql
+.. autofunction:: wardowl.backends.pgvector.filter_to_sql
 
-.. autoclass:: needtoknow.backends.chroma.ChromaBackend
+.. autoclass:: wardowl.backends.chroma.ChromaBackend
    :members: add, set_metadata, delete, search
 
-.. autofunction:: needtoknow.backends.chroma.filter_to_where
+.. autofunction:: wardowl.backends.chroma.filter_to_where
 
-.. autoclass:: needtoknow.backends.elasticsearch.ElasticsearchBackend
+.. autoclass:: wardowl.backends.elasticsearch.ElasticsearchBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.elasticsearch.create_index
+.. autofunction:: wardowl.backends.elasticsearch.create_index
 
-.. autofunction:: needtoknow.backends.elasticsearch.permission_terms
+.. autofunction:: wardowl.backends.elasticsearch.permission_terms
 
-.. autoclass:: needtoknow.backends.opensearch.OpenSearchBackend
+.. autoclass:: wardowl.backends.opensearch.OpenSearchBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.opensearch.create_index
+.. autofunction:: wardowl.backends.opensearch.create_index
 
-.. autofunction:: needtoknow.backends.opensearch.permission_terms
+.. autofunction:: wardowl.backends.opensearch.permission_terms
 
-.. autoclass:: needtoknow.backends.qdrant.QdrantBackend
+.. autoclass:: wardowl.backends.qdrant.QdrantBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.qdrant.create_collection
+.. autofunction:: wardowl.backends.qdrant.create_collection
 
-.. autofunction:: needtoknow.backends.qdrant.filter_to_qdrant
+.. autofunction:: wardowl.backends.qdrant.filter_to_qdrant
 
-.. autofunction:: needtoknow.backends.qdrant.point_id
+.. autofunction:: wardowl.backends.qdrant.point_id
 
-.. autofunction:: needtoknow.backends.qdrant.bm25_terms
+.. autofunction:: wardowl.backends.qdrant.bm25_terms
 
-.. autoclass:: needtoknow.backends.milvus.MilvusBackend
+.. autoclass:: wardowl.backends.milvus.MilvusBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.milvus.create_collection
+.. autofunction:: wardowl.backends.milvus.create_collection
 
-.. autofunction:: needtoknow.backends.milvus.filter_to_expression
+.. autofunction:: wardowl.backends.milvus.filter_to_expression
 
-.. autofunction:: needtoknow.backends.milvus.permission_terms
+.. autofunction:: wardowl.backends.milvus.permission_terms
 
-.. autoclass:: needtoknow.backends.mongodb.MongoDBBackend
+.. autoclass:: wardowl.backends.mongodb.MongoDBBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.mongodb.create_search_index
+.. autofunction:: wardowl.backends.mongodb.create_search_index
 
-.. autofunction:: needtoknow.backends.mongodb.create_text_index
+.. autofunction:: wardowl.backends.mongodb.create_text_index
 
-.. autofunction:: needtoknow.backends.mongodb.filter_to_mongo
+.. autofunction:: wardowl.backends.mongodb.filter_to_mongo
 
-.. autofunction:: needtoknow.backends.mongodb.filter_to_search
+.. autofunction:: wardowl.backends.mongodb.filter_to_search
 
-.. autofunction:: needtoknow.backends.mongodb.permission_terms
+.. autofunction:: wardowl.backends.mongodb.permission_terms
 
-.. autoclass:: needtoknow.backends.weaviate.WeaviateBackend
+.. autoclass:: wardowl.backends.weaviate.WeaviateBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.weaviate.create_collection
+.. autofunction:: wardowl.backends.weaviate.create_collection
 
-.. autofunction:: needtoknow.backends.weaviate.filter_to_weaviate
+.. autofunction:: wardowl.backends.weaviate.filter_to_weaviate
 
-.. autofunction:: needtoknow.backends.weaviate.permission_terms
+.. autofunction:: wardowl.backends.weaviate.permission_terms
 
-.. autofunction:: needtoknow.backends.weaviate.point_id
+.. autofunction:: wardowl.backends.weaviate.point_id
 
-.. autoclass:: needtoknow.backends.redis.RedisBackend
+.. autoclass:: wardowl.backends.redis.RedisBackend
    :members: add, set_metadata, delete, search, asearch
 
-.. autofunction:: needtoknow.backends.redis.create_index
+.. autofunction:: wardowl.backends.redis.create_index
 
-.. autofunction:: needtoknow.backends.redis.filter_to_query
+.. autofunction:: wardowl.backends.redis.filter_to_query
 
-.. autofunction:: needtoknow.backends.redis.permission_terms
+.. autofunction:: wardowl.backends.redis.permission_terms
 
-.. autoclass:: needtoknow.backends.lancedb.LanceDBBackend
+.. autoclass:: wardowl.backends.lancedb.LanceDBBackend
    :members: add, delete, search
 
-.. autoclass:: needtoknow.backends.faiss.FaissBackend
+.. autoclass:: wardowl.backends.faiss.FaissBackend
    :members: add, delete, set_metadata, search, save, load
 
-.. autoclass:: needtoknow.backends.vespa.VespaBackend
+.. autoclass:: wardowl.backends.vespa.VespaBackend
    :members: add, delete, set_metadata, search, close
 
-.. autofunction:: needtoknow.backends.vespa.schema
+.. autofunction:: wardowl.backends.vespa.schema
 
-.. autoclass:: needtoknow.backends.cassandra.CassandraBackend
+.. autoclass:: wardowl.backends.cassandra.CassandraBackend
    :members: add, delete, set_metadata, search
 
-.. autofunction:: needtoknow.backends.cassandra.create_table
+.. autofunction:: wardowl.backends.cassandra.create_table
 
-.. autoclass:: needtoknow.backends.pinecone.PineconeBackend
+.. autoclass:: wardowl.backends.pinecone.PineconeBackend
    :members: add, delete, set_metadata, search, clear, close
 
-.. autofunction:: needtoknow.backends.lancedb.create_table
+.. autofunction:: wardowl.backends.lancedb.create_table
 
-.. autofunction:: needtoknow.backends.lancedb.create_indexes
+.. autofunction:: wardowl.backends.lancedb.create_indexes
 
-.. autofunction:: needtoknow.backends.lancedb.filter_to_sql
+.. autofunction:: wardowl.backends.lancedb.filter_to_sql
 
-.. autofunction:: needtoknow.backends.lancedb.permission_terms
+.. autofunction:: wardowl.backends.lancedb.permission_terms
 ```
 
 ## Frameworks
 
 ```{eval-rst}
-.. autoclass:: needtoknow.langchain.NeedToKnowRetriever
+.. autoclass:: wardowl.langchain.WardowlRetriever
    :members: for_subject
 
-.. autoclass:: needtoknow.langchain.LangChainVectorStoreBackend
+.. autoclass:: wardowl.langchain.LangChainVectorStoreBackend
 
-.. autoclass:: needtoknow.llamaindex.NeedToKnowRetriever
+.. autoclass:: wardowl.llamaindex.WardowlRetriever
 
-.. autoclass:: needtoknow.llamaindex.PermissionNodePostprocessor
+.. autoclass:: wardowl.llamaindex.PermissionNodePostprocessor
 
-.. autoclass:: needtoknow.llamaindex.LlamaIndexBackend
+.. autoclass:: wardowl.llamaindex.LlamaIndexBackend
 
-.. autoclass:: needtoknow.haystack.NeedToKnowRetriever
+.. autoclass:: wardowl.haystack.WardowlRetriever
    :members: run, run_async
 
-.. autofunction:: needtoknow.mcp.add_search_tool
+.. autofunction:: wardowl.mcp.add_search_tool
 
-.. autofunction:: needtoknow.server.create_app
+.. autofunction:: wardowl.server.create_app
 
-.. autoclass:: needtoknow.server.OIDCAuthenticator
+.. autoclass:: wardowl.server.OIDCAuthenticator
    :members: subject
 
-.. autoclass:: needtoknow.server.InvalidToken
+.. autoclass:: wardowl.server.InvalidToken
 ```
 
 ## Conformance testing
 
-See [Extending needtoknow](extending.md#test-it-with-the-conformance-kit).
+See [Extending wardowl](extending.md#test-it-with-the-conformance-kit).
 
 ```{eval-rst}
-.. autofunction:: needtoknow.testing.check_backend
+.. autofunction:: wardowl.testing.check_backend
 
-.. autofunction:: needtoknow.testing.check_authorizer
+.. autofunction:: wardowl.testing.check_authorizer
 
-.. autoexception:: needtoknow.testing.ConformanceError
+.. autoexception:: wardowl.testing.ConformanceError
 
-.. autoclass:: needtoknow.testing.HashingEmbedder
+.. autoclass:: wardowl.testing.HashingEmbedder
 
-.. autofunction:: needtoknow.testing.random_documents
+.. autofunction:: wardowl.testing.random_documents
 
-.. autofunction:: needtoknow.testing.random_filter
+.. autofunction:: wardowl.testing.random_filter
 ```

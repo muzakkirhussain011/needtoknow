@@ -1,6 +1,6 @@
 name: Docs
 
-# Publishes the documentation to GitHub Pages (https://muzakkirhussain011.github.io/needtoknow/)
+# Publishes the documentation to GitHub Pages (https://muzakkirhussain011.github.io/wardowl/)
 # after every push to main. The build is the same strict one the CI docs job runs on pull requests.
 
 on:

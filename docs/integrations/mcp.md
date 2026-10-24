@@ -1,7 +1,7 @@
 # MCP
 
 ```bash
-pip install "needtoknow[mcp]"
+pip install "wardowl[mcp]"
 ```
 
 `add_search_tool` gives an [MCP](https://modelcontextprotocol.io) server a search tool that returns
@@ -14,8 +14,8 @@ from mcp.server import MCPServer
 from mcp.server.auth.settings import AuthSettings
 from pydantic import AnyHttpUrl
 
-from needtoknow import PermissionedRetriever, Subject
-from needtoknow.mcp import add_search_tool
+from wardowl import PermissionedRetriever, Subject
+from wardowl.mcp import add_search_tool
 
 server = MCPServer(
     "Company knowledge",

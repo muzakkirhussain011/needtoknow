@@ -1,16 +1,16 @@
 # HTTP service
 
-`needtoknow.server` serves a `PermissionedRetriever` over HTTP, so applications in any language
+`wardowl.server` serves a `PermissionedRetriever` over HTTP, so applications in any language
 (TypeScript, Java, .NET, Go) get the same permission-aware retrieval. You build the retriever in
 Python, with any backend and authorizer, and run the service next to your stores.
 
 ```bash
-pip install "needtoknow[server]" uvicorn
+pip install "wardowl[server]" uvicorn
 ```
 
 ```python
-from needtoknow import PermissionedRetriever
-from needtoknow.server import OIDCAuthenticator, create_app
+from wardowl import PermissionedRetriever
+from wardowl.server import OIDCAuthenticator, create_app
 
 retriever = PermissionedRetriever(backend, authorizer)
 authenticate = OIDCAuthenticator(
@@ -57,7 +57,7 @@ Content-Type: application/json
 | 200 | The hits the caller may read, best first, and whether the result is `complete` |
 | 401 | No bearer token, or one that fails verification |
 | 422 | A malformed body, including one with a field the API does not define |
-| 503 | The permission check, or the token's verification, could not be completed: nothing is returned, and the reason goes to the `needtoknow` logger, not to the caller |
+| 503 | The permission check, or the token's verification, could not be completed: nothing is returned, and the reason goes to the `wardowl` logger, not to the caller |
 
 ## Who the caller is
 
@@ -73,11 +73,11 @@ refetched when a token names a key not seen before; if the key endpoint cannot b
 answer 503.
 
 For other token formats, pass your own function: it receives the bearer token and returns the
-`Subject`, or raises `needtoknow.server.InvalidToken`. It may be async.
+`Subject`, or raises `wardowl.server.InvalidToken`. It may be async.
 
 ```python
-from needtoknow import Subject
-from needtoknow.server import InvalidToken, create_app
+from wardowl import Subject
+from wardowl.server import InvalidToken, create_app
 
 
 async def authenticate(token: str) -> Subject:

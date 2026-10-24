@@ -1,20 +1,20 @@
 # Milvus
 
 ```bash
-pip install "needtoknow[milvus]"
+pip install "wardowl[milvus]"
 ```
 
 The backend runs Milvus's vector search with the permission filter applied inside the search, so
 the k nearest chunks the subject may read come back however few of the collection's chunks that
 is. It needs `pymilvus` 2.6 or newer and a Milvus that supports filter templating. CI runs
-needtoknow's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against Milvus
+wardowl's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against Milvus
 3.0.2 standalone. Zilliz Cloud serves the same API through the same client, but CI does not test
 it.
 
 ```python
 from pymilvus import MilvusClient
 
-from needtoknow.backends.milvus import MilvusBackend, create_collection
+from wardowl.backends.milvus import MilvusBackend, create_collection
 
 client = MilvusClient(uri="http://localhost:19530")  # or Zilliz Cloud: uri=..., token=...
 create_collection(client, "docs", dim=768)
@@ -24,7 +24,7 @@ backend.add(documents)
 
 `create_collection` makes a collection with a string primary key (`id`), the vector (`embedding`,
 HNSW, cosine), the text (`content`), the metadata (`metadata`, JSON) and the permission terms
-(`needtoknow_terms`, with an inverted index). Field names, the metric (`COSINE` or `IP`; scores are
+(`wardowl_terms`, with an inverted index). Field names, the metric (`COSINE` or `IP`; scores are
 Milvus's similarity, higher is closer) and the HNSW parameters can be changed; pass the same field
 names to `MilvusBackend`.
 
@@ -43,21 +43,21 @@ names to `MilvusBackend`.
 ## How permissions are indexed
 
 The backend uses the same design as [Elasticsearch and OpenSearch](elasticsearch.md#how-permissions-are-indexed):
-one array field, `needtoknow_terms`, holds a type-tagged term for every string and integer in the
+one array field, `wardowl_terms`, holds a type-tagged term for every string and integer in the
 chunk's metadata, so `1` and `"1"` stay apart and booleans, floats, nested lists and objects never
 match. A filter becomes `ARRAY_CONTAINS_ANY` conditions on that field, joined with `AND` and `OR`,
 and an `In` with no values matches nothing without a call to Milvus.
 
-**Values never enter the expression.** Milvus filters are text expressions. needtoknow writes only
+**Values never enter the expression.** Milvus filters are text expressions. wardowl writes only
 placeholders into the expression and passes the values separately, as Milvus's
 [filter templating](https://milvus.io/docs/filtering-templating.md) (`filter_params`) allows:
 
 ```python
-from needtoknow import In
-from needtoknow.backends.milvus import filter_to_expression
+from wardowl import In
+from wardowl.backends.milvus import filter_to_expression
 
 filter_to_expression(In("allowed_groups", ["hr", "eng"]))
-# ('ARRAY_CONTAINS_ANY(needtoknow_terms, {p0})', {'p0': ['allowed_groups\x1fs:eng', 'allowed_groups\x1fs:hr']})
+# ('ARRAY_CONTAINS_ANY(wardowl_terms, {p0})', {'p0': ['allowed_groups\x1fs:eng', 'allowed_groups\x1fs:hr']})
 ```
 
 A group name or user id containing quotes, brackets or operators is therefore only ever a value, and
@@ -79,15 +79,15 @@ ever disagree, a chunk can be hidden from a pre-filtered search, never leaked.
 
 ## Collections written by other tools
 
-A row whose `needtoknow_terms` is empty is invisible to a pre-filtered search, though post-filtering
+A row whose `wardowl_terms` is empty is invisible to a pre-filtered search, though post-filtering
 still finds it and checks its metadata. Fill the field in your ingestion pipeline with
 `permission_terms`:
 
 ```python
-from needtoknow.backends.milvus import permission_terms
+from wardowl.backends.milvus import permission_terms
 
 row = {"id": doc_id, "embedding": vector, "content": text, "metadata": metadata}
-row["needtoknow_terms"] = permission_terms(metadata)
+row["wardowl_terms"] = permission_terms(metadata)
 client.upsert(collection_name="docs", data=[row])
 ```
 
@@ -100,7 +100,7 @@ adds it, with Milvus's standard analyzer, which keeps every word. One collection
 halves of [hybrid search](../hybrid.md):
 
 ```python
-from needtoknow import RankFusion
+from wardowl import RankFusion
 
 create_collection(client, "docs", dim=768, text_search=True)
 vector = MilvusBackend(client, "docs", embed=embed)

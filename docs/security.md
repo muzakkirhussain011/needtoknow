@@ -1,9 +1,9 @@
 # Security model
 
-This page states what needtoknow guarantees, what it relies on, and what stays your
-responsibility. Read it before putting needtoknow in front of confidential documents.
+This page states what wardowl guarantees, what it relies on, and what stays your
+responsibility. Read it before putting wardowl in front of confidential documents.
 
-## What needtoknow guarantees
+## What wardowl guarantees
 
 Given an authorizer that answers correctly:
 
@@ -46,12 +46,12 @@ services. The tests compare with an oracle written without the library's own fil
 
 S1 to S10 assume the authorizer answers correctly, the backend returns the metadata it stored, and
 the subject comes from authentication; the next sections cover those assumptions. The test files
-are in [`tests/`](https://github.com/muzakkirhussain011/needtoknow/tree/main/tests).
+are in [`tests/`](https://github.com/muzakkirhussain011/wardowl/tree/main/tests).
 
 ## What it relies on
 
-**The authorizer is the source of truth.** needtoknow enforces decisions; it does not make them.
-If your policy or your relationship tuples grant too much, needtoknow returns too much.
+**The authorizer is the source of truth.** wardowl enforces decisions; it does not make them.
+If your policy or your relationship tuples grant too much, wardowl returns too much.
 
 **Permission metadata must be correct and current.** With `MetadataACLAuthorizer` and
 `TenantAuthorizer`, and with any authorizer that reads chunk metadata (`OPAAuthorizer` and
@@ -66,7 +66,7 @@ returns the stored `jsonb` column, Qdrant the point's payload, and Elasticsearch
 document's `_source`, where metadata is stored unindexed. The Chroma backend rebuilds metadata from
 an exact JSON copy rather than from Chroma's own fields, because of a Chroma bug that can attach a
 deleted collection's metadata to new records ([details](integrations/chroma.md#how-metadata-is-stored)).
-Elasticsearch and OpenSearch filter on a separate field, `needtoknow_terms`, but the re-check reads
+Elasticsearch and OpenSearch filter on a separate field, `wardowl_terms`, but the re-check reads
 the metadata, so if the two ever disagree a chunk can be hidden, never leaked.
 
 **Caching delays revocation by at most `ttl`.** `CachingAuthorizer` keeps decisions for `ttl`
@@ -94,14 +94,14 @@ provider vouches for.
 
 - Never read the subject from the request body or from query parameters the client controls.
 - Never let a language model choose it. In an agent, bind the subject when the tool is created for
-  the session (for example `NeedToKnowRetriever(...).for_subject(subject)` in LangChain); do not
+  the session (for example `WardowlRetriever(...).for_subject(subject)` in LangChain); do not
   expose it as a tool argument the model fills in.
 - Group memberships sent as OpenFGA contextual tuples are trusted as given, so they too must come
   from your identity provider, not from the client.
 
 ## What it does not do
 
-**Output control.** needtoknow decides which chunks reach the prompt. It does not stop a model from
+**Output control.** wardowl decides which chunks reach the prompt. It does not stop a model from
 repeating a permitted chunk's content, and it does not filter model output.
 
 **Prompt injection.** A chunk the user may read can still contain instructions aimed at the model.
@@ -125,5 +125,5 @@ refuse URLs that are not `http://` or `https://`.
 ## Reporting a vulnerability
 
 Please report security problems privately, as described in
-[SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md), not in
+[SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md), not in
 public issues.

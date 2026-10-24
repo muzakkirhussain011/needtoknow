@@ -15,13 +15,13 @@ long a retrieval takes. Results and their discussion are in the
 | `pgvector` | PostgreSQL + pgvector HNSW index, filter in the SQL query, iterative index scans |
 | `pgvector, no iterative scan` | The same index with `hnsw.iterative_scan` off, as before pgvector 0.8 |
 
-Strategies: needtoknow's `prefilter` and `postfilter`, and the baselines that needtoknow exists to
+Strategies: wardowl's `prefilter` and `postfilter`, and the baselines that wardowl exists to
 replace: `naive top-k` (take the top k, then drop what the user may not read), `unprotected`
 (no permission check at all) and, with `--backends ...,pgvector-rls`, `row-level security`:
 PostgreSQL enforcing the permissions itself, with a row-level security policy on a copy of the
-pgvector table that has the same HNSW index and iterative scans, and no needtoknow in the path.
+pgvector table that has the same HNSW index and iterative scans, and no wardowl in the path.
 
-Ground truth is computed independently of needtoknow: the exact top-k by cosine similarity among
+Ground truth is computed independently of wardowl: the exact top-k by cosine similarity among
 the chunks the subject may read.
 
 ## Permissions
@@ -49,7 +49,7 @@ The embeddings need a GPU, so the full run happens on Kaggle, not on a laptop.
 
 ## Load benchmark
 
-`load_bench.py` measures needtoknow at scale on PostgreSQL + pgvector: the first million passages
+`load_bench.py` measures wardowl at scale on PostgreSQL + pgvector: the first million passages
 of BEIR MS MARCO with real MS MARCO questions, embedded with BAAI/bge-small-en-v1.5. It reports
 how long loading and indexing take, recall and latency by permission selectivity, throughput as
 concurrent users grow, and what Open Policy Agent costs as the permission service, with and without
@@ -58,7 +58,7 @@ with the example policy and gives PostgreSQL enough memory for a million rows.
 
 `--backend` runs the same measurements on another store: `qdrant`, `milvus`, `elasticsearch`,
 `opensearch` or `weaviate`, at `--url` (Weaviate also takes `--grpc-port`). The corpus is loaded
-through needtoknow's own backend for that store, so the layout measured is the one you get, and the
+through wardowl's own backend for that store, so the layout measured is the one you get, and the
 load time includes waiting until the store's index is built. `--ef-search` sets each store's search
 breadth (see [`stores.py`](stores.py)), and `--index-type` sets Elasticsearch's vector index type
 (`int8_hnsw`, `hnsw`; its default for 384 dimensions is `bbq_hnsw`). On Kaggle, which has no Docker,

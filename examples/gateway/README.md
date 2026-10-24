@@ -1,7 +1,7 @@
 # Example: a self-hosted AI gateway (Rampart)
 
-> This is an example deployment in the [needtoknow](../../README.md) repository. It started as
-> a standalone project called Rampart and is being ported onto the `needtoknow` library. Its
+> This is an example deployment in the [wardowl](../../README.md) repository. It started as
+> a standalone project called Rampart and is being ported onto the `wardowl` library. Its
 > package, settings (`RAMPART_*`) and metrics (`rampart_*`) keep that name until the port lands.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)

@@ -1,19 +1,19 @@
 # LangChain
 
 ```bash
-pip install "needtoknow[langchain]"
+pip install "wardowl[langchain]"
 ```
 
 ## A permission-aware LangChain retriever
 
-`NeedToKnowRetriever` is a LangChain `BaseRetriever`, so it works anywhere a retriever does:
+`WardowlRetriever` is a LangChain `BaseRetriever`, so it works anywhere a retriever does:
 chains, agents and LangGraph tools.
 
 ```python
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.langchain import NeedToKnowRetriever
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.langchain import WardowlRetriever
 
-retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()), k=4)
+retriever = WardowlRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()), k=4)
 
 docs = retriever.invoke("What changed in Q3 pricing?", subject=Subject("bob", ["sales"]))
 ```
@@ -38,7 +38,7 @@ from langchain_core.tools import tool
 
 
 def tools_for(session):
-    retriever = NeedToKnowRetriever(retriever=permissioned).for_subject(session.subject)
+    retriever = WardowlRetriever(retriever=permissioned).for_subject(session.subject)
 
     @tool
     def search_documents(query: str) -> str:
@@ -51,10 +51,10 @@ def tools_for(session):
 ## Any LangChain vector store as a backend
 
 `LangChainVectorStoreBackend` goes the other way: it lets a LangChain `VectorStore` act as a
-needtoknow backend.
+wardowl backend.
 
 ```python
-from needtoknow.langchain import LangChainVectorStoreBackend
+from wardowl.langchain import LangChainVectorStoreBackend
 
 backend = LangChainVectorStoreBackend(vectorstore, id_key="chunk_id")
 retriever = PermissionedRetriever(backend, authorizer)  # post-filtered

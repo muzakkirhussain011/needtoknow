@@ -15,7 +15,7 @@ different session from the other stores: compare its numbers with theirs only lo
 | Store | LanceDB (the `lancedb` extra, 0.40 or later), embedded, on local disk. The backend's row layout bulk-loaded with `table.add` in batches of 100,000, then `create_indexes` (the `LABEL_LIST` index on the permission terms) and LanceDB's default vector index, IVF_PQ with cosine distance; `nprobes` and `refine_factor` at their defaults |
 | Load | Throughput runs: 20 s per setting, users pre-filtering at 1% readable, cycling through the 300 questions |
 | Hardware | Kaggle, 4 CPUs, no GPU, shared by LanceDB and the benchmark's client threads |
-| Software | needtoknow at `0f4a182`, on Kaggle's Python image |
+| Software | wardowl at `0f4a182`, on Kaggle's Python image |
 
 Recall@10 is measured against the exact top 10 among the chunks the subject may read, computed by
 brute force over the same vectors. *Leaks* is the total number of returned chunks the subject may

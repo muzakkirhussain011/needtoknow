@@ -1,19 +1,19 @@
 # LanceDB
 
 ```bash
-pip install "needtoknow[lancedb]"
+pip install "wardowl[lancedb]"
 ```
 
 LanceDB is an embedded vector database: it runs inside your process, on a local directory or on
 object storage, with no server to operate. The backend runs LanceDB's vector search with the
 permission filter applied before ranking (LanceDB's pre-filtering), so the k nearest chunks the
-subject may read come back however few of the table's chunks that is. CI runs needtoknow's
+subject may read come back however few of the table's chunks that is. CI runs wardowl's
 [conformance kit](../extending.md#test-it-with-the-conformance-kit) against LanceDB 0.40.
 
 ```python
 import lancedb
 
-from needtoknow.backends.lancedb import LanceDBBackend, create_indexes, create_table
+from wardowl.backends.lancedb import LanceDBBackend, create_indexes, create_table
 
 db = lancedb.connect("data/chunks")  # or an object storage URI
 table = create_table(db, "chunks", dim=768)
@@ -22,8 +22,8 @@ backend.add(documents)
 create_indexes(table)  # scalar indexes on the permission terms and ids, once data is loaded
 ```
 
-Each chunk is a row with the columns `id`, `needtoknow_key` (the id, hex-encoded), `content`,
-`metadata` (JSON), `needtoknow_terms` and `vector` (float32). `add` upserts by id, and a write is
+Each chunk is a row with the columns `id`, `wardowl_key` (the id, hex-encoded), `content`,
+`metadata` (JSON), `wardowl_terms` and `vector` (float32). `add` upserts by id, and a write is
 searchable as soon as it returns; when one call adds the same id twice, the last version wins.
 Scores are cosine similarity, 1 minus LanceDB's cosine distance. Without an ANN index, LanceDB
 searches every row exactly; add one as for any LanceDB table, and tune it with `nprobes` and
@@ -41,11 +41,11 @@ floats, nested lists and objects never match. LanceDB filters are SQL, so each t
 hex-encoded in a list column, and a filter becomes `array_has_any` over hex strings:
 
 ```python
-from needtoknow import In
-from needtoknow.backends.lancedb import filter_to_sql
+from wardowl import In
+from wardowl.backends.lancedb import filter_to_sql
 
 filter_to_sql(In("allowed_groups", ["hr"]))
-# "array_has_any(needtoknow_terms, ['616c6c6f7765645f67726f7570731f733a6872'])"
+# "array_has_any(wardowl_terms, ['616c6c6f7765645f67726f7570731f733a6872'])"
 ```
 
 A hex string holds only `0-9` and `a-f`, so no group name or user id is ever part of the SQL; CI
@@ -58,13 +58,13 @@ permissions.
 
 ## Rows written by other tools
 
-A row with no `needtoknow_terms` is invisible to a pre-filtered search, though post-filtering still
+A row with no `wardowl_terms` is invisible to a pre-filtered search, though post-filtering still
 finds it and checks its metadata. Fill the column in your ingestion pipeline:
 
 ```python
-from needtoknow.backends.lancedb import permission_terms
+from wardowl.backends.lancedb import permission_terms
 
-row["needtoknow_terms"] = permission_terms(metadata)
+row["wardowl_terms"] = permission_terms(metadata)
 ```
 
 A row whose `metadata` is not a JSON object carries no permissions, so the re-check denies it.
@@ -77,8 +77,8 @@ permission filter, applied before the results are ranked. Build the index with
 removed). One table then serves both halves of [hybrid search](../hybrid.md):
 
 ```python
-from needtoknow import RankFusion
-from needtoknow.backends.lancedb import create_indexes
+from wardowl import RankFusion
+from wardowl.backends.lancedb import create_indexes
 
 create_indexes(table, content_field="content")
 vector = LanceDBBackend(table, embed=embed)

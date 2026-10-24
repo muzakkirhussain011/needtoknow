@@ -3,7 +3,7 @@
 For every backend, strategy, permission selectivity and permission layout it measures
 
 * recall@k against the exact top-k of what the subject may read, computed by brute force over the
-  same vectors and independently of needtoknow,
+  same vectors and independently of wardowl,
 * leaks: returned chunks the subject may not read,
 * how often the result is complete and how many candidates the authorizer checked,
 * latency per retrieval. Query embedding is excluded: every query is embedded once, up front.
@@ -24,7 +24,7 @@ Run it on Kaggle with a GPU for the embeddings (see benchmarks/README.md):
     python benchmarks/permissions_bench.py --dataset fiqa --embedder Qwen/Qwen3-Embedding-0.6B \\
         --backends exact,chroma,pgvector --database-url postgresql://...
 
-`--backends ...,pgvector-rls` adds a baseline without needtoknow: PostgreSQL's own row-level security on
+`--backends ...,pgvector-rls` adds a baseline without wardowl: PostgreSQL's own row-level security on
 a copy of the pgvector table (see `pgvector_rls_run`).
 
 `--dataset synthetic --embedder hashing` needs no model or network. With `--check` the run fails
@@ -50,8 +50,8 @@ from typing import Any
 
 import numpy as np
 
-import needtoknow
-from needtoknow import And, Document, Filter, Hit, In, MetadataACLAuthorizer, PermissionedRetriever, Subject
+import wardowl
+from wardowl import And, Document, Filter, Hit, In, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 FIELD = "allowed_groups"
 LEVELS = {1: "team", 10: "dept", 100: "div"}
@@ -224,7 +224,7 @@ def documents(ids: Sequence[str], texts: Sequence[str], metadata: Sequence[dict[
 def chroma_backend(docs: list[Document], vectors: np.ndarray, embed: Any, batch: int) -> tuple[Any, dict[str, str]]:
     import chromadb
 
-    from needtoknow.backends.chroma import ChromaBackend
+    from wardowl.backends.chroma import ChromaBackend
 
     collection = chromadb.EphemeralClient().create_collection(
         f"bench_{time.time_ns()}", embedding_function=None, configuration={"hnsw": {"space": "cosine"}}
@@ -241,14 +241,14 @@ def pgvector_backends(
     from psycopg import sql
     from psycopg_pool import ConnectionPool
 
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
-    table = sql.Identifier("needtoknow_bench")
+    table = sql.Identifier("wardowl_bench")
     pool = ConnectionPool(url, min_size=1, max_size=2, open=True)
     with pool.connection() as conn:
         conn.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(table))
-    create_schema(pool, vectors.shape[1], table="needtoknow_bench", hnsw=False)
-    loader = PgVectorBackend(pool, embed, table="needtoknow_bench")
+    create_schema(pool, vectors.shape[1], table="wardowl_bench", hnsw=False)
+    loader = PgVectorBackend(pool, embed, table="wardowl_bench")
     for start in range(0, len(docs), batch):
         loader.add(docs[start : start + batch], embeddings=vectors[start : start + batch])
     with pool.connection() as conn:
@@ -258,27 +258,27 @@ def pgvector_backends(
         server = conn.execute("SHOW server_version").fetchone()[0]
         extension = conn.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'").fetchone()[0]
     backends = {
-        "pgvector": PgVectorBackend(pool, embed, table="needtoknow_bench"),
-        "pgvector, no iterative scan": PgVectorBackend(pool, embed, table="needtoknow_bench", iterative_scan=None),
+        "pgvector": PgVectorBackend(pool, embed, table="wardowl_bench"),
+        "pgvector, no iterative scan": PgVectorBackend(pool, embed, table="wardowl_bench", iterative_scan=None),
     }
     return backends, {"postgres": server, "pgvector": extension}
 
 
 RLS = "row-level security"
-READER = "needtoknow_bench_reader"
+READER = "wardowl_bench_reader"
 
 
 def pgvector_rls_run(
     url: str, docs: list[Document], vectors: np.ndarray, embed: Any, batch: int
 ) -> tuple[Run, dict[str, str]]:
-    """PostgreSQL's own row-level security: the baseline that needtoknow's pgvector backend replaces.
+    """PostgreSQL's own row-level security: the baseline that wardowl's pgvector backend replaces.
 
     A separate table holds the same chunks with the same HNSW index, and row-level security is
     forced on it with the policy most applications would write for a jsonb ACL: a row is visible
-    when its `allowed_groups` holds one of the groups the request puts in `needtoknow.groups`. Each
+    when its `allowed_groups` holds one of the groups the request puts in `wardowl.groups`. Each
     search sets that list for its own transaction, then asks for the k nearest rows with no filter
-    of its own and the same iterative scan as needtoknow's backend, so the database alone decides
-    what is visible. needtoknow plays no part in these results.
+    of its own and the same iterative scan as wardowl's backend, so the database alone decides
+    what is visible. wardowl plays no part in these results.
 
     Superusers, and roles with BYPASSRLS, skip row-level security even on a table that forces it,
     and the benchmark's database user is usually a superuser. So each search switches to a plain
@@ -287,9 +287,9 @@ def pgvector_rls_run(
     from psycopg import sql
     from psycopg_pool import ConnectionPool
 
-    from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+    from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
-    name = "needtoknow_bench_rls"
+    name = "wardowl_bench_rls"
     table, reader = sql.Identifier(name), sql.Identifier(READER)
     pool = ConnectionPool(url, min_size=1, max_size=2, open=True)
     with pool.connection() as conn:
@@ -311,7 +311,7 @@ def pgvector_rls_run(
         conn.execute(
             sql.SQL(
                 "CREATE POLICY readable ON {} FOR SELECT"
-                " USING (metadata -> {} ?| string_to_array(current_setting('needtoknow.groups', true), ','))"
+                " USING (metadata -> {} ?| string_to_array(current_setting('wardowl.groups', true), ','))"
             ).format(table, field)
         )
         if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", [READER]).fetchone():
@@ -333,11 +333,11 @@ def pgvector_rls_run(
 
     def run(query: str, subject: Subject, k: int) -> tuple[list[str], int, bool, int]:
         if any("," in group for group in subject.groups):
-            raise ValueError("a group name with a comma cannot be passed in needtoknow.groups")
+            raise ValueError("a group name with a comma cannot be passed in wardowl.groups")
         vector = "[" + ",".join(f"{v:.8g}" for v in embed(query)) + "]"
         with pool.connection() as conn, conn.transaction():
             conn.execute(sql.SQL("SET LOCAL ROLE {}").format(reader))
-            conn.execute("SELECT set_config('needtoknow.groups', %s, true)", [",".join(subject.groups)])
+            conn.execute("SELECT set_config('wardowl.groups', %s, true)", [",".join(subject.groups)])
             conn.execute("SET LOCAL hnsw.iterative_scan = relaxed_order")
             ids = [row[0] for row in conn.execute(statement, [vector, k]).fetchall()]
         # The database checks rows itself, so nothing is examined by the application.
@@ -349,7 +349,7 @@ def pgvector_rls_run(
 # ---- systems under test ----------------------------------------------------------------------
 
 
-def needtoknow_run(backend: Any, authorizer: Any, strategy: str, max_candidates: int) -> Run:
+def wardowl_run(backend: Any, authorizer: Any, strategy: str, max_candidates: int) -> Run:
     retriever = PermissionedRetriever(backend, authorizer, strategy=strategy, max_candidates=max_candidates)
 
     def run(query: str, subject: Subject, k: int) -> tuple[list[str], int, bool, int]:
@@ -384,10 +384,10 @@ def systems(backends: dict[str, Any], max_candidates: int) -> list[tuple[str, st
     out: list[tuple[str, str, Run]] = []
     for name, backend in backends.items():
         if name == "pgvector, no iterative scan":
-            out.append((name, "prefilter", needtoknow_run(backend, authz, "prefilter", max_candidates)))
+            out.append((name, "prefilter", wardowl_run(backend, authz, "prefilter", max_candidates)))
             continue
         for strategy in ("prefilter", "postfilter"):
-            out.append((name, strategy, needtoknow_run(backend, authz, strategy, max_candidates)))
+            out.append((name, strategy, wardowl_run(backend, authz, strategy, max_candidates)))
         out.append((name, "naive top-k", naive_run(backend, authz)))
         if name == "exact":
             out.append((name, "unprotected", unprotected_run(backend)))
@@ -489,7 +489,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--selectivity", default="0.001,0.01,0.05,0.2,1")
     p.add_argument("--layouts", default=",".join(LAYOUTS))
     p.add_argument("--backends", default="exact,chroma,pgvector")
-    p.add_argument("--database-url", default=os.environ.get("NEEDTOKNOW_BENCH_DATABASE_URL"))
+    p.add_argument("--database-url", default=os.environ.get("WARDOWL_BENCH_DATABASE_URL"))
     p.add_argument("--max-candidates", type=int, default=1000)
     p.add_argument("--cell-seconds", type=float, default=300.0, help="time limit for one table row")
     p.add_argument("--batch-size", type=int, default=64, help="embedding batch size")
@@ -526,7 +526,7 @@ def environment(args: argparse.Namespace) -> dict[str, Any]:
         "python": platform.python_version(),
         "platform": platform.platform(),
         "cpus": os.cpu_count(),
-        "needtoknow": needtoknow.__version__,
+        "wardowl": wardowl.__version__,
         "numpy": np.__version__,
     }
     if args.embedder != "hashing":
@@ -549,7 +549,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not set(wanted) <= {"exact", "chroma", "pgvector", "pgvector-rls"}:
         raise SystemExit("--backends takes exact, chroma, pgvector and pgvector-rls")
     if {"pgvector", "pgvector-rls"} & set(wanted) and not args.database_url:
-        raise SystemExit("pgvector needs --database-url or NEEDTOKNOW_BENCH_DATABASE_URL")
+        raise SystemExit("pgvector needs --database-url or WARDOWL_BENCH_DATABASE_URL")
     rng = np.random.default_rng(args.seed)
     began = time.perf_counter()
 

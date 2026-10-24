@@ -9,8 +9,8 @@ from helpers import filters
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import In, Or, filter_to_dict
-from needtoknow.backends.pgvector import MANY_VALUES, filter_to_sql
+from wardowl import In, Or, filter_to_dict
+from wardowl.backends.pgvector import MANY_VALUES, filter_to_sql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "fuzz"))
 from filters_fuzzer import check_document, check_filter

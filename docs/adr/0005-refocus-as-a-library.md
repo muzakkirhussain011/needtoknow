@@ -19,7 +19,7 @@ into the RAG code they already have.
 
 ## Decision
 
-The project becomes **needtoknow**, a Python library:
+The project becomes **wardowl**, a Python library:
 
 - A dependency-free core: subjects, a backend-neutral filter language (`In`, `And`, `Or`), an
   `Authorizer` protocol (`check`, optional `filter_for`), a `SearchBackend` protocol, and
@@ -33,7 +33,7 @@ The project becomes **needtoknow**, a Python library:
   library. ADRs 0001 to 0004 stay as the record of that design; 0002 (ACL inside retrieval) is the
   idea this library generalises.
 
-The name `rampart` was also taken on PyPI by an unrelated AI-safety project; `needtoknow` names the
+The name `rampart` was also taken on PyPI by an unrelated AI-safety project; `wardowl` names the
 security principle the library enforces.
 
 ## Consequences
