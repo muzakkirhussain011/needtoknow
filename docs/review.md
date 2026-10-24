@@ -145,6 +145,15 @@ published as advisory
 | October 2026 | The OIDC authenticator verified with the algorithm the token named, and malformed tokens gave 500 errors | 2.0.0 |
 | October 2026 | The HTTP service parsed bodies of any size and passed NaN vectors to the retriever | 2.0.0 |
 | October 2026 | The Lock workflow resolved dependencies with a token that could push | 2.0.0 |
+| October 2026 | Haystack's `ComponentTool` turned a subject a model sent, even one it did not offer, into a real `Subject` | 2.0.0 |
+| October 2026 | LlamaIndex's node postprocessor passed permission fields into prompts and traces | 2.0.0 |
+| October 2026 | pgvector stored a whole-number float written with an exponent as an integer, which an integer filter matched | 2.0.0 |
+| October 2026 | FAISS returned its stored metadata, so changing a hit changed the chunk's permissions | 2.0.0 |
+| October 2026 | Elasticsearch and OpenSearch returned results from a search with failed shards as complete | 2.0.0 |
+| October 2026 | Cedar never received metadata keys starting with `__`, so a `forbid` on them did not apply | 2.0.0 |
+| October 2026 | One chunk id OpenFGA or SpiceDB refused failed every retrieval that returned it | 2.0.0 |
+| October 2026 | A string `audit_key` or `signing_key` turned audit events or the shared cache off without an error | 2.0.0 |
+| October 2026 | The example gateway parsed bodies of any size before authentication, and two of its patterns took quadratic time | the gateway example |
 
 ## Reporting
 

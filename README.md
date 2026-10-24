@@ -589,9 +589,11 @@ permission check, searches with your own vectors, permission changes without re-
 search tool for AI agents, a Haystack component, and the MongoDB Atlas, Weaviate, Redis and LanceDB
 backends. 1.4 added keyword search on every store but Chroma, the Cedar authorizer and permission sync from
 Google Drive. 1.5 added an HTTP service for any language, redaction, the Ory Keto and Casbin
-authorizers and the FAISS backend. 1.6 added the Vespa and Cassandra backends. Next, in rough
-order: the Pinecone backend, permission sync from SharePoint and Confluence, and an Azure AI Search
-backend. Contributions are welcome; see
+authorizers and the FAISS backend. 1.6 added the Vespa and Cassandra backends. 2.0, the first release
+named wardowl, added the Pinecone backend and the fixes from the project's own security audit, some
+of which change behaviour; [Upgrading](https://muzakkirhussain011.github.io/wardowl/upgrading.html)
+lists them. Next, in rough order: permission sync from SharePoint and Confluence, and an Azure AI
+Search backend. Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/muzakkirhussain011/wardowl/blob/main/CONTRIBUTING.md).
 
 ## Example deployment
