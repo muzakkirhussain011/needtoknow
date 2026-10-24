@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # By hand, and by the Lock workflow on the commit it pushes, which no push event announces.
+  workflow_dispatch:
+    inputs:
+      pinecone:
+        description: Also run the Pinecone tests against the service, with the PINECONE_API_KEY secret
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -192,10 +199,6 @@ jobs:
           # The code that decides who reads what is held to a higher bar: the retriever, the filter
           # language, composition, caching and the permission-service clients, together.
           coverage report --fail-under=95 --include="wardowl/retriever.py,wardowl/filters.py,wardowl/authz.py,wardowl/caching.py,wardowl/authorizers/*.py"
-      - name: Pinecone, the service (only this step gets the key; skipped without the secret)
-        env:
-          WARDOWL_TEST_PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-        run: pytest -q -p no:cacheprovider tests/test_pinecone.py
       - name: Cassandra and Vespa server errors, when a step failed
         if: failure()
         run: |
@@ -237,6 +240,32 @@ jobs:
           run weaviate http://127.0.0.1:8079
           run redis redis://127.0.0.1:6379/0
           run lancedb "$RUNNER_TEMP/lancedb" --refine-factor 5  # embedded: the URL is a directory
+
+  # The only job that receives the Pinecone key. It runs on main, or by hand with `pinecone` ticked,
+  # never for a pull request; on a fresh runner with only the Pinecone extra and the test tools
+  # installed, from uv.lock by hash, and with pytest's plugin autoloading off.
+  pinecone:
+    name: pinecone (the service)
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.pinecone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.12" }
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with: { version: "0.13.1", enable-cache: false }
+      - name: Install from uv.lock, by hash
+        run: |
+          uv export --frozen --no-emit-project --extra pinecone --extra dev -o "$RUNNER_TEMP/requirements.txt"
+          pip install --require-hashes --no-deps -r "$RUNNER_TEMP/requirements.txt"
+          pip install --require-hashes --no-deps -r .github/requirements/build.txt
+          pip install --no-deps --no-build-isolation -e .
+      - name: Pinecone, the service (skipped without the secret)
+        env:
+          WARDOWL_TEST_PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: pytest -q -p no:cacheprovider tests/test_pinecone.py
 
   library:
     name: library (Python ${{ matrix.python }})

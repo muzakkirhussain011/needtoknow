@@ -36,12 +36,12 @@ chroma = ["chromadb>=1.5"]
 elasticsearch = ["elasticsearch>=8.12"]
 opensearch = ["opensearch-py>=2.4"]
 qdrant = ["qdrant-client>=1.15"]
-milvus = ["pymilvus>=2.6"]
+milvus = ["pymilvus>=2.6.2"]
 mongodb = ["pymongo>=4.13"]
 weaviate = ["weaviate-client>=4.16"]
 redis = ["redis>=5"]
 lancedb = ["lancedb>=0.40"]
-langchain = ["langchain-core>=1.0"]
+langchain = ["langchain-core>=1.3.3"]
 llamaindex = ["llama-index-core>=0.12"]
 haystack = ["haystack-ai>=2.12"]
 mcp = ["mcp>=2.3"]
@@ -52,7 +52,7 @@ casbin = ["casbin>=1.43"]
 vespa = ["httpx>=0.27"]
 pinecone = ["httpx>=0.27"]
 cassandra = ["cassandra-driver>=3.29"]
-server = ["fastapi>=0.115", "pyjwt[crypto]>=2.10"]
+server = ["fastapi>=0.115", "pyjwt[crypto]>=2.14"]
 # Sphinx 9 needs Python 3.12, so the documentation is built on 3.12 or later.
 docs = [
   "sphinx>=9.1; python_version >= '3.12'",
@@ -74,7 +74,7 @@ Documentation = "https://muzakkirhussain011.github.io/wardowl/"
 integration = ["opentelemetry-sdk>=1.30", "pgvector>=0.3", "elasticsearch[async]>=8.12", "opensearch-py[async]>=2.4"]
 release = ["twine==7.0.0", "cyclonedx-bom==7.5.0", "sigstore==4.5.0"]
 # The FastAPI reference service in examples/fastapi_rag, whose tests CI runs.
-examples = ["fastapi>=0.115", "httpx>=0.27", "pyjwt>=2.9"]
+examples = ["fastapi>=0.115", "httpx>=0.27", "pyjwt>=2.14"]
 
 [tool.uv]
 default-groups = []

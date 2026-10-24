@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +29,17 @@ class Settings(BaseSettings):
     embed_dim: int = 768
 
     principals_file: Path = Path("config/principals.yaml")
+    # API keys are stored as HMAC-SHA256 digests under this secret (hex, at least 32 bytes), which
+    # stays out of the principals file: `rampart key-hashing` makes one.
+    key_secret: SecretStr | None = None
+    # Runs the demo: its principals file, hashed under a published secret, is refused without it.
+    demo: bool = False
+
+    # Prometheus metrics are served by `rampart serve` on their own port, not on the API's.
+    # A port of 0 turns them off.
+    metrics_host: str = "127.0.0.1"
+    metrics_port: int = 9464
+
     top_k: int = 5
     max_context_chars: int = 6000
     chunk_injection_threshold: float = 0.5

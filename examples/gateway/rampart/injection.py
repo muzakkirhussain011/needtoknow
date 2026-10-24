@@ -46,7 +46,10 @@ _RULES: tuple[tuple[re.Pattern[str], float, str], ...] = (
         0.6,
         "chat-template-tokens",
     ),
-    (re.compile(r"!\[[^\]]*\]\(https?://[^)\s]*\?[^)\s]*=", re.I), 0.7, "markdown-image-exfiltration"),
+    # Alt text and URL stop at the next "[" (and the URL's first part at its "?"), so each attempt
+    # reads only up to the next image: this runs before the policy decides, and the form without
+    # those stops took quadratic time on a question full of "![" or "?".
+    (re.compile(r"!\[[^\[\]]*\]\(https?://[^)\s?\[]*\?[^)\s\[]*=", re.I), 0.7, "markdown-image-exfiltration"),
     (
         re.compile(
             r"\b(send|post|upload|forward|email)\b.{0,40}\b(to|at)\b.{0,10}(https?://|[\w.+-]+@[\w-]+\.)", re.I | re.S

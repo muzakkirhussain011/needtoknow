@@ -6810,7 +6810,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'vespa'", specifier = ">=0.27" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.40" },
-    { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=1.0" },
+    { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=1.3.3" },
     { name = "llama-index-core", marker = "extra == 'llamaindex'", specifier = ">=0.12" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.0" },
@@ -6818,8 +6818,8 @@ requires-dist = [
     { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.4" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.30" },
     { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'pgvector'", specifier = ">=3.2" },
-    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'server'", specifier = ">=2.10" },
-    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'server'", specifier = ">=2.14" },
+    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6.2" },
     { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.13" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
@@ -6838,7 +6838,7 @@ provides-extras = ["casbin", "cassandra", "cedar", "chroma", "dev", "docs", "ela
 examples = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "pyjwt", specifier = ">=2.9" },
+    { name = "pyjwt", specifier = ">=2.14" },
 ]
 integration = [
     { name = "elasticsearch", extras = ["async"], specifier = ">=8.12" },

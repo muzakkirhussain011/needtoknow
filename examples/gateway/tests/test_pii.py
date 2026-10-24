@@ -1,3 +1,5 @@
+import time
+
 from rampart.pii import Redactor, _iban_ok, _luhn_ok, redact
 
 
@@ -52,3 +54,15 @@ def test_secrets_are_masked():
 def test_ordinary_numbers_are_not_masked():
     text = "Invoice 2026-0042 for SAR 50,000 is due in 30 days; 21 days of leave; order #998877."
     assert redact(text).text == text
+
+
+def test_email_detection_takes_linear_time_on_long_runs():
+    start = time.perf_counter()
+    for text in ("a." * 20000, "a" * 40000 + "@", "x@" + "a." * 20000 + "1", "a@" * 20000):
+        redact(text)
+    assert time.perf_counter() - start < 2
+
+
+def test_an_address_is_masked_from_where_it_starts():
+    r = redact("mail:jo.smith@corp.example, or (a@b.example).")
+    assert r.text == "mail:[EMAIL_1], or ([EMAIL_2])." and r.counts["EMAIL"] == 2

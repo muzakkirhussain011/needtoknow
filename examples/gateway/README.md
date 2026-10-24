@@ -83,11 +83,13 @@ Changing who may read what is a reviewed pull request to the policy, tested with
 ## Quickstart
 
 Requirements: Docker with Compose. The stack is PostgreSQL with pgvector, OPA, the gateway and a
-model server.
+model server. `RAMPART_DEMO=1` lets the gateway start with the demo users below, whose keys are
+published; without it, it refuses them. The API listens on `localhost:8080` only.
 
 **Model server on another machine** (recommended; a GPU host running Ollama or vLLM):
 
 ```bash
+export RAMPART_DEMO=1
 export RAMPART_LLM_BASE_URL=http://gpu-host:11434/v1
 export RAMPART_EMBED_BASE_URL=http://gpu-host:11434
 docker compose up -d --build
@@ -96,7 +98,7 @@ docker compose up -d --build
 **Everything on one machine** (downloads `gemma4:e2b` and `embeddinggemma`, a few GB):
 
 ```bash
-docker compose --profile local-llm up -d --build
+RAMPART_DEMO=1 docker compose --profile local-llm up -d --build
 ```
 
 Load the sample documents for *Najm Logistics*, a fictional company:
@@ -108,8 +110,12 @@ docker compose exec gateway rampart ingest samples
 ### Try it as different people
 
 The demo users in [`config/principals.yaml`](config/principals.yaml) have keys `demo-key-<name>`.
-Only scrypt hashes of the keys are stored. For a real deployment, start a new file with
-`rampart key-hashing` (a fresh salt) and give each user a key from `rampart new-key`.
+Only HMAC-SHA256 digests of the keys are stored, under a secret the gateway holds; the demo's
+secret is published, which is why it needs `RAMPART_DEMO=1`. For a real deployment, run
+`rampart key-hashing` for a new secret (set it as `RAMPART_KEY_SECRET`) and the `key_hashing`
+block of a new principals file, give each user a key from `rampart new-key`, and mount that file
+at `/app/config/principals.yaml` in place of the demo's (`docker-compose.yml`). The image holds no
+principals file.
 
 | User | Team / department | Clearance | Can read |
 |---|---|---|---|
@@ -179,10 +185,14 @@ print(reply.model_extra["rampart"]["citations"])
 | `GET /v1/audit` | `auditor`, `admin` | Recent audit records |
 | `GET /v1/audit/verify` | `auditor`, `admin` | Recompute the hash chain |
 | `GET /dashboard` | `auditor`, `admin` | HTML overview (HTTP Basic) |
-| `GET /metrics` | scraper | Prometheus metrics (`rampart_requests_total`, `rampart_policy_denials_total`, `rampart_pii_masked_total`, `rampart_chunks_quarantined_total`, `rampart_acl_violations_total`, `rampart_tokens_total`, `rampart_stage_seconds`) |
+| `GET /metrics` on port 9464 | scraper, internal network | Prometheus metrics (`rampart_requests_total`, `rampart_policy_denials_total`, `rampart_pii_masked_total`, `rampart_chunks_quarantined_total`, `rampart_acl_violations_total`, `rampart_tokens_total`, `rampart_stage_seconds`), served apart from the API. Denials are counted by a fixed reason code, such as `model_not_approved`. |
 
 CLI: `rampart serve`, `rampart ingest <dir>`, `rampart new-key`, `rampart hash-key <key>`, `rampart key-hashing`,
 `rampart verify-audit`.
+
+Questions are at most 4,000 characters; `/v1/chat/completions` takes at most 20 messages of at
+most 4,000 characters each. Model and collection names are at most 200 characters, and a request
+names at most 50 collections.
 
 ## Configuration
 
@@ -197,7 +207,10 @@ Environment variables (or a `.env` file):
 | `RAMPART_DEFAULT_MODEL` | `gemma4:e2b` | Used when a request names no model; the policy has its own default |
 | `RAMPART_EMBED_BASE_URL` | `http://localhost:11434` | Ollama `/api/embed` |
 | `RAMPART_EMBED_MODEL`, `RAMPART_EMBED_DIM` | `embeddinggemma`, `768` | The vector column is created with this dimension |
-| `RAMPART_PRINCIPALS_FILE` | `config/principals.yaml` | Users, teams, roles and API key hashes |
+| `RAMPART_PRINCIPALS_FILE` | `config/principals.yaml` | Users, teams, roles and API key digests |
+| `RAMPART_KEY_SECRET` | unset | Hex secret the key digests are made under (`rampart key-hashing`); required unless `RAMPART_DEMO=1` |
+| `RAMPART_DEMO` | `false` | Accept the demo principals and their published secret. Never in a real deployment. |
+| `RAMPART_METRICS_HOST`, `RAMPART_METRICS_PORT` | `127.0.0.1`, `9464` | Where `rampart serve` serves Prometheus metrics; port `0` turns them off. The image binds them to `0.0.0.0` inside the container, and Compose does not publish the port. |
 | `RAMPART_TOP_K`, `RAMPART_MAX_CONTEXT_CHARS` | `5`, `6000` | Retrieval depth and context budget |
 | `RAMPART_CHUNK_INJECTION_THRESHOLD` | `0.5` | Chunks scoring at or above this are quarantined |
 | `RAMPART_MINUTES_SAVED_PER_ANSWER` | `6.0` | Only used for the dashboard's time-saved estimate |

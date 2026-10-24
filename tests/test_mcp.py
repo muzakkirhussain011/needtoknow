@@ -105,6 +105,16 @@ def test_the_tool_is_read_only_and_bounds_the_limit():
         call(make_server(), {"query": ""}, token("bob", ["eng"]))
 
 
+def test_the_query_length_is_bounded():
+    (tool,) = asyncio.run(make_server().list_tools())
+    assert tool.input_schema["properties"]["query"]["maxLength"] == 4000
+    (tool,) = asyncio.run(make_server(max_query_length=50).list_tools())
+    assert tool.input_schema["properties"]["query"]["maxLength"] == 50
+    with pytest.raises(ToolError):
+        call(make_server(), {"query": "leave " * 700}, token("bob", ["eng"]))
+    assert set(ids(call(make_server(), {"query": "leave " * 600}, token("bob", ["eng"])))) == {"handbook", "runbook"}
+
+
 def test_a_permission_service_failure_returns_nothing_and_reveals_nothing():
     down = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("opa.internal:8181 refused")))
     with pytest.raises(ToolError) as failure:
@@ -119,8 +129,26 @@ def test_subject_functions_may_be_async_and_must_return_a_subject():
 
     result = call(make_server(subject=lookup), {"query": "leave"}, token("bob", ["eng"]))
     assert set(ids(result)) == {"handbook", "runbook"}
+    # A plain function that returns an awaitable is awaited too.
+    result = call(make_server(subject=lambda access: lookup(access)), {"query": "leave"}, token("bob", ["eng"]))
+    assert set(ids(result)) == {"handbook", "runbook"}
     with pytest.raises(UnexpectedToolError):
         call(make_server(subject=lambda access: "bob"), {"query": "leave"}, token("bob", ["eng"]))
+
+
+def test_a_synchronous_subject_function_runs_in_a_worker_thread():
+    where = []
+
+    def lookup(access: AccessToken) -> Subject:
+        try:
+            asyncio.get_running_loop()
+            where.append("event loop")
+        except RuntimeError:
+            where.append("worker thread")
+        return from_claims(access)
+
+    result = call(make_server(subject=lookup), {"query": "leave"}, token("bob", ["eng"]))
+    assert set(ids(result)) == {"handbook", "runbook"} and where == ["worker thread"]
 
 
 def test_a_fixed_subject_serves_a_single_user_server_over_the_protocol():
@@ -140,6 +168,8 @@ def test_arguments_are_checked():
         add_search_tool(MCPServer("x"), retriever, from_claims, limit=30, max_limit=20)
     with pytest.raises(ValueError):
         add_search_tool(MCPServer("x"), retriever, from_claims, limit=0)
+    with pytest.raises(ValueError):
+        add_search_tool(MCPServer("x"), retriever, from_claims, max_query_length=0)
     with pytest.raises(TypeError):
         add_search_tool(MCPServer("x"), retriever, "bob")
 

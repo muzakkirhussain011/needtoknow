@@ -19,12 +19,14 @@ FROM base AS runtime
 RUN useradd --create-home --uid 10001 rampart
 COPY --from=build /wheels /wheels
 RUN pip install --no-index --no-deps /wheels/*.whl && rm -rf /wheels
-COPY config ./config
+# No principals file: API keys and who holds them are mounted at run time (docker-compose.yml),
+# never baked into an image.
 COPY samples ./samples
 USER rampart
-EXPOSE 8080
+# 8080 is the API; 9464 serves Prometheus metrics, for the internal network only.
+EXPOSE 8080 9464
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"
-CMD ["rampart", "serve", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["rampart", "serve", "--host", "0.0.0.0", "--port", "8080", "--metrics-host", "0.0.0.0"]
 
 FROM base AS test
 COPY --from=uv /uv /bin/uv

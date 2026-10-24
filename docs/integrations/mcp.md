@@ -55,7 +55,9 @@ The model chooses what to search for, never whose permissions apply:
   ([security model](../security.md#the-subject-must-come-from-authentication)).
 - A call without a verified token is refused with a protocol error, and nothing is searched. That
   covers a server run over stdio, and an HTTP server started without a token verifier.
-- `subject_for` may be `async`, and must return a `Subject`; anything else fails the call.
+- `subject_for` may be `async`, and must return a `Subject`; anything else fails the call. A
+  synchronous `subject_for` runs in a worker thread, so a slow directory lookup never stalls the
+  server's other calls.
 
 When an agent acts for a user, the token should be issued for that user (for example through OAuth
 token exchange), so `token.subject` is the person and the agent's own identity is in
@@ -86,6 +88,7 @@ The tool is marked read-only, and returns structured results:
 - `complete` is `RetrievalResult.complete`: false when passages the caller may read could be
   missing.
 - `limit` defaults to 5 and is capped at `max_limit` (20); both are arguments of `add_search_tool`.
+  `query` holds at most `max_query_length` characters (4,000 by default).
   `name` and `description` set the tool's name and the description the model reads.
 
 ## Failures
