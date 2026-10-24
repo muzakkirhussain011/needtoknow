@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "type": "tenant",
+      "relations": {
+        "member": {"this": {}}
+      },
+      "metadata": {
+        "relations": {
+          "member": {"directly_related_user_types": [{"type": "user"}]}
+        }
+      }
+    },
+    {
+      "type": "group",
+      "relations": {
+        "member": {"this": {}}
+      },
+      "metadata": {
+        "relations": {
+          "member": {"directly_related_user_types": [{"type": "user"}]}
+        }
+      }
+    },
+    {
+      "type": "document",
+      "relations": {
+        "tenant": {"this": {}},
+        "reader": {"this": {}},
+        "viewer": {
+          "intersection": {
+            "child": [
+              {"computedUserset": {"object": "", "relation": "reader"}},
+              {
+                "tupleToUserset": {
+                  "tupleset": {"object": "", "relation": "tenant"},
+                  "computedUserset": {"object": "", "relation": "member"}
+                }
+              }
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "tenant": {"directly_related_user_types": [{"type": "tenant"}]},
+          "reader": {
+            "directly_related_user_types": [
+              {"type": "user"},
+              {"type": "group", "relation": "member"}
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
