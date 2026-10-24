@@ -44,6 +44,14 @@ On a vector backend built without `embed`, a text query raises `ValueError` rath
 searched some other way (Chroma is the exception: it falls back to the collection's own embedding
 function).
 
+A query vector with the wrong number of dimensions makes the retrieval raise, and nothing is
+returned. `FaissBackend` checks the length itself and raises `ValueError` before searching. Vespa
+and Pinecone refuse the query, and their backends raise `RuntimeError` with the store's message.
+Every other backend hands the vector to its store's client, and the store's own error comes back
+unchanged (an exception from psycopg, redis-py, the Qdrant client and so on), since the retriever
+does not catch errors from a backend. The same holds when `embed` returns vectors of another
+model's size.
+
 ## Hybrid search with one embedding
 
 ```python
@@ -61,8 +69,8 @@ result = retriever.retrieve(Query(text=question, vector=embed(question)), subjec
 
 | Backend | Text query | `Query(vector=...)` | `Query(text=..., vector=...)` |
 |---|---|---|---|
-| pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, Elasticsearch, OpenSearch | embedded with `embed` | the vector | the vector |
-| The same in `mode="keyword"` | the text | `ValueError` | the text |
+| pgvector, Qdrant, Milvus, MongoDB, Weaviate, Redis, Elasticsearch, OpenSearch, LanceDB, Vespa, FAISS, Cassandra, Pinecone | embedded with `embed` | the vector | the vector |
+| The same in `mode="keyword"` (all but FAISS, Cassandra and Pinecone, which search vectors only) | the text | `ValueError` | the text |
 | Chroma | `embed`, or the collection's embedding function | the vector | the vector |
 | `InMemoryBackend` (word matching) | the text | `ValueError` | the text |
 | `LangChainVectorStoreBackend` | `similarity_search` | `similarity_search_by_vector` | `similarity_search_by_vector` |

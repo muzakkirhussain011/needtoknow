@@ -78,8 +78,9 @@ whoever can write to that Redis can plant a decision, unless you set `signing_ke
 carries an HMAC-SHA256 over its key and content, and anything unsigned, tampered with or copied
 under another key is ignored. Keep that Redis private to the application either way. Key names are
 digests, so the subjects and chunks are not readable from a key listing. A failing Redis is only
-ever a miss. `invalidate()` clears Redis at once and reaches other replicas within `local_ttl` (1
-second by default).
+ever a miss, and a hanging one too once the client has timeouts
+([Operations](operations.md#sharing-the-cache-across-processes)). `invalidate()` clears Redis at
+once and reaches other replicas within `local_ttl` (1 second by default).
 
 **A scope only narrows the search.** `scope_for` (from `TenantAuthorizer` inside `AllOf`, for
 example) limits which chunks post-filtering searches, and every candidate is still checked. A scope
@@ -120,9 +121,9 @@ end users, or give each tenant its own keyword index.
 them, but the rest of your stack sees them.
 
 **Authentication and transport security.** Use TLS and credentials for your permission service,
-your vector store and Redis. The HTTP authorizers (OPA, OpenFGA, SpiceDB, Cerbos) accept `headers`
-for an `Authorization` header (`SpiceDBAuthorizer` also takes its preshared key as `token`) and
-refuse URLs that are not `http://` or `https://`.
+your vector store and Redis. The HTTP authorizers (OPA, OpenFGA, SpiceDB, Cerbos, Keto) accept
+`headers` for an `Authorization` header (`SpiceDBAuthorizer` also takes its preshared key as
+`token`) and refuse URLs that are not `http://` or `https://`.
 
 ## Reporting a vulnerability
 

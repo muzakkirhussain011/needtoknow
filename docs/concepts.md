@@ -45,9 +45,16 @@ Any doubt must raise. The retriever turns every exception from an authorizer int
 | Authorizer | Decides with | Pre-filters |
 |---|---|---|
 | `MetadataACLAuthorizer` | `allowed_users` and `allowed_groups` on each chunk (`"*"` for everyone) | Yes |
+| [`TenantAuthorizer`](combining.md#tenant-isolation) | The chunk's `tenant` field against the subject's `tenant` attribute | Yes |
 | `FunctionAuthorizer` | Your function, optionally with your own `filter_for` | If you give one |
+| [`AllOf`, `AnyOf`](combining.md#allof-and-anyof) | Several authorizers: all of them, or any one | When every part has a filter; otherwise a [scope](combining.md#scoped-post-filtering), where the parts allow one |
 | [`OPAAuthorizer`](integrations/opa.md) | A Rego policy in Open Policy Agent | If the policy returns a filter |
 | [`OpenFGAAuthorizer`](integrations/openfga.md) | Relationship tuples in OpenFGA | Yes, through ListObjects |
+| [`SpiceDBAuthorizer`](integrations/spicedb.md) | Relationships in SpiceDB | Yes, through LookupResources |
+| [`CerbosAuthorizer`](integrations/cerbos.md) | Cerbos policies | Yes, from query plans |
+| [`KetoAuthorizer`](integrations/keto.md) | Relationship tuples in Ory Keto | No |
+| [`CedarAuthorizer`](integrations/cedar.md) | Cedar policies, in your process | No |
+| [`CasbinAuthorizer`](integrations/casbin.md) | A Casbin enforcer, in your process | No |
 | [`CachingAuthorizer`](operations.md#permission-caching) | Any of the above, cached for a bounded time | As the wrapped one |
 
 ## Filters
@@ -92,10 +99,10 @@ it. `filter_to_dict` and `filter_from_dict` convert filters to and from JSON, wh
 may read, so a subject who may read 0.1% of the corpus still gets ten good results, not the
 permitted few among the global top ten.
 
-**Post-filtering** searches without a filter and checks the candidates. It starts with
-`k × overfetch` candidates (default 4), and while fewer than k are permitted it multiplies the
-fetch by `overfetch` and searches again, until k are found, the backend runs out, or
-`max_candidates` (default 1000) is reached. The last case is reported as `complete=False`, so you
+**Post-filtering** checks every candidate with `check`. It starts with `k × overfetch` candidates
+(default 4), and while fewer than k are permitted it multiplies the fetch by `overfetch` and
+searches again, until k are found, the backend runs out, or `max_candidates` (default 1000) is
+reached. The last case is reported as `complete=False`, so you
 know the result may be missing permitted chunks rather than finding out from users.
 `max_candidates` bounds every strategy: a `k` above it raises `ValueError`, a reranker's depth is
 capped at it, and post-filtering checks no more candidates than it asked the backend for, even if
@@ -105,6 +112,27 @@ may read only a small share of the corpus are where post-filtering struggles; th
 
 Choose `prefilter` explicitly when you want an error rather than a silent fallback if a filter is
 not available.
+
+### What the store receives
+
+| Strategy | The filter in each search |
+|---|---|
+| `prefilter` | `filter_for`: exactly what the subject may read |
+| `postfilter` | `scope_for`, when the authorizer has it and the backend supports filters; otherwise none |
+| `auto` | As `prefilter` when the backend supports filters and `filter_for` returns a filter; otherwise as `postfilter` |
+
+A scope is a filter every readable chunk matches, such as the subject's tenant
+([Scoped post-filtering](combining.md#scoped-post-filtering)). `AllOf` and `AnyOf` have
+`scope_for`, and `CachingAuthorizer` passes on the scope of the authorizer it wraps. The other
+built-in authorizers have none, so with them, or with a backend whose `supports_filters` is false,
+post-filtering searches without a filter.
+
+A scope can be the whole permission filter. `AllOf`'s scope joins each part's filter, or its scope
+when it has none, so when every part has a filter, as in
+`AllOf(TenantAuthorizer(), MetadataACLAuthorizer())`, the scope is the same filter pre-filtering
+would send. The retriever asks for it even with `strategy="postfilter"`: the store then filters
+inside the search as it would for pre-filtering, and the retriever over-fetches and checks each
+candidate as well. `strategy="postfilter"` does not mean an unfiltered search.
 
 ## What a result tells you
 

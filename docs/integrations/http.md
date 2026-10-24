@@ -104,6 +104,61 @@ async def authenticate(token: str) -> Subject:
 app = create_app(retriever, authenticate)
 ```
 
+### Mapping a real provider's tokens
+
+What lands in `sub`, `groups` and the tenant claim is set by your identity provider, and the
+defaults rarely match the ids in your permissions. With Keycloak, for example:
+
+- **`sub` is Keycloak's own user id**, a generated UUID, not the username. Write your permissions
+  with that id, or map it to your own ids by overriding `subject`, which receives the verified
+  claims. A username or email address is a safe id only if users cannot change it.
+- **Groups come with their full path by default** (`/hr`, `/acme/hr`) from the group membership
+  mapper. Write your permissions the same way. Turning "Full group path" off sends `hr`, and then
+  `/acme/hr` and `/globex/hr` arrive as the same group.
+- **A claim that decides access must be one only administrators can set.** A user attribute
+  mapped into the token, such as a tenant, must be declared in the realm's user profile with only
+  administrators allowed to edit it; otherwise users can change it in the account console.
+- **The access token's `aud` names your API only through an audience mapper.** Without one, no
+  token passes verification, since `audience` must be in it.
+
+The client's mappers, as in an exported realm:
+
+```json
+[
+  {"name": "groups", "protocol": "openid-connect", "protocolMapper": "oidc-group-membership-mapper",
+   "config": {"claim.name": "groups", "full.path": "true", "access.token.claim": "true"}},
+  {"name": "tenant", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-attribute-mapper",
+   "config": {"user.attribute": "tenant", "claim.name": "tenant", "jsonType.label": "String",
+              "access.token.claim": "true"}},
+  {"name": "audience", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
+   "config": {"included.custom.audience": "knowledge-api", "access.token.claim": "true"}}
+]
+```
+
+```python
+from wardowl import Subject
+from wardowl.server import OIDCAuthenticator
+
+REALM = "https://keycloak.example.com/realms/example"
+
+
+class KeycloakAuthenticator(OIDCAuthenticator):
+    def subject(self, claims):
+        found = super().subject(claims)  # checks sub, groups and the tenant claim
+        return Subject(directory.user_id_for(found.id), found.groups, found.attributes)
+
+
+authenticate = KeycloakAuthenticator(
+    issuer=REALM,
+    audience="knowledge-api",
+    jwks_url=f"{REALM}/protocol/openid-connect/certs",
+    tenant_claim="tenant",
+)
+```
+
+`directory` stands for wherever you map Keycloak's ids to yours; leave `subject` alone if your
+permissions already use Keycloak's ids.
+
 ## In production
 
 - Terminate TLS in front of the service, and keep it on a private network with your stores and

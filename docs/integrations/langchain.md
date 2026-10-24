@@ -28,6 +28,10 @@ docs = bobs_retriever.invoke("What changed in Q3 pricing?")
 A call with no subject raises `ValueError` instead of returning unfiltered results. `ainvoke` uses
 `aretrieve`.
 
+A `subject=` passed to a call wins over the one bound with `for_subject`. Binding protects only
+where nothing else can pass `subject=`: keep the call's arguments out of the hands of a model or a
+client, as the agent example below does.
+
 Each returned `Document` carries `relevance_score` and the chunk metadata named in
 `metadata_fields`, none by default, as in
 `WardowlRetriever(retriever=permissioned, metadata_fields=["title", "source"])`. Permission fields

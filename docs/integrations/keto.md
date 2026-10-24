@@ -34,6 +34,26 @@ also checks the subject set `Group:<group>#members` for each of the subject's gr
 chunk if any check does. The groups are then trusted as given, so they must come from the verified
 token, as [Security model](../security.md#the-subject-must-come-from-authentication) explains.
 
+## Tenants
+
+Keto's relationships have no tenant: `Group:hr#members` is one group, whichever tenant's directory
+it came from, and `Document:handbook` is one object. With every tenant in one Keto:
+
+- Qualify every name that can repeat across tenants, in the relationships and in what you send:
+  document ids (`doc_id` `acme/handbook`) and, with `group_subjects=True`, group names (`acme/hr`).
+  Otherwise the members of one tenant's `hr` read what another tenant shared with its `hr`.
+- Add the tenant check: `AllOf(TenantAuthorizer(), KetoAuthorizer(...))` denies another tenant's
+  chunks before Keto is asked ([Combining](../combining.md#tenant-isolation)). Keto alone honours
+  every relationship it holds, a direct grant to a user on another tenant's document included,
+  whether it was written on purpose, by mistake or by a sync gone wrong.
+
+```python
+from wardowl import AllOf, Subject, TenantAuthorizer
+
+authorizer = AllOf(TenantAuthorizer(), KetoAuthorizer("http://keto:4466", group_subjects=True))
+subject = Subject(user.id, [f"{user.tenant}/{g}" for g in user.groups], {"tenant": user.tenant})
+```
+
 ## Pre-filtering
 
 Keto has no reverse lookup ("which documents may ann view?"), so `filter_for` returns None and the

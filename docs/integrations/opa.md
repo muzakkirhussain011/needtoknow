@@ -15,6 +15,15 @@ Your Rego policy decides; wardowl asks. A complete, tested policy is in
 opa run --server examples/opa
 ```
 
+That loads the policy from files, which OPA reads again whenever it starts. Policies and data
+uploaded through OPA's REST API (`PUT /v1/policies/...`, `PUT /v1/data/...`) are kept in OPA's
+memory by default, and an OPA that restarts without them has lost them. A lost policy leaves every
+decision undefined, so every retrieval raises `AuthorizationError` until it is uploaded again; lost
+data is worse, since the policy still decides, without it, and can allow what the data used to
+forbid. In production, load both from files or from a
+[bundle](https://www.openpolicyagent.org/docs/management-bundles), which OPA downloads from your
+server and polls for changes.
+
 ## Decisions
 
 `check` queries `decisions_path` (default `wardowl/decisions`) with this input:

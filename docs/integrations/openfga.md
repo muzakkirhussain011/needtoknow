@@ -87,6 +87,18 @@ contextual tuples (`user:<id> member group:<name>`), so group memberships from y
 provider take effect without being written to OpenFGA first. They are trusted as given, so they
 must come from authentication, not from the client.
 
+## Tenants in one store
+
+With every tenant in one store, qualify group names with the tenant, in the tuples and in the
+`Subject`'s groups: `acme/hr`, not `hr` (`:`, `#`, `*` and spaces are refused). A contextual tuple
+otherwise makes the user a member of `group:hr`, the one group of that name for every tenant, so
+`check` grants them every tenant's documents shared with `hr`, and ListObjects lists them all. A
+long enough list reaches `list_objects_limit`, the authorizer then returns no filter, and every
+retrieval quietly post-filters. Qualify document ids the same way, and add the tenant check,
+`AllOf(TenantAuthorizer(), OpenFGAAuthorizer(...))`, so that no tuple can grant across tenants
+([Combining](../combining.md#tenant-isolation)). A store per tenant, with an authorizer each, keeps
+them apart too.
+
 ## Failing closed
 
 Every failure raises `AuthorizationError`: an unreachable server, a timeout (`timeout=`, 2 seconds

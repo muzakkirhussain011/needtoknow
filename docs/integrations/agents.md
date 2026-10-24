@@ -52,12 +52,43 @@ so follow its current documentation:
 - [Semantic Kernel: MCP plugins](https://learn.microsoft.com/en-us/semantic-kernel/concepts/plugins/adding-mcp-plugins)
   (`pip install "semantic-kernel[mcp]"`): `MCPStreamableHttpPlugin` connects to a remote server.
 - [DSPy: MCP](https://dspy.ai/learn/programming/mcp): open the connection with the `mcp` package's
-  streamable HTTP client and a `ClientSession`, then wrap each tool with `dspy.Tool.from_mcp_tool`;
-  run the agent inside the session, since the tools call back into it.
+  streamable HTTP client and a `ClientSession`, as below, then wrap each tool with
+  `dspy.Tool.from_mcp_tool`; run the agent inside the session, since the tools call back into it.
+- LangChain and LangGraph: `MultiServerMCPClient` from `langchain-mcp-adapters` takes the header in
+  a server's connection settings (`"transport": "http"`, `"url"`, `"headers"`). As of October
+  2026 it requires `mcp` 1.x, so install it where the agent runs, not beside `wardowl[mcp]`.
+- LlamaIndex: `BasicMCPClient(url, headers=...)` from `llama-index-tools-mcp`, with `McpToolSpec`
+  to turn the server's tools into LlamaIndex tools.
+- Haystack: `MCPTool` or `MCPToolset` from `mcp-haystack`, with
+  `StreamableHttpServerInfo(url=..., token=user_token)`, which sends the token as a bearer header.
 
 For LangChain and LangGraph, LlamaIndex and Haystack, wardowl also has in-process integrations
 that bind the subject per session: [LangChain](langchain.md), [LlamaIndex](llamaindex.md),
 [Haystack](haystack.md).
+
+## The MCP Python SDK
+
+In version 2 of the `mcp` package, the streamable HTTP client takes no `headers` argument. Put the
+header on the `httpx2.AsyncClient` (the HTTP library `mcp` 2 uses) and pass that client as
+`http_client`:
+
+```python
+import httpx2
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
+
+async def list_knowledge_tools(user_token: str):
+    headers = {"Authorization": f"Bearer {user_token}"}
+    async with httpx2.AsyncClient(headers=headers, timeout=httpx2.Timeout(30.0, read=300.0)) as http:
+        async with streamable_http_client(KNOWLEDGE_URL, http_client=http) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.list_tools()
+```
+
+A client you pass replaces the SDK's default one, timeouts included, so set them as the SDK's own
+examples do (30 seconds, and 300 for reading the event stream).
 
 ## Check it
 

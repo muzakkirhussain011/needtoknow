@@ -11,7 +11,8 @@ stop as soon as it is withdrawn.
    `TenantAuthorizer`, or an OPA or Cerbos policy that reads chunk metadata), a change takes effect
    when the chunks are updated: `set_metadata`, a re-index, or the next run of a permission sync
    such as [Google Drive](integrations/google-drive.md). With a permission service (OpenFGA, SpiceDB,
-   OPA data, Cerbos policies), it takes effect when the service has the change.
+   Keto, OPA data, Cerbos policies), it takes effect when the service has the change; with an
+   in-process engine (Cedar, Casbin), when the engine in your process has it.
 2. **The permission service's own consistency.**
    - OpenFGA with `consistency="MINIMIZE_LATENCY"` (its default) may answer from its cache, when one
      is configured; `"HIGHER_CONSISTENCY"` skips it. See [OpenFGA](integrations/openfga.md).
@@ -20,6 +21,16 @@ stop as soon as it is withdrawn.
      `{"atLeastAsFresh": {"token": zedtoken}}` with the token from your write, answers from current data.
    - OPA and Cerbos answer from the policies and data they have loaded; bundle polling or a policy
      reload adds its interval.
+   - Keto has no consistency option: `KetoAuthorizer` sends none, as Keto's check API takes none.
+     A deleted relationship stops granting access once Keto's checks no longer see it, which
+     depends on your Keto deployment and its database, not on wardowl.
+   - Cedar and Casbin run in your process, so there is no service to wait for: a change applies on
+     the next check once the engine has it. `CedarAuthorizer` evaluates the policies it was created
+     with (create a new one to change them) and the `entities` you give it, which, as a function
+     of the subject, are read again on every check. Casbin evaluates the policy its enforcer holds
+     in memory: a change made through the enforcer (`remove_policy`, say) applies at once, and one
+     written to the adapter's storage by another process only once that enforcer reloads it
+     (`load_policy()`, or a Casbin watcher).
 3. **`CachingAuthorizer`.** A cached decision is used for at most `ttl` seconds. `invalidate()`
    drops decisions at once in its own process, including answers that were still being fetched, and
    reaches other replicas sharing a Redis within `local_ttl`. See
@@ -62,7 +73,9 @@ and put the revocation in the request path of the change itself:
 
 - **Ask the service for current answers:** `OpenFGAAuthorizer(..., consistency="HIGHER_CONSISTENCY")`,
   or `SpiceDBAuthorizer(..., consistency={"fullyConsistent": True})`, or pass SpiceDB the zedtoken
-  of your write with `atLeastAsFresh`.
+  of your write with `atLeastAsFresh`. Keto needs no setting. With Casbin, make the change through
+  the enforcer that serves retrievals, or reload it before you report success; with Cedar, replace
+  the authorizer, or change what its `entities` function returns.
 - **Do not cache, or invalidate before you report success.** Either leave `CachingAuthorizer` out,
   or call `invalidate(user_id)` in the same code that applies the revocation, and only then tell the
   administrator it is done. `invalidate()` raises if it cannot reach Redis.

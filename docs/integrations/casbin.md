@@ -39,6 +39,29 @@ def request(subject, hit, action):
 authorizer = CasbinAuthorizer(enforcer, request=request)
 ```
 
+With `request`, wardowl sends exactly the request the function returns, one per chunk, and nothing
+more: `group_subjects`, `group_prefix`, the refusal of user ids that start with the prefix, and
+`resource_field` are all skipped, and the function receives the Casbin action (after `actions`). If
+your policies name groups in the subject field (`p, group:legal, contract-7, read`), a user whose id
+is `group:legal` would then get that group's grants. A custom `request` must therefore:
+
+- refuse an id that could pass for a group or a role, by raising `AuthorizationError` (anything it
+  raises makes the retrieval raise `AuthorizationError`);
+- carry the subject's groups itself when they come from the token, for example as an attribute the
+  matcher reads, since `group_subjects` does not apply;
+- describe a chunk that lacks the attributes the matcher reads in a way the policy denies.
+
+```python
+from wardowl import AuthorizationError
+
+
+def request(subject, hit, action):
+    if subject.id.startswith("group:"):
+        raise AuthorizationError(f"subject id {subject.id!r} could pass for a group")
+    who = SimpleNamespace(id=subject.id, groups=sorted(subject.groups), **subject.attributes)
+    return (who, SimpleNamespace(**hit.metadata), action)
+```
+
 ## Groups from the token
 
 If group memberships live in Casbin's `g` policies, nothing else is needed. If they come from your

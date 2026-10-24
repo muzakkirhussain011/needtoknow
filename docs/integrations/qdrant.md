@@ -26,6 +26,20 @@ fields and on `wardowl_id`, which `set_metadata` and `delete` filter on. Without
 still filters correctly, but has to check every point; a collection in strict mode refuses filtered
 updates on a field without an index, so index `wardowl_id` in collections you create yourself.
 
+The default `keyword_fields` do not include `tenant`, the field
+[`TenantAuthorizer`](../combining.md#tenant-isolation) filters on. In a collection that holds
+several tenants, add it, so that Qdrant plans the tenant condition with an index:
+
+```python
+create_collection(client, "docs", dim=768, keyword_fields=("allowed_users", "allowed_groups", "tenant"))
+```
+
+A keyword index serves string tenant ids; for integer ids, create an integer index on
+`metadata.tenant` yourself (`field_schema=models.PayloadSchemaType.INTEGER`). Qdrant can also
+arrange its storage by tenant when you create the index yourself with
+`field_schema=models.KeywordIndexParams(type=models.KeywordIndexType.KEYWORD, is_tenant=True)`
+([Qdrant's multitenancy guide](https://qdrant.tech/documentation/guides/multiple-partitions/)).
+
 ## How points are stored
 
 `QdrantBackend` stores and reads points in the layout of LangChain's Qdrant integration: the text
