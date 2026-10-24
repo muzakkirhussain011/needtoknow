@@ -73,13 +73,7 @@ asked about on its own, as if it were the reader:
 - With an intersection, such as `permission view = viewer & org->member`, a grant through a group
   can be refused, because the group is not itself a member of the organisation.
 
-For such schemas, store the memberships in SpiceDB and keep the default. CI checks, against a real
-SpiceDB, that a banned member of a permitted group is denied by default.
-
-Each group subject set is checked against the whole permission on its own, as SpiceDB checks any
-subject, and the chunk is allowed if the user or any of the groups has the permission. That is
-right for a permission that is a union, like `view = viewer` above, and wrong for one with an
-intersection or an exclusion. Take a document readable only inside its tenant:
+For example, a document readable only inside its tenant:
 
 ```text
 definition organization {
@@ -93,17 +87,17 @@ definition document {
 }
 ```
 
-`group:eng#member` is a viewer, but not a member of the organization, which lists users, so it
-lacks `view`; and `user:alice` is not a viewer, since her membership of `eng` is not in SpiceDB.
-Every document granted to a group is then denied. An exclusion fails the other way: under
-`view = viewer - banned`, the group subject set is not banned, so it has `view`, and a banned user
-in that group keeps reading, whether or not memberships live in SpiceDB.
+With `group_subjects=True` and memberships only in the token, `group:eng#member` is a viewer but not
+a member of the organization, which lists users, so it lacks `view`; and `user:alice` is not a
+viewer, since her membership of `eng` is not in SpiceDB. Every document granted to a group is then
+denied.
 
-With such a schema, either write group memberships into SpiceDB and pass `group_subjects=False`, so
-that SpiceDB evaluates the whole permission for the user; or keep the permission wardowl asks about
-a plain union, as in [the schema above](#the-schema), and apply the other conditions outside
-SpiceDB, such as the tenant with `AllOf(TenantAuthorizer(), SpiceDBAuthorizer(...))`
-([Combining](../combining.md#tenant-isolation)).
+With such a schema, either store the memberships in SpiceDB and keep the default,
+`group_subjects=False`, so that SpiceDB evaluates the whole permission for the user; or keep the
+permission wardowl asks about a plain union, as in [the schema above](#the-schema), and apply the
+other conditions outside SpiceDB, such as the tenant with
+`AllOf(TenantAuthorizer(), SpiceDBAuthorizer(...))` ([Combining](../combining.md#tenant-isolation)).
+CI checks, against a real SpiceDB, that a banned member of a permitted group is denied by default.
 
 ## Checks
 
