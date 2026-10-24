@@ -6,6 +6,13 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-24
+
+The first release named wardowl: until 1.6.0 the project was needtoknow. It adds the Pinecone
+backend and the fixes from the project's own security audit of every module, and it is a major
+release because several of those fixes change behaviour that 1.x code may rely on.
+[Upgrading](https://muzakkirhussain011.github.io/wardowl/upgrading.html) lists what to change.
+
 ### Changed
 
 - **The project is renamed wardowl.** Install it with `pip install wardowl` and import `wardowl`. The
@@ -36,6 +43,11 @@ All notable changes are recorded here. The format follows
 - `PineconeBackend` waits 30 seconds by default (`wait=30.0`, was `None`) for a search to see each
   write, so a revoked permission or a deleted chunk is out of searches when the call returns.
   `wait=None` keeps the old behaviour.
+
+- Haystack: `WardowlRetriever`'s `subject` input also accepts a function returning the `Subject`,
+  called on every run. Because the input accepts any type, a connection to the component by
+  component name alone is ambiguous: name the sockets, as in
+  `pipeline.connect("embedder.embedding", "retriever.query_embedding")`.
 
 ### Added
 
@@ -154,8 +166,10 @@ All notable changes are recorded here. The format follows
   and refuse an `Authorization` header (SpiceDB's `token`, for one) over `http://` unless the url
   names this machine and no proxy applies. Pass `allow_insecure=True` to send it over a network you
   trust. Both raise `ValueError` when the authorizer is created.
-- The HTTP authorizers' `timeout` now bounds a whole call: connecting, sending, every read of the
-  answer, and any retry. It used to apply to each socket operation, so a server that sent its
+- The HTTP authorizers' `timeout` now bounds a whole call except the DNS lookup of the host:
+  connecting to each of its addresses, the TLS handshake, sending, every read of the answer, and any
+  retry. The standard library has no timeout for the lookup, so the system resolver's own settings
+  bound it, and the time it takes counts against `timeout`. It used to apply to each socket operation, so a server that sent its
   answer slowly could hold a retrieval for much longer. Answers larger than the new
   `max_response_bytes` (10 MiB by default) are refused with `AuthorizationError`.
 
@@ -205,6 +219,67 @@ All notable changes are recorded here. The format follows
   Compose), and policy denials are counted by fixed reason codes, so a caller's model name can no
   longer add label values.
 
+- `CedarAuthorizer` no longer leaves out metadata keys that start with `__` or are not strings. A
+  chunk holding `{"__restricted": true}` lost the key, so `forbid ... when { resource has
+  "__restricted" }` never applied and a broad `permit` let the chunk through. Cedar's JSON reserves
+  only `__entity`, `__extn` and `__expr`, for its escapes, so other keys that start with `__` now
+  reach Cedar (with `schema`, declare them like any other attribute). A chunk whose metadata holds
+  a reserved key or a key that is not a string, at any depth, is denied without asking Cedar and
+  counted in the log, like a value Cedar cannot hold; a subject attribute holding one raises
+  `AuthorizationError`. The entity references wardowl writes itself, and the `entities` you pass,
+  are unchanged.
+
+- `PgVectorBackend` writes a float without a fraction with one (`10000000000000000.0`), in lists and
+  nested objects too. `json.dumps` writes every float of magnitude 1e16 or more with an exponent
+  (`1.2345678901234568e+16`), which jsonb stores as an integer, so the value came back as an int and
+  `In("owner", [12345678901234568])` matched it, in SQL and in the retriever's re-check, though
+  `matches` does not. A pandas integer column with a missing value holds such floats. Rows written
+  before keep the integer until they are written again with `add` or `set_metadata`.
+- `FaissBackend` keeps its own copy of each chunk's metadata and returns copies, as
+  `InMemoryBackend` does. `add` kept the caller's `Document`, `set_metadata` a shallow copy of the
+  dict, and `search` returned the stored dict, so
+  `hits[0].metadata["allowed_groups"].append("eng")`, or a change to a dict after passing it in,
+  granted `eng` from the next search.
+- `ChromaBackend.search` drops a hit whose metadata, rebuilt from the JSON copy, the filter does not
+  match. `set_metadata` reads the stored fields and updates them in two calls, so an `add` between
+  them could leave list fields the update did not remove, and the `where` filter matched the chunk
+  on a group its metadata no longer granted.
+- `WeaviateBackend.set_metadata` and `delete` count an object as written by another tool only when
+  it has no string `wardowl_id`, as search results do, not when the id is empty. A chunk stored with
+  the id `""` counted as another tool's, so a call naming its object's UUID as the chunk id changed
+  or removed it.
+- `VespaBackend` refuses the chunk ids `.` and `..` with `ValueError` in `add`, `set_metadata` and
+  `delete`, before sending any request. httpx drops such a path segment, so the request went to
+  another path, where a 404 passed for "not stored": a `delete` or `set_metadata` of `..` changed
+  nothing and returned as if done. Vespa's `/document/v1` refuses these ids percent-encoded too.
+
+- Haystack: a model calling `WardowlRetriever` through `ComponentTool` can no longer choose the
+  subject. `ComponentTool` offered `subject` as a tool parameter, and it passes on every argument a
+  model sends, even one it does not offer, converting it with pydantic, which built a `Subject` from
+  a JSON object. The `subject` input is now typed `Callable[[], Subject] | Any`: `ComponentTool`
+  leaves out an input whose type holds a function, and a value a model sends anyway arrives as
+  JSON, which the component refuses with nothing retrieved. In an agent, give the tool the subject
+  from the agent's state with `inputs_from_state={"subject": "subject"}`. `BoundWardowlRetriever`
+  is unchanged.
+- LlamaIndex's `PermissionNodePostprocessor` returns copies of the nodes it keeps, with only the
+  metadata keys named in the new `metadata_fields`, none by default, in their relationships too, as
+  the retrievers already did. It returned the nodes unchanged, and LlamaIndex's default
+  `MetadataMode.LLM` put `allowed_users`, `allowed_groups` and `tenant` into prompts and traces. The
+  nodes passed in are not changed, and the authorizer still sees all the metadata.
+
+- Example gateway (`examples/gateway`): a request body over `RAMPART_MAX_BODY_BYTES` (1 MiB by
+  default) is refused with 413 before it is parsed or the caller is authenticated, by its
+  `Content-Length` and by the bytes received. Neither the app nor uvicorn set a limit, so a 1 GB
+  POST to `/v1/ask` was read and parsed as JSON before the API key was checked. A principal marked
+  `disabled` is refused with 403 where its key is checked, before its question is masked and
+  scored; only the policy refused it before, after that work. The phone pattern and the "send data
+  out" injection rule, which run before the policy decides, now take linear time (a run of 4,000
+  zeros took most of a second, and `send.to.` repeated over 4,000 characters about a second): a
+  phone number starts only where a number starts, so digits glued to a preceding digit or `+` are
+  no longer read as one, and the rule's address starts only where a run of address characters
+  starts, with at most 64 characters before the `@` and 63 in the domain label. Compose pins
+  every image by digest (`ollama/ollama` was `latest`), and Dependabot keeps those pins current.
+
 ### Fixed
 
 - `max_candidates` bounds every retrieval: a `k` above it raises `ValueError` (pre-filtering searched
@@ -237,6 +312,29 @@ All notable changes are recorded here. The format follows
 - The email pattern in the redaction guide could take quadratic time on a long run of word
   characters and dots; it now starts a match only where such a run starts.
 
+- `OpenFGAAuthorizer` and `SpiceDBAuthorizer` deny, without sending it, a chunk whose resource id
+  the service would refuse: for OpenFGA an id with `:`, `#`, a space or a control character, the id
+  `*`, or one that makes the object (`document:<id>`) longer than 256 characters; for SpiceDB
+  anything but 1 to 1024 letters, digits and `/_|-=+`. One such id used to make the service refuse
+  the whole request, so every retrieval that found that chunk returned nothing, for every user.
+
+- `ElasticsearchBackend` and `OpenSearchBackend` send `allow_partial_search_results=false` with
+  every search, and raise `RuntimeError` for an answer that reports a failed shard
+  (`_shards.failed` above 0) or `timed_out: true`. Such an answer is HTTP 200 and carries only the
+  other shards' hits, which were returned as complete.
+
+- `PermissionedRetriever(audit_key=...)` raises `TypeError` for a key that is not `bytes` or
+  `bytearray`. A string passed the length check, then made every event fail to build: the error was
+  logged, no observer received an event, and retrieval went on unaudited.
+- `RedisCache(signing_key=...)` raises `TypeError` for a key that is not `bytes` or `bytearray`, for
+  the same reason: a string passed the length check, then failed every read and write of the
+  shared cache.
+- A shared-cache entry whose expiry is an integer too large for a float is a miss. `float()` raised
+  `OverflowError`, which escaped the read, so every retrieval for that subject failed.
+- The conformance kit requires `asearch` to refuse, with `ValueError`, every filter `search`
+  refuses. When `search` refused a filter on an odd field name such as `team.name`, the kit skipped
+  `asearch`, so an async path that dropped the filter and returned everything went unseen.
+
 ### Documentation
 
 - The OPA, OpenFGA, SpiceDB and Cerbos pages say what `recheck=False` requires: the filter alone
@@ -245,6 +343,15 @@ All notable changes are recorded here. The format follows
   each field in the shape the policy assumes; the default re-check drops the others as violations.
   `OpenFGAAuthorizer` and `SpiceDBAuthorizer` deny, without asking, a chunk whose resource field is
   not one string.
+
+- The Cassandra page says when a search falls back to one ANN query filtered in the process (a
+  filter that needs more than `max_queries` ANDs, such as a subject in more than 254 groups at the
+  default), that the search can then return fewer than `k` hits, or none, though more chunks match,
+  with nothing in the result saying so, and how to avoid it: raise `max_queries`, send fewer groups,
+  or put a term every match needs, such as a tenant, in the filter.
+- The Cassandra page says the vector index is approximate, so a search can now and then return
+  fewer than `k` hits when more match, and the conformance tests check Cassandra as an approximate
+  index. The filter stays exact.
 
 ## [1.6.0] - 2026-10-23
 
@@ -941,7 +1048,8 @@ needed, in which case it will be announced in a second release candidate. Instal
 - The project is now `wardowl`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.6.0...v2.0.0
 [1.6.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.3.3...v1.4.0
