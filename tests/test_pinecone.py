@@ -10,6 +10,7 @@ import uuid
 import pytest
 
 from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends import NothingMatches
 from wardowl.backends._engines import tag
 from wardowl.backends.pinecone import TERMS_FIELD, PineconeBackend, filter_to_pinecone, record_id
 from wardowl.testing import QUERY, HashingEmbedder, check_backend

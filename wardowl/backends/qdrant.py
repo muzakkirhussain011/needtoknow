@@ -104,14 +104,14 @@ def _addressed(ids: Sequence[str]) -> models.Filter:
     is that id, and the point named by an id in canonical UUID form that has no `wardowl_id`."""
     from qdrant_client import models
 
-    points: list[int | str] = [point_id(i) for i in ids]
+    points: list[Any] = [point_id(i) for i in ids]  # qdrant also takes UUIDs here
     own = models.Filter(
         must=[
             models.HasIdCondition(has_id=points),
             models.FieldCondition(key=ID_KEY, match=models.MatchAny(any=list(ids))),
         ]
     )
-    foreign: list[int | str] = [i for i in ids if canonical_uuid(i)]
+    foreign: list[Any] = [i for i in ids if canonical_uuid(i)]
     if not foreign:
         return own
     written_elsewhere = models.Filter(
