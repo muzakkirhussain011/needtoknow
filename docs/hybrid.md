@@ -6,8 +6,8 @@ finds meaning that shares no words with the query. Most production RAG combines 
 searches several backends with the same permission filter and fuses their rankings.
 
 ```python
-from needtoknow import PermissionedRetriever, RankFusion
-from needtoknow.backends.elasticsearch import ElasticsearchBackend
+from wardowl import PermissionedRetriever, RankFusion
+from wardowl.backends.elasticsearch import ElasticsearchBackend
 
 vector = ElasticsearchBackend(client, "docs", embed)  # kNN search
 keyword = ElasticsearchBackend(client, "docs", None, mode="keyword")  # BM25 on the same index
@@ -38,7 +38,7 @@ needs no embedding function and runs under the same permission filter as the vec
 - **PostgreSQL + pgvector:** PostgreSQL full-text search, so one table serves both searches:
 
 ```python
-from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
 create_schema(pool, dim=768, text_search="english")  # adds the full-text index
 vector = PgVectorBackend(pool, embed)
@@ -76,6 +76,6 @@ score(chunk) = sum over backends that returned it of  weight / (rank_constant + 
 - Filters are used only when every backend supports them; otherwise the retriever post-filters the
   fused results, checking each candidate.
 - A chunk that two backends return with **different metadata** is left out and logged on the
-  `needtoknow` logger. That happens when one index has not caught up with a permission change: the
+  `wardowl` logger. That happens when one index has not caught up with a permission change: the
   chunk's permissions are uncertain, so it is not returned with whichever version came first.
   Monitor the warning; it means your indexes have drifted apart.

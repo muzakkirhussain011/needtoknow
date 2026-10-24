@@ -5,14 +5,14 @@ Indexes (SAI). `CassandraBackend` puts the permission filter in the `WHERE` clau
 query, as bound parameters, so Cassandra applies it inside the search.
 
 ```bash
-pip install "needtoknow[cassandra]"
+pip install "wardowl[cassandra]"
 ```
 
 ```python
 from cassandra.cluster import Cluster
 
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever
-from needtoknow.backends.cassandra import CassandraBackend, create_table
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever
+from wardowl.backends.cassandra import CassandraBackend, create_table
 
 session = Cluster(["cassandra.internal"]).connect()
 create_table(session, "rag", "chunks", dim=768)  # the table and its two SAI indexes, if missing
@@ -25,9 +25,9 @@ retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 ## How filtering works
 
 Each row stores a tagged term for every string or integer in the chunk's metadata (the field name,
-the value's type and the value) in the indexed `set<text>` column `needtoknow_terms`, and the
+the value's type and the value) in the indexed `set<text>` column `wardowl_terms`, and the
 metadata itself as JSON, returned exactly as written. A filter is rewritten as an OR of ANDs. Each
-AND becomes one ANN query whose `WHERE` requires its terms with `needtoknow_terms CONTAINS ?`; the
+AND becomes one ANN query whose `WHERE` requires its terms with `wardowl_terms CONTAINS ?`; the
 queries run concurrently and the best `k` hits of their union are returned. A subject in the groups
 `eng` and `sales` costs two ANN queries.
 

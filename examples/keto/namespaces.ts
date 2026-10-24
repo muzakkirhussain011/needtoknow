@@ -1,4 +1,4 @@
-// Ory Keto namespaces for needtoknow's tests and the KetoAuthorizer guide: a document's `view`
+// Ory Keto namespaces for wardowl's tests and the KetoAuthorizer guide: a document's `view`
 // relation holds users and the members of groups.
 import { Namespace, SubjectSet } from "@ory/keto-namespace-types"
 

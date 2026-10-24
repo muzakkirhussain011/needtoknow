@@ -12,7 +12,7 @@ import pytest
 qdrant_client = pytest.importorskip("qdrant_client")
 from qdrant_client import models  # noqa: E402
 
-from needtoknow import (  # noqa: E402
+from wardowl import (  # noqa: E402
     And,
     Document,
     In,
@@ -23,7 +23,7 @@ from needtoknow import (  # noqa: E402
     RankFusion,
     Subject,
 )
-from needtoknow.backends.qdrant import (  # noqa: E402
+from wardowl.backends.qdrant import (  # noqa: E402
     ID_KEY,
     QdrantBackend,
     bm25_terms,
@@ -31,11 +31,11 @@ from needtoknow.backends.qdrant import (  # noqa: E402
     filter_to_qdrant,
     point_id,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend  # noqa: E402
+from wardowl.testing import QUERY, HashingEmbedder, check_backend  # noqa: E402
 
 EMBED = HashingEmbedder()
-URL = os.environ.get("NEEDTOKNOW_TEST_QDRANT_URL")
-needs_server = pytest.mark.skipif(not URL, reason="set NEEDTOKNOW_TEST_QDRANT_URL to run against a Qdrant server")
+URL = os.environ.get("WARDOWL_TEST_QDRANT_URL")
+needs_server = pytest.mark.skipif(not URL, reason="set WARDOWL_TEST_QDRANT_URL to run against a Qdrant server")
 
 
 def _factory(client, *, own_vectors=False):
@@ -122,7 +122,7 @@ def test_points_written_by_langchain_are_searchable_and_carry_their_permissions(
     )
     backend = QdrantBackend(client, "lc", EMBED)
     hits = PermissionedRetriever(backend, MetadataACLAuthorizer()).retrieve("leave", Subject("ann", ["hr"]), k=5).hits
-    # The point id stands in for a needtoknow id; the point without metadata is readable by nobody.
+    # The point id stands in for a wardowl id; the point without metadata is readable by nobody.
     assert [(h.id, h.text) for h in hits] == [(point, "leave policy")]
 
 
@@ -225,7 +225,7 @@ def test_mode_is_checked():
 def any_client(request):
     if request.param == "server":
         if not URL:
-            pytest.skip("set NEEDTOKNOW_TEST_QDRANT_URL to run against a Qdrant server")
+            pytest.skip("set WARDOWL_TEST_QDRANT_URL to run against a Qdrant server")
         return qdrant_client.QdrantClient(url=URL)
     return qdrant_client.QdrantClient(":memory:")
 

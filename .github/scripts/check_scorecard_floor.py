@@ -56,7 +56,7 @@ def compare(floors: dict[str, int], checks: list[dict[str, Any]]) -> list[str]:
 
 
 def main() -> int:
-    repo = os.environ.get("GITHUB_REPOSITORY", "muzakkirhussain011/needtoknow")
+    repo = os.environ.get("GITHUB_REPOSITORY", "muzakkirhussain011/wardowl")
     result = published(repo, os.environ.get("SCORECARD_COMMIT") or None)
     errors = compare(json.loads(FLOORS.read_text(encoding="utf-8")), result["checks"])
     for error in errors:

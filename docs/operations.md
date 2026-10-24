@@ -1,11 +1,11 @@
 # Operations
 
-Running needtoknow in production: fewer calls to the permission service, an audit trail, traces,
+Running wardowl in production: fewer calls to the permission service, an audit trail, traces,
 metrics, and the signals worth alerting on.
 
 ```python
-from needtoknow import CachingAuthorizer, JsonLinesAudit, PermissionedRetriever
-from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "needtoknow[otel]"
+from wardowl import CachingAuthorizer, JsonLinesAudit, PermissionedRetriever
+from wardowl.otel import OpenTelemetryMetrics, OpenTelemetryObserver  # pip install "wardowl[otel]"
 
 retriever = PermissionedRetriever(
     backend,
@@ -21,7 +21,7 @@ A remote permission service (OPA, OpenFGA) adds a network round trip to every re
 `CachingAuthorizer` wraps any authorizer and remembers its answers.
 
 ```python
-from needtoknow import CachingAuthorizer
+from wardowl import CachingAuthorizer
 
 authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 ```
@@ -52,13 +52,13 @@ them.
 ### Sharing the cache across processes
 
 With many replicas, each one's cache asks the permission service separately, and `invalidate()`
-only clears the replica it runs in. Give them a shared cache (`pip install "needtoknow[redis]"`):
+only clears the replica it runs in. Give them a shared cache (`pip install "wardowl[redis]"`):
 
 ```python
 import redis
 
-from needtoknow import CachingAuthorizer
-from needtoknow.caching import RedisCache
+from wardowl import CachingAuthorizer
+from wardowl.caching import RedisCache
 
 shared = RedisCache(redis.Redis.from_url(REDIS_URL), signing_key=CACHE_SIGNING_KEY)
 authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
@@ -99,7 +99,7 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
   without a valid signature is ignored.
 
 Another store works too: pass any object with `get_many`, `set_many` and `delete_prefix`
-(`needtoknow.caching.SharedCache`).
+(`wardowl.caching.SharedCache`).
 
 ## Changing a document's permissions
 
@@ -148,11 +148,11 @@ retrieval:
 ```python
 import ssl
 
-from needtoknow.authorizers import CircuitBreaker
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
+from wardowl.authorizers import CircuitBreaker
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
 
 tls = ssl.create_default_context(cafile="/etc/ssl/internal-ca.pem")
-tls.load_cert_chain("/etc/needtoknow/client.pem", "/etc/needtoknow/client.key")
+tls.load_cert_chain("/etc/wardowl/client.pem", "/etc/wardowl/client.key")
 
 authorizer = OpenFGAAuthorizer(
     "https://openfga.internal:8443",
@@ -223,31 +223,31 @@ flushes after each event:
 {"action":"read","authorize_ms":0.18,"complete":true,"denied":0,"duration_ms":4.21,"error":null,"examined":2,"k":5,"query_hmac":"9f2c...","rerank_ms":0.0,"reranked":0,"returned_ids":["handbook","policy-7"],"search_ms":3.87,"searches":1,"started_at":1792152000.12,"strategy":"prefilter","subject_id":"bob","violations":0}
 ```
 
-An observer that raises is logged on the `needtoknow` logger and never changes what retrieval
+An observer that raises is logged on the `wardowl` logger and never changes what retrieval
 returns or raises.
 
 ## Tracing
 
-`OpenTelemetryObserver` records each retrieval as a span named `needtoknow.retrieve`, timed from
+`OpenTelemetryObserver` records each retrieval as a span named `wardowl.retrieve`, timed from
 the call and parented to the span that was current when it ran.
 
 | Attribute | Value |
 |---|---|
 | `gen_ai.operation.name` | `retrieval` |
-| `gen_ai.retrieval.top_k`, `needtoknow.k` | The `k` requested |
-| `needtoknow.action` | As requested |
-| `needtoknow.strategy` | The strategy that ran |
-| `needtoknow.returned`, `needtoknow.examined`, `needtoknow.denied`, `needtoknow.violations` | Counts |
-| `needtoknow.complete` | As `RetrievalResult.complete` |
-| `needtoknow.searches`, `needtoknow.search.duration_ms`, `needtoknow.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
-| `needtoknow.reranked`, `needtoknow.rerank.duration_ms` | Chunks reranked and the reranker's time, on reranked retrievals only |
-| `error.type`, `needtoknow.error` | The exception type; the span status is then ERROR |
-| `needtoknow.error.cause` | The type of the exception behind it, as `RetrievalEvent.cause` |
-| `needtoknow.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
+| `gen_ai.retrieval.top_k`, `wardowl.k` | The `k` requested |
+| `wardowl.action` | As requested |
+| `wardowl.strategy` | The strategy that ran |
+| `wardowl.returned`, `wardowl.examined`, `wardowl.denied`, `wardowl.violations` | Counts |
+| `wardowl.complete` | As `RetrievalResult.complete` |
+| `wardowl.searches`, `wardowl.search.duration_ms`, `wardowl.authorize.duration_ms` | Backend searches made, and the time spent in the backend and in the authorizer |
+| `wardowl.reranked`, `wardowl.rerank.duration_ms` | Chunks reranked and the reranker's time, on reranked retrievals only |
+| `error.type`, `wardowl.error` | The exception type; the span status is then ERROR |
+| `wardowl.error.cause` | The type of the exception behind it, as `RetrievalEvent.cause` |
+| `wardowl.subject.id` | Only with `OpenTelemetryObserver(record_subject=True)` |
 
 The `gen_ai.*` and `error.type` attributes are the ones OpenTelemetry's GenAI semantic conventions
 define for retrieval. Those conventions were still at Development status in October 2026 and may
-change, so everything else uses the `needtoknow.` prefix, and the span keeps its name. It needs only
+change, so everything else uses the `wardowl.` prefix, and the span keeps its name. It needs only
 `opentelemetry-api`; your application configures the SDK and exporter as usual.
 
 ## Metrics
@@ -255,7 +255,7 @@ change, so everything else uses the `needtoknow.` prefix, and the span keeps its
 `OpenTelemetryMetrics` turns the same events into metrics for dashboards and alerts:
 
 ```python
-from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver
+from wardowl.otel import OpenTelemetryMetrics, OpenTelemetryObserver
 
 observers = [OpenTelemetryObserver(), OpenTelemetryMetrics()]
 retriever = PermissionedRetriever(backend, authorizer, observers=observers)
@@ -264,14 +264,14 @@ retriever = PermissionedRetriever(backend, authorizer, observers=observers)
 | Instrument | Type, unit | What it measures |
 |---|---|---|
 | `gen_ai.client.operation.duration` | Histogram, s | Each retrieval, with `gen_ai.operation.name = "retrieval"`, as the GenAI conventions define it |
-| `needtoknow.retrievals` | Counter | Retrievals by `needtoknow.outcome`: `complete`, `incomplete` or `error` |
-| `needtoknow.search.duration` | Histogram, s | Time spent in the backend during one retrieval |
-| `needtoknow.authorize.duration` | Histogram, s | Time spent in the authorizer during one retrieval |
-| `needtoknow.rerank.duration` | Histogram, s | Time spent in the reranker, on reranked retrievals only |
-| `needtoknow.chunks.returned`, `.examined`, `.denied` | Counters | Chunks returned, checked by the authorizer, and withheld |
-| `needtoknow.violations` | Counter | Pre-filtered chunks the re-check rejected |
+| `wardowl.retrievals` | Counter | Retrievals by `wardowl.outcome`: `complete`, `incomplete` or `error` |
+| `wardowl.search.duration` | Histogram, s | Time spent in the backend during one retrieval |
+| `wardowl.authorize.duration` | Histogram, s | Time spent in the authorizer during one retrieval |
+| `wardowl.rerank.duration` | Histogram, s | Time spent in the reranker, on reranked retrievals only |
+| `wardowl.chunks.returned`, `.examined`, `.denied` | Counters | Chunks returned, checked by the authorizer, and withheld |
+| `wardowl.violations` | Counter | Pre-filtered chunks the re-check rejected |
 
-Every instrument is broken down by `needtoknow.action` and `needtoknow.strategy`, plus the outcome
+Every instrument is broken down by `wardowl.action` and `wardowl.strategy`, plus the outcome
 and `error.type` where they apply. Each has a handful of values, so the number of time series stays
 small however many users you have. Subjects, queries and chunks are never recorded; per-subject
 questions belong to the audit log. The duration histogram uses the bucket boundaries the
@@ -283,13 +283,13 @@ either.
 
 | Signal | Metric | Why |
 |---|---|---|
-| Any violation | `needtoknow.violations` increases | The backend returned chunks outside the filter. Nothing leaked, because the re-check caught them, but the backend or its translation has a bug. |
-| Authorization failures | `needtoknow.retrievals` with `error.type = AuthorizationError` | The permission service is failing. Users are getting errors, which is the safe outcome, but it is an outage. |
-| Incomplete results | Share of `needtoknow.outcome = incomplete` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
-| Slow permission checks | `needtoknow.authorize.duration` p99 | The permission service, or the network to it, is slowing retrieval down. `CachingAuthorizer` helps. |
+| Any violation | `wardowl.violations` increases | The backend returned chunks outside the filter. Nothing leaked, because the re-check caught them, but the backend or its translation has a bug. |
+| Authorization failures | `wardowl.retrievals` with `error.type = AuthorizationError` | The permission service is failing. Users are getting errors, which is the safe outcome, but it is an outage. |
+| Incomplete results | Share of `wardowl.outcome = incomplete` | Post-filtering is hitting `max_candidates`. Raise it, or move to pre-filtering. |
+| Slow permission checks | `wardowl.authorize.duration` p99 | The permission service, or the network to it, is slowing retrieval down. `CachingAuthorizer` helps. |
 | Probing | `denied` per call, by subject, in the audit log | Unusually high values can mean a user is probing for documents they may not read. |
-| Which part is failing | `error.type = AuthorizationError` by `RetrievalEvent.cause` (or the span's `needtoknow.error.cause`) | `TimeoutError` points at a slow permission service, `ConnectionRefusedError` and other `OSError`s at one that cannot be reached, and no cause at an error status (HTTP 503) or an answer in the wrong shape. |
-| Shared cache failing | `CachingAuthorizer.stats().shared_failures` rising, or `needtoknow shared cache` warnings in the log | Every replica is asking the permission service directly; answers stay correct, but load and latency rise. |
+| Which part is failing | `error.type = AuthorizationError` by `RetrievalEvent.cause` (or the span's `wardowl.error.cause`) | `TimeoutError` points at a slow permission service, `ConnectionRefusedError` and other `OSError`s at one that cannot be reached, and no cause at an error status (HTTP 503) or an answer in the wrong shape. |
+| Shared cache failing | `CachingAuthorizer.stats().shared_failures` rising, or `wardowl shared cache` warnings in the log | Every replica is asking the permission service directly; answers stay correct, but load and latency rise. |
 | Cache not helping | Hit rate, `(hits + shared_hits) / (hits + shared_hits + misses)`, falling | `ttl` too short for the traffic, `maxsize` too small, or subjects whose groups or attributes change on every request (each change is a new cache key). |
 | Paused permission service | `CircuitBreaker.is_open` | Requests are being refused without calling the service, for `reset_after` seconds. |
 

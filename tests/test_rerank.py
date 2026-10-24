@@ -7,7 +7,7 @@ import math
 
 import pytest
 
-from needtoknow import (
+from wardowl import (
     Document,
     FunctionAuthorizer,
     Hit,
@@ -197,7 +197,7 @@ def test_opentelemetry_records_rerank_time_only_for_reranked_retrievals():
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-    from needtoknow.otel import OpenTelemetryMetrics, OpenTelemetryObserver
+    from wardowl.otel import OpenTelemetryMetrics, OpenTelemetryObserver
 
     reader, exporter = InMemoryMetricReader(), InMemorySpanExporter()
     tracer_provider = TracerProvider()
@@ -218,7 +218,7 @@ def test_opentelemetry_records_rerank_time_only_for_reranked_retrievals():
         for scope in resource.scope_metrics:
             for metric in scope.metrics:
                 points[metric.name] = list(metric.data.data_points)
-    assert sum(p.count for p in points["needtoknow.rerank.duration"]) == 1
+    assert sum(p.count for p in points["wardowl.rerank.duration"]) == 1
     plain, reranked = exporter.get_finished_spans()
-    assert "needtoknow.reranked" not in plain.attributes
-    assert reranked.attributes["needtoknow.reranked"] == 3
+    assert "wardowl.reranked" not in plain.attributes
+    assert reranked.attributes["wardowl.reranked"] == 3

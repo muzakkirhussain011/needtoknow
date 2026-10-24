@@ -3600,168 +3600,6 @@ wheels = [
 ]
 
 [[package]]
-name = "needtoknow"
-source = { editable = "." }
-default-groups = []
-
-[package.optional-dependencies]
-casbin = [
-    { name = "casbin" },
-]
-cassandra = [
-    { name = "cassandra-driver" },
-]
-cedar = [
-    { name = "cedarpy" },
-]
-chroma = [
-    { name = "chromadb" },
-]
-dev = [
-    { name = "hypothesis" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-docs = [
-    { name = "myst-parser", marker = "python_full_version >= '3.12'" },
-    { name = "shibuya", marker = "python_full_version >= '3.12'" },
-    { name = "sphinx", marker = "python_full_version >= '3.12'" },
-    { name = "sphinx-copybutton", marker = "python_full_version >= '3.12'" },
-    { name = "sphinx-design", marker = "python_full_version >= '3.12'" },
-]
-elasticsearch = [
-    { name = "elasticsearch" },
-]
-faiss = [
-    { name = "faiss-cpu" },
-]
-haystack = [
-    { name = "haystack-ai" },
-]
-lancedb = [
-    { name = "lancedb" },
-]
-langchain = [
-    { name = "langchain-core" },
-]
-llamaindex = [
-    { name = "llama-index-core" },
-]
-mcp = [
-    { name = "mcp" },
-]
-milvus = [
-    { name = "pymilvus" },
-]
-mongodb = [
-    { name = "pymongo" },
-]
-opensearch = [
-    { name = "opensearch-py" },
-]
-otel = [
-    { name = "opentelemetry-api" },
-]
-pgvector = [
-    { name = "psycopg", extra = ["binary", "pool"] },
-]
-pinecone = [
-    { name = "httpx" },
-]
-qdrant = [
-    { name = "qdrant-client" },
-]
-redis = [
-    { name = "redis" },
-]
-server = [
-    { name = "fastapi" },
-    { name = "pyjwt", extra = ["crypto"] },
-]
-vespa = [
-    { name = "httpx" },
-]
-weaviate = [
-    { name = "weaviate-client" },
-]
-
-[package.dev-dependencies]
-examples = [
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "pyjwt" },
-]
-integration = [
-    { name = "elasticsearch", extra = ["async"] },
-    { name = "opensearch-py", extra = ["async"] },
-    { name = "opentelemetry-sdk" },
-    { name = "pgvector" },
-]
-release = [
-    { name = "cyclonedx-bom" },
-    { name = "sigstore" },
-    { name = "twine" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "casbin", marker = "extra == 'casbin'", specifier = ">=1.43" },
-    { name = "cassandra-driver", marker = "extra == 'cassandra'", specifier = ">=3.29" },
-    { name = "cedarpy", marker = "extra == 'cedar'", specifier = ">=4.12" },
-    { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=1.5" },
-    { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.12" },
-    { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.15" },
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
-    { name = "haystack-ai", marker = "extra == 'haystack'", specifier = ">=2.12" },
-    { name = "httpx", marker = "extra == 'pinecone'", specifier = ">=0.27" },
-    { name = "httpx", marker = "extra == 'vespa'", specifier = ">=0.27" },
-    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
-    { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.40" },
-    { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=1.0" },
-    { name = "llama-index-core", marker = "extra == 'llamaindex'", specifier = ">=0.12" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.0" },
-    { name = "myst-parser", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=5.1" },
-    { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.4" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.30" },
-    { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'pgvector'", specifier = ">=3.2" },
-    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'server'", specifier = ">=2.10" },
-    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6" },
-    { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.13" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
-    { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.15" },
-    { name = "redis", marker = "extra == 'redis'", specifier = ">=5" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.1" },
-    { name = "shibuya", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=2026.7.12" },
-    { name = "sphinx", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=9.1" },
-    { name = "sphinx-copybutton", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.5.2" },
-    { name = "sphinx-design", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.7" },
-    { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.16" },
-]
-provides-extras = ["casbin", "cassandra", "cedar", "chroma", "dev", "docs", "elasticsearch", "faiss", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "pinecone", "qdrant", "redis", "server", "vespa", "weaviate"]
-
-[package.metadata.requires-dev]
-examples = [
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pyjwt", specifier = ">=2.9" },
-]
-integration = [
-    { name = "elasticsearch", extras = ["async"], specifier = ">=8.12" },
-    { name = "opensearch-py", extras = ["async"], specifier = ">=2.4" },
-    { name = "opentelemetry-sdk", specifier = ">=1.30" },
-    { name = "pgvector", specifier = ">=0.3" },
-]
-release = [
-    { name = "cyclonedx-bom", specifier = "==7.5.0" },
-    { name = "sigstore", specifier = "==4.5.0" },
-    { name = "twine", specifier = "==7.0.0" },
-]
-
-[[package]]
 name = "nest-asyncio"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -6850,6 +6688,168 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7b/3f/4fe7905f73ba0e768baa102a09ba9458f2f0bb4a676102e1fd7a3cb55c2b/validators-0.36.0.tar.gz", hash = "sha256:92ad9ed00bbed320b784cec0ea90b213cf08904cf605b3d0852cfa4108e32a2c", size = 79234, upload-time = "2026-10-11T11:01:31.682Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d5/ce/fc5090ea3789bdfd22e90f2515b237194c5dacfc8f26d2082a0b50b2ca86/validators-0.36.0-py3-none-any.whl", hash = "sha256:c52ad00435e385b95fa4d6dd3081cb20c0660e7fd07b214523c8584dd2edba34", size = 46040, upload-time = "2026-10-11T11:01:30.269Z" },
+]
+
+[[package]]
+name = "wardowl"
+source = { editable = "." }
+default-groups = []
+
+[package.optional-dependencies]
+casbin = [
+    { name = "casbin" },
+]
+cassandra = [
+    { name = "cassandra-driver" },
+]
+cedar = [
+    { name = "cedarpy" },
+]
+chroma = [
+    { name = "chromadb" },
+]
+dev = [
+    { name = "hypothesis" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "myst-parser", marker = "python_full_version >= '3.12'" },
+    { name = "shibuya", marker = "python_full_version >= '3.12'" },
+    { name = "sphinx", marker = "python_full_version >= '3.12'" },
+    { name = "sphinx-copybutton", marker = "python_full_version >= '3.12'" },
+    { name = "sphinx-design", marker = "python_full_version >= '3.12'" },
+]
+elasticsearch = [
+    { name = "elasticsearch" },
+]
+faiss = [
+    { name = "faiss-cpu" },
+]
+haystack = [
+    { name = "haystack-ai" },
+]
+lancedb = [
+    { name = "lancedb" },
+]
+langchain = [
+    { name = "langchain-core" },
+]
+llamaindex = [
+    { name = "llama-index-core" },
+]
+mcp = [
+    { name = "mcp" },
+]
+milvus = [
+    { name = "pymilvus" },
+]
+mongodb = [
+    { name = "pymongo" },
+]
+opensearch = [
+    { name = "opensearch-py" },
+]
+otel = [
+    { name = "opentelemetry-api" },
+]
+pgvector = [
+    { name = "psycopg", extra = ["binary", "pool"] },
+]
+pinecone = [
+    { name = "httpx" },
+]
+qdrant = [
+    { name = "qdrant-client" },
+]
+redis = [
+    { name = "redis" },
+]
+server = [
+    { name = "fastapi" },
+    { name = "pyjwt", extra = ["crypto"] },
+]
+vespa = [
+    { name = "httpx" },
+]
+weaviate = [
+    { name = "weaviate-client" },
+]
+
+[package.dev-dependencies]
+examples = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pyjwt" },
+]
+integration = [
+    { name = "elasticsearch", extra = ["async"] },
+    { name = "opensearch-py", extra = ["async"] },
+    { name = "opentelemetry-sdk" },
+    { name = "pgvector" },
+]
+release = [
+    { name = "cyclonedx-bom" },
+    { name = "sigstore" },
+    { name = "twine" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "casbin", marker = "extra == 'casbin'", specifier = ">=1.43" },
+    { name = "cassandra-driver", marker = "extra == 'cassandra'", specifier = ">=3.29" },
+    { name = "cedarpy", marker = "extra == 'cedar'", specifier = ">=4.12" },
+    { name = "chromadb", marker = "extra == 'chroma'", specifier = ">=1.5" },
+    { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8.12" },
+    { name = "faiss-cpu", marker = "extra == 'faiss'", specifier = ">=1.15" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115" },
+    { name = "haystack-ai", marker = "extra == 'haystack'", specifier = ">=2.12" },
+    { name = "httpx", marker = "extra == 'pinecone'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'vespa'", specifier = ">=0.27" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
+    { name = "lancedb", marker = "extra == 'lancedb'", specifier = ">=0.40" },
+    { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=1.0" },
+    { name = "llama-index-core", marker = "extra == 'llamaindex'", specifier = ">=0.12" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=2.3" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.0" },
+    { name = "myst-parser", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=5.1" },
+    { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.4" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.30" },
+    { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'pgvector'", specifier = ">=3.2" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'server'", specifier = ">=2.10" },
+    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6" },
+    { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.13" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
+    { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.15" },
+    { name = "redis", marker = "extra == 'redis'", specifier = ">=5" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.17.1" },
+    { name = "shibuya", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=2026.7.12" },
+    { name = "sphinx", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=9.1" },
+    { name = "sphinx-copybutton", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.5.2" },
+    { name = "sphinx-design", marker = "python_full_version >= '3.12' and extra == 'docs'", specifier = ">=0.7" },
+    { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.16" },
+]
+provides-extras = ["casbin", "cassandra", "cedar", "chroma", "dev", "docs", "elasticsearch", "faiss", "haystack", "lancedb", "langchain", "llamaindex", "mcp", "milvus", "mongodb", "opensearch", "otel", "pgvector", "pinecone", "qdrant", "redis", "server", "vespa", "weaviate"]
+
+[package.metadata.requires-dev]
+examples = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pyjwt", specifier = ">=2.9" },
+]
+integration = [
+    { name = "elasticsearch", extras = ["async"], specifier = ">=8.12" },
+    { name = "opensearch-py", extras = ["async"], specifier = ">=2.4" },
+    { name = "opentelemetry-sdk", specifier = ">=1.30" },
+    { name = "pgvector", specifier = ">=0.3" },
+]
+release = [
+    { name = "cyclonedx-bom", specifier = "==7.5.0" },
+    { name = "sigstore", specifier = "==4.5.0" },
+    { name = "twine", specifier = "==7.0.0" },
 ]
 
 [[package]]

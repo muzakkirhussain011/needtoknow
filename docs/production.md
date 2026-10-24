@@ -1,6 +1,6 @@
 # Production checklist
 
-What to settle before needtoknow serves real users, and what happens when each part of the system
+What to settle before wardowl serves real users, and what happens when each part of the system
 fails. Each item links to the page with the details.
 
 ## Before launch
@@ -25,7 +25,7 @@ fails. Each item links to the page with the details.
   `create_collection` (Qdrant, Milvus) and `create_index` (Elasticsearch, OpenSearch) create the
   indexes; Chroma needs no setup. ([Integrations](integrations/index.md))
 - [ ] Your own backend or authorizer, if you wrote one, passes the conformance kit.
-  ([Extending needtoknow](extending.md#test-it-with-the-conformance-kit))
+  ([Extending wardowl](extending.md#test-it-with-the-conformance-kit))
 
 **Retrieval settings**
 
@@ -57,14 +57,14 @@ fails. Each item links to the page with the details.
   `audit_key` from your secret store if you want query fingerprints. ([Operations](operations.md#audit-events))
 - [ ] `OpenTelemetryMetrics` and `OpenTelemetryObserver` are installed, and the alerts in
   [What to alert on](operations.md#what-to-alert-on) are set up, starting with any increase in
-  `needtoknow.violations`.
+  `wardowl.violations`.
 - [ ] `examined`, `denied` and timings stay in logs and metrics and are never shown to end users;
   they can hint that forbidden documents exist. ([Security model](security.md#what-it-does-not-do))
 
 **Supply chain and capacity**
 
 - [ ] The version is pinned, and the release's signatures are verified as
-  [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md#verifying-a-release)
+  [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md#verifying-a-release)
   describes.
 - [ ] Capacity is measured on your own data with the load harness in `benchmarks/`
   ([Benchmarks](benchmarks.md#reproduce-it)). In ours, over a million chunks, one 4-CPU machine
@@ -72,24 +72,24 @@ fails. Each item links to the page with the details.
 
 ## When something fails
 
-needtoknow fails closed: whenever it cannot be sure what a subject may read, it returns nothing and
+wardowl fails closed: whenever it cannot be sure what a subject may read, it returns nothing and
 says why. The table shows what each failure looks like.
 
-| What fails | What needtoknow does | What you see |
+| What fails | What wardowl does | What you see |
 |---|---|---|
-| The permission service is down, slow or erroring | Raises `AuthorizationError` after the timeout and retries; with a circuit breaker open, at once | `needtoknow.retrievals` with `error.type = AuthorizationError`; no results reach the model |
+| The permission service is down, slow or erroring | Raises `AuthorizationError` after the timeout and retries; with a circuit breaker open, at once | `wardowl.retrievals` with `error.type = AuthorizationError`; no results reach the model |
 | The permission service gives a malformed answer (wrong count, non-booleans, not a filter) | Raises `AuthorizationError`; never caches the answer | As above |
 | The vector store is down | Raises the store client's own error; nothing is returned | `error.type` names that error |
-| The vector store ignores or mistranslates the filter | The re-check drops every chunk outside it | `violations > 0` on the result, the event and the `needtoknow.violations` metric |
-| Post-filtering cannot find `k` readable chunks within `max_candidates` | Returns what it found | `complete = False`; `needtoknow.outcome = incomplete` |
+| The vector store ignores or mistranslates the filter | The re-check drops every chunk outside it | `violations > 0` on the result, the event and the `wardowl.violations` metric |
+| Post-filtering cannot find `k` readable chunks within `max_candidates` | Returns what it found | `complete = False`; `wardowl.outcome = incomplete` |
 | A subject has no tenant under `TenantAuthorizer` | Raises `AuthorizationError` | As for a failing authorizer |
-| The shared cache (Redis) is down or slow | Treats it as a miss and asks the permission service | A warning on the `needtoknow` logger; higher `needtoknow.authorize.duration` |
+| The shared cache (Redis) is down or slow | Treats it as a miss and asks the permission service | A warning on the `wardowl` logger; higher `wardowl.authorize.duration` |
 | A shared-cache entry is unsigned, tampered with or copied under another key | Ignores it (with `signing_key`) | Nothing: it is a miss |
 | `invalidate()` cannot reach Redis | Raises, because the caller asked for a revocation now | The exception at the caller |
-| An observer raises | Logs it; retrieval is unaffected | An error on the `needtoknow` logger |
+| An observer raises | Logs it; retrieval is unaffected | An error on the `wardowl` logger |
 
 What to do about each, containment first, is in the [incident runbook](runbook.md).
 
-What needtoknow does not protect against is listed in the
+What wardowl does not protect against is listed in the
 [security model](security.md#what-it-does-not-do): output control, prompt injection inside readable
 chunks, and the side channels above.

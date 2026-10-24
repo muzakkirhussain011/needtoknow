@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from hypothesis import strategies as st
 
-from needtoknow import And, Document, Filter, Hit, In, InMemoryBackend, Or, Subject, matches, testing
+from wardowl import And, Document, Filter, Hit, In, InMemoryBackend, Or, Subject, matches, testing
 
 USERS = ["alice", "bob", "carol", "dave", "erin"]
 GROUPS = ["eng", "hr", "sales", "finance", "legal"]
@@ -58,7 +58,7 @@ HashingEmbedder = testing.HashingEmbedder  # the public test embedder; the tests
 
 
 # ---- conformance: random metadata and filters ------------------------------------------------
-# Every backend must return exactly the documents `needtoknow.filters.matches` says match.
+# Every backend must return exactly the documents `wardowl.filters.matches` says match.
 
 FIELDS = ["team", "level", "allowed_users", "allowed_groups", "tags"]
 VALUES = ["a", "b", "c", 1, 2]

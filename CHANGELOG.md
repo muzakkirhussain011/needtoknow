@@ -6,6 +6,17 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The project is renamed wardowl.** Install it with `pip install wardowl` and import `wardowl`. The
+  repository and the documentation moved to `github.com/muzakkirhussain011/wardowl` and
+  `muzakkirhussain011.github.io/wardowl` (the old addresses redirect). Everything named after the
+  project changes with it: classes (`NeedToKnowRetriever` is now `WardowlRetriever`), environment
+  variables (`NEEDTOKNOW_*` is now `WARDOWL_*`), the default cache namespace and metric names, and the
+  field names the backends store (`needtoknow_terms`, `needtoknow_id` and `needtoknow_metadata` are
+  now `wardowl_terms`, `wardowl_id` and `wardowl_metadata`), so collections written by needtoknow
+  must be indexed again. needtoknow 1.6.0 remains on PyPI and gets no further releases.
+
 ### Added
 
 - `PineconeBackend` (the `pinecone` extra): dense vector search on a Pinecone index through its
@@ -39,7 +50,7 @@ Cassandra applies it in the `WHERE` of each ANN query, with every value bound as
 
 ## [1.5.0] - 2026-10-23
 
-Applications in any language can now use needtoknow through an HTTP service that takes the user
+Applications in any language can now use wardowl through an HTTP service that takes the user
 from a verified OIDC token. Redaction hides the parts of a permitted chunk a user may not see,
 before a reranker or a model reads it. Ory Keto and Casbin join the permission systems, and FAISS
 joins the stores, with exact pre-filtering in the process.
@@ -60,7 +71,7 @@ joins the stores, with exact pre-filtering in the process.
   subject's groups as subject sets. Keto has no reverse lookup, so the retriever post-filters. A
   result carrying an error, a malformed answer or a wrong number of results raises
   `AuthorizationError`. Tested against Keto 26.2.0 and with the conformance kit.
-- An HTTP service, `needtoknow.server` (the `server` extra), so applications in any language get
+- An HTTP service, `wardowl.server` (the `server` extra), so applications in any language get
   permission-aware retrieval: `create_app(retriever, authenticate)` serves `POST /v1/retrieve`,
   `GET /healthz` and an OpenAPI description. The subject comes from the verified bearer token
   alone; `OIDCAuthenticator` verifies JWTs against the identity provider's published keys
@@ -106,7 +117,7 @@ last dependency releases (Pillow 12.3 among them) no longer receive security fix
   `create_text_index` creates, so one collection serves both halves of hybrid search. A backend
   given `text_index` also waits for that index after each write. Tested with the conformance kit,
   alone and fused with vector search, against Atlas Local 8.0.30.
-- `RetrievalEvent.cause`, and the span attribute `needtoknow.error.cause`: the type of the exception
+- `RetrievalEvent.cause`, and the span attribute `wardowl.error.cause`: the type of the exception
   behind a failure, such as `TimeoutError` or `ConnectionRefusedError` for a permission service that
   is slow or unreachable, and `None` for an error status or a malformed answer. The HTTP authorizers
   now keep the connection error as the cause of the `AuthorizationError` they raise after retrying.
@@ -147,16 +158,16 @@ last dependency releases (Pillow 12.3 among them) no longer receive security fix
   `create_indexes(table, content_field="content")` builds the index, keeping every word; rows
   added after it are found by a scan until `table.optimize()`. Tested with the conformance kit,
   alone and fused with vector search, with LanceDB 0.40.
-- Permission sync from Google Drive. `needtoknow.sync.google_drive.GoogleDriveACL` reads who may
+- Permission sync from Google Drive. `wardowl.sync.google_drive.GoogleDriveACL` reads who may
   read a Drive file, in My Drive or a shared drive, through your Drive v3 service, and
-  `needtoknow.sync.with_access` writes the answer onto the file's chunks for
+  `wardowl.sync.with_access` writes the answer onto the file's chunks for
   `MetadataACLAuthorizer`, keeping their other metadata. Users and groups map to their addresses,
   a domain to the group `"domain:<domain>"` and anyone to everyone when findable in search.
   Grants that do not open the file's content grant nothing: sharing by link alone (unless
   `link_sharing=True`), deleted accounts, expired grants, view grants such as a limited-access
   folder's metadata view, inherited grants on limited-access items, and grants a shared drive's
   settings shut out (members only, domain users only). `domains=` leaves out grants outside your
-  organization's domains. `needtoknow.sync.Access` is the source-neutral answer that later
+  organization's domains. `wardowl.sync.Access` is the source-neutral answer that later
   connectors return too.
 - Documentation for operators and reviewers: an incident runbook (a document seen by the wrong
   person, rising `violations`, `AuthorizationError`, a failing or untrusted shared cache, an
@@ -211,7 +222,7 @@ review of the code. Upgrade if you use a shared cache and call `invalidate()`.
 
 ### Security
 
-Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
 
 - In rare interleavings, a decision revoked with `invalidate()` could still be used afterwards, for
   up to `ttl`. An `invalidate()` of everyone deleted every id's epoch, including one that a
@@ -246,7 +257,7 @@ Completes the 1.3.1 fix for `CachingAuthorizer.invalidate()`. Upgrade if you use
 
 ### Security
 
-Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
 
 - With a shared cache, `invalidate()` could still leave the revoked decision in its own process for
   up to `local_ttl` (1 second by default): a retrieval running during the call could copy the old
@@ -261,7 +272,7 @@ you call `invalidate()` to revoke access.
 
 ### Security
 
-Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
 
 - `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
   permission service gave just before the revocation, to a call that finished just after it, was
@@ -320,21 +331,21 @@ under the support policy the first minor release after that date, 1.4, drops it,
   read, and can reorder, rescore or drop hits but not add one; returned hits keep their stored
   text and metadata. Any function or object with `rerank` (and optionally `arerank`) works.
   Events report `reranked` and `rerank_ms`, and OpenTelemetry records a
-  `needtoknow.rerank.duration` histogram. Guide: "Reranking".
-- `needtoknow.backends.lancedb`: LanceDB, the embedded vector database, with the permission filter
+  `wardowl.rerank.duration` histogram. Guide: "Reranking".
+- `wardowl.backends.lancedb`: LanceDB, the embedded vector database, with the permission filter
   applied before the vector search ranks (LanceDB's pre-filtering). Permission terms are stored
   hex-encoded in a list column and matched with `array_has_any`, and deletes match a hex-encoded id,
   so no group name, user id or document id is ever part of the SQL. `add` upserts, keeping the last
   version of a repeated id; metadata is stored as JSON and returned exactly. `create_table` and
   `create_indexes` (a `LABEL_LIST` index on the terms) set the table up. Tested with the
-  conformance kit, with text and vector queries, on LanceDB 0.40. Extra: `needtoknow[lancedb]`.
-- `needtoknow.mcp.add_search_tool`: a permission-aware search tool for MCP servers (MCP Python SDK
+  conformance kit, with text and vector queries, on LanceDB 0.40. Extra: `wardowl[lancedb]`.
+- `wardowl.mcp.add_search_tool`: a permission-aware search tool for MCP servers (MCP Python SDK
   2.3 or later), so AI assistants and agents search with the calling user's permissions. The user
   comes from the access token the server verified for the request, through your `subject_for`
   function, never from the tool's arguments; a call without a verified token is refused, and a
   fixed `Subject` serves single-user stdio servers. The read-only tool takes `query` and a bounded
   `limit`, returns structured results without metadata unless keys are named, and reports a
-  permission service failure to the model without internal details. Extra: `needtoknow[mcp]`.
+  permission service failure to the model without internal details. Extra: `wardowl[mcp]`.
 - `Query`: search with a vector you computed, alone or with the text. `retrieve(Query(vector=...),
   subject)` searches an image's or another model's embedding, an embedding from your own service
   or cache, or one shared by every backend in `RankFusion` (vector backends use the vector, keyword
@@ -359,32 +370,32 @@ under the support policy the first minor release after that date, 1.4, drops it,
 - `mode="keyword"` on the Elasticsearch and OpenSearch backends: BM25 on the text under the same
   permission filter, with no embedding function needed. Tested with the conformance kit, alone and
   fused with vector search, against both engines.
-- `needtoknow.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis
+- `wardowl.backends.redis`: vector search on the Redis Query Engine (Redis 8 or later, or Redis
   Stack), with the permission filter in the same KNN query. Permission terms are stored
   hex-encoded in a TAG field, so no group name or user id can add query syntax and TAG matching's
   case folding never merges two values; metadata is stored as JSON and returned exactly.
   `create_index` sets up the index, and `redis.asyncio` clients give a native `aretrieve`. Tested
-  with the conformance kit against Redis 8.10.2. Extra: `needtoknow[redis]`, as for the shared
+  with the conformance kit against Redis 8.10.2. Extra: `wardowl[redis]`, as for the shared
   cache.
-- `needtoknow.haystack.NeedToKnowRetriever`: a Haystack pipeline component over any needtoknow
+- `wardowl.haystack.WardowlRetriever`: a Haystack pipeline component over any wardowl
   backend and authorizer. The authenticated user is a run input, so one pipeline serves every
   user, and the component refuses to run without a `Subject`. It outputs Haystack `Document`s and
   `complete`, and has `run_async`. The extra requires `haystack-ai` 2.12 or later; CI tests the
-  current Haystack 3 release. Extra: `needtoknow[haystack]`.
-- `needtoknow.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
+  current Haystack 3 release. Extra: `wardowl[haystack]`.
+- `wardowl.backends.mongodb`: MongoDB Atlas Vector Search, with the permission filter as the
   `$vectorSearch` pre-filter on a type-tagged array field (a BSON filter, so values are never query
   syntax). Atlas indexes writes shortly after they happen, so `add` and `delete` wait until the
   index shows the change, including a replaced chunk's new permissions (`wait=False` skips it).
   `create_search_index` sets up the index, and `AsyncMongoClient` collections give a native
   `aretrieve`. Tested with the conformance kit against `mongodb/mongodb-atlas-local` 8.0.30. Extra:
-  `needtoknow[mongodb]`.
-- `needtoknow.backends.weaviate`: Weaviate, with the permission filter applied inside the vector
+  `wardowl[mongodb]`.
+- `wardowl.backends.weaviate`: Weaviate, with the permission filter applied inside the vector
   search. Permissions are matched on a type-tagged `text[]` property with `field` tokenization, each
   term guarded at both ends so case and whitespace never blur two values, through the client's
   filter objects; metadata is stored as unindexed JSON and returned exactly. Document ids become
   UUIDs, with the original kept on the object. `create_collection` sets up a self-provided cosine
   vector, and `WeaviateAsyncClient` gives a native `aretrieve`. Tested with the conformance kit
-  against Weaviate 1.39.12. Extra: `needtoknow[weaviate]`.
+  against Weaviate 1.39.12. Extra: `wardowl[weaviate]`.
 
 ### Changed
 
@@ -406,7 +417,7 @@ review of the code. Upgrade if you use a shared cache and call `invalidate()`.
 
 ### Security
 
-Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
 
 - In rare interleavings, a decision revoked with `invalidate()` could still be used afterwards, for
   up to `ttl`. An `invalidate()` of everyone deleted every id's epoch, including one that a
@@ -441,7 +452,7 @@ access; or move to 1.3.1.
 
 ### Security
 
-Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
+Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2) covers this fix.
 
 - `CachingAuthorizer.invalidate()` could be undone by a retrieval already in flight. An answer the
   permission service gave just before the revocation, to a call that finished just after it, was
@@ -466,12 +477,12 @@ Advisory [GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/
 
 ## [1.2.0] - 2026-10-17
 
-Breadth and scale. needtoknow now works with six more systems: the Qdrant, Milvus, Elasticsearch
+Breadth and scale. wardowl now works with six more systems: the Qdrant, Milvus, Elasticsearch
 and OpenSearch vector stores, and the SpiceDB and Cerbos permission systems. Authorizers combine
 (`AllOf`, `AnyOf`, `TenantAuthorizer`), with scoped post-filtering for multi-tenant indexes; the
 permission cache can be shared across replicas through Redis; OpenTelemetry metrics show where each
 retrieval spends its time; and a subject can be in tens of thousands of groups. A conformance kit,
-`needtoknow.testing`, checks your own backends and authorizers against the reference semantics, as
+`wardowl.testing`, checks your own backends and authorizers against the reference semantics, as
 CI does for every built-in one. One behaviour is stricter: an authorizer answer that is not a
 filter now fails closed instead of reaching the backend.
 
@@ -489,38 +500,38 @@ release without it, not 1.2 as the 1.1.0 notes said.
   how it works, code in tabs, integrations, measured results), a top navigation bar with menus,
   copy buttons on code, edit links on every page, and link previews. It uses each platform's own
   font and no third-party services, and its buttons meet WCAG AA contrast in light and dark mode.
-- `needtoknow.testing`: a conformance kit for your own backends and authorizers.
+- `wardowl.testing`: a conformance kit for your own backends and authorizers.
   `check_backend` compares a backend with the reference filter semantics on generated documents and
   nested filters (exact results, `k`, ordering, unchanged metadata, `asearch`, no leaks through the
   retriever); `check_authorizer` checks that `check` and `filter_for` agree. Every built-in backend,
   and the example OPA policy against a real OPA, runs it in CI. `HashingEmbedder` gives vector stores
   deterministic embeddings without a model.
-- `needtoknow.backends.qdrant`: a Qdrant backend. The filter becomes Qdrant's `query_filter`
+- `wardowl.backends.qdrant`: a Qdrant backend. The filter becomes Qdrant's `query_filter`
   (`MatchAny` per value type, an empty `In` decided before the query), `create_collection` adds
   keyword payload indexes on the permission fields, points use LangChain's Qdrant layout so existing
   collections work, and `AsyncQdrantClient` gives a native `aretrieve`. Tested with the conformance kit
-  against a real Qdrant server and Qdrant's local mode. Extra: `needtoknow[qdrant]`.
-- `needtoknow.backends.elasticsearch` and `needtoknow.backends.opensearch`: kNN search with the
+  against a real Qdrant server and Qdrant's local mode. Extra: `wardowl[qdrant]`.
+- `wardowl.backends.elasticsearch` and `wardowl.backends.opensearch`: kNN search with the
   permission filter applied during the search. Permissions are matched on one type-tagged keyword
-  field (`needtoknow_terms`), because keyword fields compare strings and would otherwise match the
+  field (`wardowl_terms`), because keyword fields compare strings and would otherwise match the
   integer `1` against `"1"`; metadata is stored unindexed and returned exactly, and never adds
   mappings. `create_index` sets up the mapping, `permission_terms` lets other ingestion pipelines
   write the field, and async clients give a native `aretrieve`. Tested with the conformance kit
-  against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `needtoknow[elasticsearch]`,
-  `needtoknow[opensearch]`.
-- `needtoknow.backends.milvus`: a Milvus backend, with the permission filter applied inside the
+  against Elasticsearch 9.5.5 and OpenSearch 3.9.0. Extras: `wardowl[elasticsearch]`,
+  `wardowl[opensearch]`.
+- `wardowl.backends.milvus`: a Milvus backend, with the permission filter applied inside the
   vector search. Permissions are matched on a type-tagged array field, as on the search engines,
   and the values are passed as Milvus filter parameters, never written into the expression, so a
   group name cannot change what a filter selects. `create_collection` sets up the schema and
   indexes, searches use strong consistency by default, and `AsyncMilvusClient` gives a native
-  `aretrieve`. Tested with the conformance kit against Milvus 3.0.2. Extra: `needtoknow[milvus]`.
-- `needtoknow.authorizers.spicedb.SpiceDBAuthorizer`: SpiceDB over its HTTP API, with no extra
+  `aretrieve`. Tested with the conformance kit against Milvus 3.0.2. Extra: `wardowl[milvus]`.
+- `wardowl.authorizers.spicedb.SpiceDBAuthorizer`: SpiceDB over its HTTP API, with no extra
   dependency. CheckBulkPermissions in batches (answers matched by the request they echo),
   LookupResources for the pre-filter (post-filtering when the list may be truncated or is
   conditional on a caveat), the subject's groups as `group:<name>#member` subject sets, caveat
   context, a configurable consistency, and conditional answers treated as failures, not decisions.
   Tested against a real SpiceDB for random relationship graphs and with the conformance kit.
-- `needtoknow.authorizers.cerbos.CerbosAuthorizer`: Cerbos over its HTTP API, with no extra
+- `wardowl.authorizers.cerbos.CerbosAuthorizer`: Cerbos over its HTTP API, with no extra
   dependency. CheckResources per chunk (metadata as resource attributes, the subject's groups and
   attributes on the principal), and pre-filters translated from PlanResources query plans: `and`,
   `or`, `hasIntersection`, `in` and `==` on resource attributes become exact filters, anything else
@@ -534,15 +545,15 @@ release without it, not 1.2 as the 1.1.0 notes said.
   a small share of the index keeps its recall. `AllOf` and `AnyOf` provide scopes, and
   `CachingAuthorizer` caches them.
 - `CachingAuthorizer(shared=...)`: a second cache tier shared by every process, with
-  `needtoknow.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
-  `needtoknow[redis]`). Replicas reuse each other's answers, each keeps its own copy for at most
+  `wardowl.caching.RedisCache` (Redis, Valkey, Dragonfly, Redis Cluster; extra
+  `wardowl[redis]`). Replicas reuse each other's answers, each keeps its own copy for at most
   `local_ttl` seconds (1 by default), and `invalidate()` reaches every replica within `local_ttl`.
   Shared entries carry their expiry time, so the revocation bound holds across replicas; key names
   are digests; values can be signed with HMAC-SHA256 (`signing_key`) so planted entries are
   ignored; and a failing shared cache is only ever a miss.
 - The conformance kit also generates nested lists and objects in metadata, filters of 300 values,
   and subjects in hundreds of groups.
-- `needtoknow.otel.OpenTelemetryMetrics`: retrieval metrics for dashboards and alerts. The
+- `wardowl.otel.OpenTelemetryMetrics`: retrieval metrics for dashboards and alerts. The
   `gen_ai.client.operation.duration` histogram from the OpenTelemetry GenAI conventions, retrievals
   by outcome, time spent in the backend and in the authorizer, chunks returned, examined and denied,
   and violations. Attributes have a handful of values each; subjects, queries and chunks are never
@@ -590,7 +601,7 @@ following the support policy, 1.2 will be the first release without it.
   request, and replace a connection the server closed while idle.
 - Transient failures are retried once by default (`retries=`): refused or reset connections,
   missing responses, HTTP 502, 503 and 504. Timeouts and other errors are not retried.
-- `needtoknow.authorizers.CircuitBreaker`: pauses requests to a permission service that keeps
+- `wardowl.authorizers.CircuitBreaker`: pauses requests to a permission service that keeps
   failing, then probes; pass it as `circuit_breaker=`.
 - `ssl_context=` on both authorizers, for your own CA or mutual TLS.
 - `PgVectorBackend(ef_search=...)` sets pgvector's HNSW search depth for each search, trading
@@ -617,7 +628,7 @@ following the support policy, 1.2 will be the first release without it.
 ## [1.0.0] - 2026-10-16
 
 The first stable release. The public API in the
-[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) now follows semantic
+[API reference](https://muzakkirhussain011.github.io/wardowl/api.html) now follows semantic
 versioning. Everything in 1.0.0rc1 below is included; these are the changes since the release
 candidate.
 
@@ -636,10 +647,10 @@ candidate.
 ## [1.0.0rc1] - 2026-10-16
 
 The first release candidate for 1.0. The public API in the
-[API reference](https://muzakkirhussain011.github.io/needtoknow/api.html) is what 1.0.0 will ship:
+[API reference](https://muzakkirhussain011.github.io/wardowl/api.html) is what 1.0.0 will ship:
 changes before then are fixes, unless testing the release candidate shows that a breaking change is
 needed, in which case it will be announced in a second release candidate. Install it with
-`pip install --pre needtoknow`.
+`pip install --pre wardowl`.
 
 ### Added
 
@@ -656,28 +667,28 @@ needed, in which case it will be announced in a second release candidate. Instal
 - `InMemoryBackend` with deterministic keyword scoring, for tests and small corpora.
 - Property-based tests (Hypothesis) for the security guarantees on Python 3.10 to 3.13.
 - Contributor documentation: CONTRIBUTING, GOVERNANCE, CODE_OF_CONDUCT, SECURITY.
-- `needtoknow.backends.pgvector`: PostgreSQL + pgvector backend with the permission filter in the
+- `wardowl.backends.pgvector`: PostgreSQL + pgvector backend with the permission filter in the
   query as JSON containment tests (GIN-indexable), iterative HNSW scans, `create_schema`, and a
-  native async search when given an async pool. Extra: `needtoknow[pgvector]`.
-- `needtoknow.backends.chroma`: Chroma backend translating filters into `where` clauses. It never
+  native async search when given an async pool. Extra: `wardowl[pgvector]`.
+- `wardowl.backends.chroma`: Chroma backend translating filters into `where` clauses. It never
   stores Chroma array metadata: in chromadb 1.5.x (local mode) a deleted collection's array
   metadata surfaces on new records in other collections and is used by `where` filters
   (chroma-core/chroma#7594). List values become
   one boolean field each, and search results are rebuilt from an exact JSON copy of the metadata,
-  so the re-check always sees the true permissions. Extra: `needtoknow[chroma]`.
-- `needtoknow.authorizers.opa`: Open Policy Agent authorizer using only the standard library, with
+  so the re-check always sees the true permissions. Extra: `wardowl[chroma]`.
+- `wardowl.authorizers.opa`: Open Policy Agent authorizer using only the standard library, with
   per-chunk decisions and optional policy-provided filters; every failure fails closed. Example
   policy in `examples/opa`.
 - `filter_to_dict` / `filter_from_dict` for a JSON form of filters.
-- `needtoknow.authorizers.openfga`: OpenFGA authorizer over the HTTP API (no extra dependency):
+- `wardowl.authorizers.openfga`: OpenFGA authorizer over the HTTP API (no extra dependency):
   batched BatchCheck, ListObjects pre-filtering that falls back to post-filtering when the list may
   be truncated, and the subject's groups sent as contextual tuples. Tested against a real OpenFGA
   for random relationship graphs.
-- `needtoknow.langchain`: `NeedToKnowRetriever` (a LangChain retriever; refuses to run without a
+- `wardowl.langchain`: `WardowlRetriever` (a LangChain retriever; refuses to run without a
   subject) and `LangChainVectorStoreBackend` (any LangChain vector store, post-filtered).
-  Extra: `needtoknow[langchain]`.
-- `needtoknow.llamaindex`: `NeedToKnowRetriever`, `PermissionNodePostprocessor` and
-  `LlamaIndexBackend`. Extra: `needtoknow[llamaindex]`.
+  Extra: `wardowl[langchain]`.
+- `wardowl.llamaindex`: `WardowlRetriever`, `PermissionNodePostprocessor` and
+  `LlamaIndexBackend`. Extra: `wardowl[llamaindex]`.
 - Runnable examples for LangChain and LlamaIndex, executed in CI.
 - `CachingAuthorizer`: caches pre-filters and per-chunk decisions (keyed by chunk id and
   metadata) per subject for `ttl` seconds, with that as the documented revocation bound; errors and
@@ -686,12 +697,12 @@ needed, in which case it will be announced in a second release candidate. Instal
   `observers` (subject id, strategy, returned ids, denied and violation counts, duration, error
   type, optional HMAC of the query). Never query or chunk text. `JsonLinesAudit` writes them as
   JSON lines; observer failures are logged and never affect retrieval.
-- `needtoknow.otel.OpenTelemetryObserver`: one span per retrieval with counts and outcomes, the
-  subject id only on request. Extra: `needtoknow[otel]`.
+- `wardowl.otel.OpenTelemetryObserver`: one span per retrieval with counts and outcomes, the
+  subject id only on request. Extra: `wardowl[otel]`.
 - Documentation site (Sphinx, MyST, Furo) in `docs/`: getting started, concepts, a security model,
-  operations, one page per integration, extending needtoknow, benchmarks and an API reference.
+  operations, one page per integration, extending wardowl, benchmarks and an API reference.
   CI builds it with warnings as errors, and every push to `main` publishes it to
-  <https://muzakkirhussain011.github.io/needtoknow/>. Extra: `needtoknow[docs]`.
+  <https://muzakkirhussain011.github.io/wardowl/>. Extra: `wardowl[docs]`.
 - Benchmark harness (`benchmarks/`): recall@k against exact ground truth, leaks, completeness and
   latency for exact search, Chroma and pgvector across permission selectivity and layouts, with a
   Kaggle notebook for real embeddings. CI runs a small version against real Chroma and PostgreSQL
@@ -702,27 +713,27 @@ needed, in which case it will be announced in a second release candidate. Instal
 
 ### Changed
 
-- `RetrievalResult.complete` is documented precisely: it is `False` when needtoknow knows results
+- `RetrievalResult.complete` is documented precisely: it is `False` when wardowl knows results
   may be missing, and it trusts the backend's ranking, so it cannot see results an approximate index
   failed to return. The benchmarks measure how often that happens.
 - Filter values must be strings or integers, and metadata values of other types (booleans,
   floats) never match. This keeps every backend's answer identical to the reference.
-- The project is now `needtoknow`, a permission-aware retrieval library (ADR 0005). The earlier
+- The project is now `wardowl`, a permission-aware retrieval library (ADR 0005). The earlier
   Rampart gateway lives on as an example deployment in `examples/gateway`.
 
-[Unreleased]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.6.0...HEAD
-[1.6.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.5.0...v1.6.0
-[1.5.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.3...v1.4.0
-[1.3.3]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.2...v1.3.3
-[1.3.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.1...v1.3.2
-[1.3.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.3.0...v1.3.1
-[1.3.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.3.0
-[1.2.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.1...v1.2.2
-[1.2.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.2...v1.2.0
-[1.1.2]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/muzakkirhussain011/needtoknow/compare/v1.0.0rc1...v1.0.0
-[1.0.0rc1]: https://github.com/muzakkirhussain011/needtoknow/releases/tag/v1.0.0rc1
+[Unreleased]: https://github.com/muzakkirhussain011/wardowl/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.3.3...v1.4.0
+[1.3.3]: https://github.com/muzakkirhussain011/wardowl/compare/v1.3.2...v1.3.3
+[1.3.2]: https://github.com/muzakkirhussain011/wardowl/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/muzakkirhussain011/wardowl/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.2.0...v1.3.0
+[1.2.2]: https://github.com/muzakkirhussain011/wardowl/compare/v1.2.1...v1.2.2
+[1.2.1]: https://github.com/muzakkirhussain011/wardowl/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.1.2...v1.2.0
+[1.1.2]: https://github.com/muzakkirhussain011/wardowl/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/muzakkirhussain011/wardowl/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/muzakkirhussain011/wardowl/compare/v1.0.0rc1...v1.0.0
+[1.0.0rc1]: https://github.com/muzakkirhussain011/wardowl/releases/tag/v1.0.0rc1

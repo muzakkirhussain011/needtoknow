@@ -10,9 +10,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from needtoknow import AuthorizationError, Hit, Subject
-from needtoknow.authorizers.keto import KetoAuthorizer
-from needtoknow.testing import check_authorizer
+from wardowl import AuthorizationError, Hit, Subject
+from wardowl.authorizers.keto import KetoAuthorizer
+from wardowl.testing import check_authorizer
 
 ANN = Subject("ann", ["eng", "ops"])
 
@@ -124,9 +124,9 @@ def test_batch_size_must_be_positive():
 
 # ---- a real Keto (CI starts one with examples/keto/keto.yml) ---------------------------------
 
-KETO_URL = os.environ.get("NEEDTOKNOW_TEST_KETO_URL")
-KETO_WRITE_URL = os.environ.get("NEEDTOKNOW_TEST_KETO_WRITE_URL")
-needs_keto = pytest.mark.skipif(not (KETO_URL and KETO_WRITE_URL), reason="set NEEDTOKNOW_TEST_KETO_URL to run")
+KETO_URL = os.environ.get("WARDOWL_TEST_KETO_URL")
+KETO_WRITE_URL = os.environ.get("WARDOWL_TEST_KETO_WRITE_URL")
+needs_keto = pytest.mark.skipif(not (KETO_URL and KETO_WRITE_URL), reason="set WARDOWL_TEST_KETO_URL to run")
 
 
 def write(**relationship):

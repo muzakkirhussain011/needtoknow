@@ -6,9 +6,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from needtoknow import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.sync import Access, with_access
-from needtoknow.sync.google_drive import FIELDS, GoogleDriveACL, drive_access
+from wardowl import Document, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.sync import Access, with_access
+from wardowl.sync.google_drive import FIELDS, GoogleDriveACL, drive_access
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
 

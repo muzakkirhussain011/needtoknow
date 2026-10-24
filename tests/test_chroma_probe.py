@@ -2,8 +2,8 @@
 
 In chromadb 1.5.x (local mode), deleting a collection leaves its array metadata behind and SQLite
 reuses record ids, so new records in other collections come back with those arrays and `where`
-filters use them (chroma-core/chroma#7594). Scalars stay isolated. needtoknow's
-Chroma backend therefore never stores arrays (see needtoknow/backends/chroma.py). This test is
+filters use them (chroma-core/chroma#7594). Scalars stay isolated. wardowl's
+Chroma backend therefore never stores arrays (see wardowl/backends/chroma.py). This test is
 expected to fail while the upstream behaviour persists; if it starts passing, Chroma has fixed it.
 """
 

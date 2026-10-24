@@ -8,19 +8,19 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import TERMS_FIELD, tag, terms
-from needtoknow.backends.milvus import (
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import TERMS_FIELD, tag, terms
+from wardowl.backends.milvus import (
     SPARSE_FIELD,
     MilvusBackend,
     create_collection,
     filter_to_expression,
     permission_terms,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-MILVUS_URL = os.environ.get("NEEDTOKNOW_TEST_MILVUS_URL")
+MILVUS_URL = os.environ.get("WARDOWL_TEST_MILVUS_URL")
 CONTAINS = f"ARRAY_CONTAINS_ANY({TERMS_FIELD}, {{%s}})"
 
 
@@ -174,7 +174,7 @@ def test_asearch_uses_the_async_client_or_a_thread():
 
 def _client():
     if not MILVUS_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_MILVUS_URL to run against Milvus")
+        pytest.skip("set WARDOWL_TEST_MILVUS_URL to run against Milvus")
     pymilvus = pytest.importorskip("pymilvus")
     return pymilvus.MilvusClient(uri=MILVUS_URL)
 
@@ -245,7 +245,7 @@ def test_hostile_group_names_are_only_values():
     name = _new_collection(client)
     backend = MilvusBackend(client, name, EMBED)
     backend.add([Document("secret", "leave policy", {"allowed_groups": ["board"]})])
-    hostile = Subject("mallory", ['x"]) OR id != "" OR ARRAY_CONTAINS_ANY(needtoknow_terms, ["'])
+    hostile = Subject("mallory", ['x"]) OR id != "" OR ARRAY_CONTAINS_ANY(wardowl_terms, ["'])
     result = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter").retrieve("leave", hostile, 5)
     client.drop_collection(name)
     assert result.hits == [] and result.violations == 0
@@ -343,7 +343,7 @@ def test_server_keyword_mode_passes_the_conformance_kit():
 
 
 def test_server_hybrid_search_over_one_collection_passes_the_conformance_kit():
-    from needtoknow import RankFusion
+    from wardowl import RankFusion
 
     client, previous = _client(), []
 
@@ -379,7 +379,7 @@ def test_server_keyword_mode_ranks_by_bm25_inside_the_filter():
         assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
         assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
         assert [h.id for h in keyword.search("the", 5)] == ["c"]  # the standard analyzer keeps every word
-        hostile = 'leave" || ARRAY_CONTAINS_ANY(needtoknow_terms, ["*"]) || "'
+        hostile = 'leave" || ARRAY_CONTAINS_ANY(wardowl_terms, ["*"]) || "'
         assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
         keyword.set_metadata({"b": {"allowed_groups": ["*"]}})
         assert [h.id for h in keyword.search("payouts", 5, In("allowed_groups", ["*"]))] == ["b"]

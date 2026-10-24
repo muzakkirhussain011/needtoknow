@@ -1,28 +1,28 @@
 # Redis vector search
 
 ```bash
-pip install "needtoknow[redis]"
+pip install "wardowl[redis]"
 ```
 
 The backend runs a KNN query on the Redis Query Engine with the permission filter as part of the
 same query, so the k nearest chunks the subject may read come back however few of the index's
 chunks that is. It needs Redis 8 or later, where the Query Engine is built in, or Redis Stack. CI
-runs needtoknow's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against
-Redis 8.10.2. The same `needtoknow[redis]` extra serves the [shared permission cache](../operations.md#sharing-the-cache-across-processes).
+runs wardowl's [conformance kit](../extending.md#test-it-with-the-conformance-kit) against
+Redis 8.10.2. The same `wardowl[redis]` extra serves the [shared permission cache](../operations.md#sharing-the-cache-across-processes).
 
 ```python
 import redis
 
-from needtoknow.backends.redis import RedisBackend, create_index
+from wardowl.backends.redis import RedisBackend, create_index
 
 client = redis.Redis.from_url(REDIS_URL)
-create_index(client, "chunks", dim=768)  # hashes under "needtoknow:", HNSW, cosine
+create_index(client, "chunks", dim=768)  # hashes under "wardowl:", HNSW, cosine
 backend = RedisBackend(client, "chunks", embed=embed)  # embed: str -> list[float]
 backend.add(documents)
 ```
 
-Each chunk is a hash under the prefix (`needtoknow:` plus the document id) with the fields
-`needtoknow_id`, `content`, `metadata` (JSON), `needtoknow_terms` and `embedding` (float32). A write
+Each chunk is a hash under the prefix (`wardowl:` plus the document id) with the fields
+`wardowl_id`, `content`, `metadata` (JSON), `wardowl_terms` and `embedding` (float32). A write
 is searchable as soon as it returns; replacing a chunk replaces the whole hash. `ef_runtime` sets
 HNSW's search breadth. Scores are cosine similarity, 1 minus Redis's cosine distance. For a native
 `aretrieve`, pass `async_client=redis.asyncio.Redis(...)`; otherwise async calls run in a thread.
@@ -41,11 +41,11 @@ floats, nested lists and objects never match. Redis TAG queries have their own s
 `|`, `@`, `*`), and TAG matching ignores case by default, so each term is stored hex-encoded:
 
 ```python
-from needtoknow import In
-from needtoknow.backends.redis import filter_to_query
+from wardowl import In
+from wardowl.backends.redis import filter_to_query
 
 filter_to_query(In("allowed_groups", ["hr"]))
-# '@needtoknow_terms:{616c6c6f7765645f67726f7570731f733a6872}'
+# '@wardowl_terms:{616c6c6f7765645f67726f7570731f733a6872}'
 ```
 
 A hex string holds only `0-9` and `a-f`, so no group name or user id can add query syntax, and
@@ -56,13 +56,13 @@ retriever's re-check sees the true permissions.
 
 ## Hashes written by other tools
 
-A hash without `needtoknow_terms` is invisible to a pre-filtered search, though post-filtering
+A hash without `wardowl_terms` is invisible to a pre-filtered search, though post-filtering
 still finds it and checks its metadata. Fill the field in your ingestion pipeline:
 
 ```python
-from needtoknow.backends.redis import permission_terms
+from wardowl.backends.redis import permission_terms
 
-client.hset(key, mapping={"needtoknow_terms": permission_terms(metadata)})
+client.hset(key, mapping={"wardowl_terms": permission_terms(metadata)})
 ```
 
 ## Keyword search and hybrid search
@@ -72,7 +72,7 @@ must hold the text: create it with `content_field=`, which keeps every word (the
 stop words). One index then serves both halves of [hybrid search](../hybrid.md):
 
 ```python
-from needtoknow import RankFusion
+from wardowl import RankFusion
 
 create_index(client, "chunks", dim=768, content_field="content")
 vector = RedisBackend(client, "chunks", embed=embed)
@@ -87,6 +87,6 @@ Scores are Redis's BM25 (`BM25STD`), higher for better matches. A keyword backen
 writes chunks with no vector, which keyword search finds and vector search does not.
 
 An existing index can gain the text field with `FT.ALTER chunks SCHEMA ADD content TEXT`, and Redis
-indexes the stored hashes in the background. An index created by an earlier needtoknow keeps Redis's
+indexes the stored hashes in the background. An index created by an earlier wardowl keeps Redis's
 default stop words, so common English words in a query match nothing there. CI runs the conformance
 kit against Redis 8.10.2 in keyword mode and fused with vector search.

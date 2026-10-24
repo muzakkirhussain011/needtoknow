@@ -1,7 +1,7 @@
 """A RAG service on FastAPI: every search and every answer uses only chunks the caller may read.
 
-    pip install needtoknow fastapi uvicorn pyjwt
-    export NEEDTOKNOW_DEMO_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+    pip install wardowl fastapi uvicorn pyjwt
+    export WARDOWL_DEMO_JWT_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
     uvicorn --factory rag_service:create_app --app-dir examples/fastapi_rag
 
 How it holds:
@@ -41,7 +41,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from needtoknow import (
+from wardowl import (
     AllOf,
     AuthorizationError,
     CachingAuthorizer,
@@ -73,13 +73,13 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        secret = os.environ.get("NEEDTOKNOW_DEMO_JWT_SECRET", "")
+        secret = os.environ.get("WARDOWL_DEMO_JWT_SECRET", "")
         if len(secret) < 32:
-            raise RuntimeError("set NEEDTOKNOW_DEMO_JWT_SECRET to at least 32 random characters")
+            raise RuntimeError("set WARDOWL_DEMO_JWT_SECRET to at least 32 random characters")
         return cls(
             secret,
-            os.environ.get("NEEDTOKNOW_DEMO_ISSUER", cls.issuer),
-            os.environ.get("NEEDTOKNOW_DEMO_AUDIENCE", cls.audience),
+            os.environ.get("WARDOWL_DEMO_ISSUER", cls.issuer),
+            os.environ.get("WARDOWL_DEMO_AUDIENCE", cls.audience),
         )
 
 

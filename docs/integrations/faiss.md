@@ -6,12 +6,12 @@ beside the index and hands the permission filter to FAISS as a set of allowed id
 considers only chunks the subject may read, so pre-filtering is exact.
 
 ```bash
-pip install "needtoknow[faiss]"
+pip install "wardowl[faiss]"
 ```
 
 ```python
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever
-from needtoknow.backends.faiss import FaissBackend
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever
+from wardowl.backends.faiss import FaissBackend
 
 backend = FaissBackend(embed, dim=768)
 backend.add(chunks)  # or backend.add(chunks, embeddings) with vectors you computed

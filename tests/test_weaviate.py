@@ -10,9 +10,9 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import TERMS_FIELD, tag, terms
-from needtoknow.backends.weaviate import (
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import TERMS_FIELD, tag, terms
+from wardowl.backends.weaviate import (
     ID_PROPERTY,
     WeaviateBackend,
     create_collection,
@@ -20,11 +20,11 @@ from needtoknow.backends.weaviate import (
     permission_terms,
     point_id,
 )
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-WEAVIATE_URL = os.environ.get("NEEDTOKNOW_TEST_WEAVIATE_URL")
-WEAVIATE_GRPC_PORT = int(os.environ.get("NEEDTOKNOW_TEST_WEAVIATE_GRPC_PORT", "50051"))
+WEAVIATE_URL = os.environ.get("WARDOWL_TEST_WEAVIATE_URL")
+WEAVIATE_GRPC_PORT = int(os.environ.get("WARDOWL_TEST_WEAVIATE_GRPC_PORT", "50051"))
 
 
 # ---- ids, terms, translation (no server) -------------------------------------------------------
@@ -181,7 +181,7 @@ def test_asearch_uses_the_async_client_or_a_thread():
 @pytest.fixture
 def client():
     if not WEAVIATE_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_WEAVIATE_URL to run against Weaviate")
+        pytest.skip("set WARDOWL_TEST_WEAVIATE_URL to run against Weaviate")
     weaviate = pytest.importorskip("weaviate")
     parts = urlsplit(WEAVIATE_URL)
     connection = weaviate.connect_to_local(host=parts.hostname, port=parts.port, grpc_port=WEAVIATE_GRPC_PORT)
@@ -341,7 +341,7 @@ def test_keyword_mode_passes_the_conformance_kit(client):
 
 
 def test_hybrid_search_over_one_collection_passes_the_conformance_kit(client):
-    from needtoknow import RankFusion
+    from wardowl import RankFusion
 
     previous: list[str] = []
 

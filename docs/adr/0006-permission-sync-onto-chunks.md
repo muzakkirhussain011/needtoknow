@@ -20,7 +20,7 @@ sharing changes. Three ways were considered:
 
 ## Decision
 
-`needtoknow.sync` copies sharing onto the chunks.
+`wardowl.sync` copies sharing onto the chunks.
 
 - A connector reads one document's sharing and returns `Access(users, groups, everyone)`, a
   source-neutral answer. `with_access` writes it into a chunk's metadata, replacing both
@@ -35,7 +35,7 @@ sharing changes. Three ways were considered:
 - Connectors take the source's client from the application and never import it, so they add no
   dependency. Their tests run on the response shapes the source documents.
 
-Google Drive is the first connector (`needtoknow.sync.google_drive`).
+Google Drive is the first connector (`wardowl.sync.google_drive`).
 
 ## Consequences
 

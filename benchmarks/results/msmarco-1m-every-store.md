@@ -13,7 +13,7 @@ the same million vectors, queries and permissions.
 | Embeddings | BAAI/bge-small-en-v1.5, 384 dimensions; queries carry the model's retrieval instruction |
 | Permissions | Random layout: 1,000 teams, 100 departments, 10 divisions; selectivity 0.1%, 1%, 10%, 100% |
 | Retrieval | k = 10, `max_candidates` = 1000, `overfetch` = 4 |
-| Stores | Release builds, each at its own defaults and loaded through its needtoknow backend: Qdrant 1.19.2, Elasticsearch 9.5.5 (default vector index for 384 dimensions: `bbq_hnsw`, 1-bit quantization), OpenSearch 3.9.0, Weaviate 1.39.12, LanceDB 0.40 (embedded; default IVF_PQ index), Redis 8.10.2 (HNSW, M 16, EF_CONSTRUCTION 200) |
+| Stores | Release builds, each at its own defaults and loaded through its wardowl backend: Qdrant 1.19.2, Elasticsearch 9.5.5 (default vector index for 384 dimensions: `bbq_hnsw`, 1-bit quantization), OpenSearch 3.9.0, Weaviate 1.39.12, LanceDB 0.40 (embedded; default IVF_PQ index), Redis 8.10.2 (HNSW, M 16, EF_CONSTRUCTION 200) |
 | Load | Throughput: users pre-filtering at 1% readable, cycling through the 300 questions; each setting run 3 times for 20 s; every returned chunk checked against the subject's permissions |
 | Hardware | Kaggle, 4 CPUs, no GPU, shared by the store and the benchmark's client threads |
 | Software | Python 3.13.15, NumPy 2.1.3 |

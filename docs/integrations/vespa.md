@@ -6,20 +6,20 @@ with the permission filter in the YQL query, so Vespa applies it inside the near
 BM25 search: pre-filtering is exact.
 
 ```bash
-pip install "needtoknow[vespa]"
+pip install "wardowl[vespa]"
 ```
 
 The application package needs a schema with the fields the backend writes. `schema(dim)` writes
-one; [`examples/vespa`](https://github.com/muzakkirhussain011/needtoknow/tree/main/examples/vespa)
+one; [`examples/vespa`](https://github.com/muzakkirhussain011/wardowl/tree/main/examples/vespa)
 is a complete single-node package, which CI deploys.
 
 ```python
 from pathlib import Path
 
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever
-from needtoknow.backends.vespa import VespaBackend, schema
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever
+from wardowl.backends.vespa import VespaBackend, schema
 
-Path("app/schemas/needtoknow.sd").write_text(schema(768))  # then deploy the package
+Path("app/schemas/wardowl.sd").write_text(schema(768))  # then deploy the package
 
 backend = VespaBackend("http://localhost:8080", embed)
 backend.add(chunks)  # or backend.add(chunks, embeddings) with vectors you computed
@@ -29,8 +29,8 @@ retriever = PermissionedRetriever(backend, MetadataACLAuthorizer())
 ## How filtering works
 
 Each chunk stores a tagged term for every string or integer in its metadata (the field name, the
-value's type and the value), hex-encoded, in the array attribute `needtoknow_terms` with fast-search.
-A filter becomes `needtoknow_terms in ("...")` conditions joined with `and` and `or`. The terms keep
+value's type and the value), hex-encoded, in the array attribute `wardowl_terms` with fast-search.
+A filter becomes `wardowl_terms in ("...")` conditions joined with `and` and `or`. The terms keep
 `1` and `"1"` apart, as the reference semantics do, and every value the filter writes into the YQL
 text is hex digits, so no metadata value can change the query. The metadata itself is stored as
 JSON and returned exactly as written.

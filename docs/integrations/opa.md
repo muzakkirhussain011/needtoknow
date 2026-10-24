@@ -3,13 +3,13 @@
 No extra dependency: requests use the standard library.
 
 ```python
-from needtoknow.authorizers.opa import OPAAuthorizer
+from wardowl.authorizers.opa import OPAAuthorizer
 
-authorizer = OPAAuthorizer("http://localhost:8181", filter_path="needtoknow/filter")
+authorizer = OPAAuthorizer("http://localhost:8181", filter_path="wardowl/filter")
 ```
 
-Your Rego policy decides; needtoknow asks. A complete, tested policy is in
-[`examples/opa/needtoknow.rego`](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/opa/needtoknow.rego):
+Your Rego policy decides; wardowl asks. A complete, tested policy is in
+[`examples/opa/wardowl.rego`](https://github.com/muzakkirhussain011/wardowl/blob/main/examples/opa/wardowl.rego):
 
 ```bash
 opa run --server examples/opa
@@ -17,7 +17,7 @@ opa run --server examples/opa
 
 ## Decisions
 
-`check` queries `decisions_path` (default `needtoknow/decisions`) with this input:
+`check` queries `decisions_path` (default `wardowl/decisions`) with this input:
 
 ```json
 {

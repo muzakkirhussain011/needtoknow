@@ -7,7 +7,7 @@ runs after the permission check:
 ```python
 from sentence_transformers import CrossEncoder
 
-from needtoknow import Hit, PermissionedRetriever, Query
+from wardowl import Hit, PermissionedRetriever, Query
 
 model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
 
@@ -33,7 +33,7 @@ only needs a function, or an object with a `rerank` method, that takes the query
 Reranking before the permission check would send every candidate, including chunks the user may not
 read, to the reranker. With a hosted rerank API that means sending them to a third party; with any
 reranker it means a model saw text it should not have, and could surface it in its scores or logs.
-needtoknow reranks only what passed the check:
+wardowl reranks only what passed the check:
 
 - The reranker receives only hits the authorizer allowed (and, when pre-filtering, the re-check
   confirmed).
@@ -70,7 +70,7 @@ example above, and raises `ValueError` for a query that has only a vector.
 
 `RetrievalEvent.reranked` is the number of chunks given to the reranker (0 without one) and
 `rerank_ms` the time it took. `OpenTelemetryObserver` adds them to the span, and
-`OpenTelemetryMetrics` records them in the `needtoknow.rerank.duration` histogram. See
+`OpenTelemetryMetrics` records them in the `wardowl.rerank.duration` histogram. See
 [Operations](operations.md).
 
 `RetrievalResult.complete` describes the pool the reranker chose from: whether those were the top

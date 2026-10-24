@@ -1,0 +1,37 @@
+schema wardowl {
+    document wardowl {
+        field wardowl_id type string {
+            indexing: attribute | summary
+        }
+        field text type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field wardowl_metadata type string {
+            indexing: summary
+        }
+        field wardowl_terms type array<string> {
+            indexing: attribute
+            attribute: fast-search
+        }
+        field embedding type tensor<float>(x[16]) {
+            indexing: attribute | index
+            attribute {
+                distance-metric: angular
+            }
+        }
+    }
+    rank-profile wardowl {
+        inputs {
+            query(q) tensor<float>(x[16])
+        }
+        first-phase {
+            expression: cos(distance(field, embedding))
+        }
+    }
+    rank-profile wardowl_bm25 {
+        first-phase {
+            expression: bm25(text)
+        }
+    }
+}

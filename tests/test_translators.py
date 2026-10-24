@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from needtoknow import And, In, Or
-from needtoknow.backends.chroma import JSON_KEY, NEVER, _decode_metadata, _encode_metadata, filter_to_where
-from needtoknow.backends.pgvector import filter_to_sql
+from wardowl import And, In, Or
+from wardowl.backends.chroma import JSON_KEY, NEVER, _decode_metadata, _encode_metadata, filter_to_where
+from wardowl.backends.pgvector import filter_to_sql
 
 # ---- PostgreSQL ------------------------------------------------------------------------------
 

@@ -8,33 +8,24 @@ description: Permission-aware retrieval for RAG. Every user gets only the chunks
 ```{raw} html
 <div class="ntk-hero">
   <p class="ntk-hero__lead">
-    needtoknow puts your permission system inside RAG retrieval. Every user gets only the chunks
+    wardowl puts your permission system inside RAG retrieval. Every user gets only the chunks
     they are allowed to read, whatever vector store, permission system or framework you use.
   </p>
   <div class="ntk-hero__actions">
     <a class="sd-btn sd-btn-primary sd-rounded-pill" href="quickstart.html">Get started</a>
-    <a class="sd-btn sd-btn-outline-primary sd-rounded-pill" href="https://github.com/muzakkirhussain011/needtoknow">View on GitHub</a>
+    <a class="sd-btn sd-btn-outline-primary sd-rounded-pill" href="https://github.com/muzakkirhussain011/wardowl">View on GitHub</a>
   </div>
 </div>
 ```
 
 ```bash
-pip install needtoknow
-```
-
-```{raw} html
-<div class="ntk-hero-visual">
-  <div class="ntk-hero__stage" data-ntk-hero>
-    <img src="_static/brand/needtoknow-3d.webp" width="440" height="361" alt="The needtoknow logo: a document whose readable lines are highlighted and one line is redacted">
-  </div>
-</div>
-<script type="module" src="_static/hero3d.js"></script>
+pip install wardowl
 ```
 
 ## Built for production RAG
 
 A RAG assistant over company documents is only as safe as its retrieval step. If the search ignores
-who is asking, an engineer can ask about salaries and get HR documents summarised back. needtoknow
+who is asking, an engineer can ask about salaries and get HR documents summarised back. wardowl
 sits between your application and your vector store, and closes that gap.
 
 ::::{grid} 1 2 3 3
@@ -103,7 +94,7 @@ error instead.
 ::::{tab-item} Permissions on the chunks
 
 ```python
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 backend = InMemoryBackend(
     [
@@ -124,9 +115,9 @@ print([hit.id for hit in result.hits])  # ['handbook']
 ```python
 from psycopg_pool import ConnectionPool
 
-from needtoknow import PermissionedRetriever, Subject
-from needtoknow.authorizers.openfga import OpenFGAAuthorizer
-from needtoknow.backends.pgvector import PgVectorBackend
+from wardowl import PermissionedRetriever, Subject
+from wardowl.authorizers.openfga import OpenFGAAuthorizer
+from wardowl.backends.pgvector import PgVectorBackend
 
 backend = PgVectorBackend(ConnectionPool("postgresql://localhost/app"), embed=embed)
 authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field="doc_id")
@@ -140,10 +131,10 @@ result = retriever.retrieve("What are the salary bands?", Subject("alice"))
 ::::{tab-item} LangChain
 
 ```python
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.langchain import NeedToKnowRetriever
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.langchain import WardowlRetriever
 
-retriever = NeedToKnowRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()), k=4)
+retriever = WardowlRetriever(retriever=PermissionedRetriever(backend, MetadataACLAuthorizer()), k=4)
 
 docs = retriever.invoke("What changed in Q3 pricing?", subject=Subject("bob", ["sales"]))
 ```
@@ -155,11 +146,11 @@ docs = retriever.invoke("What changed in Q3 pricing?", subject=Subject("bob", ["
 ```python
 from llama_index.core.query_engine import RetrieverQueryEngine
 
-from needtoknow import MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.llamaindex import NeedToKnowRetriever
+from wardowl import MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.llamaindex import WardowlRetriever
 
 permissioned = PermissionedRetriever(backend, MetadataACLAuthorizer())
-retriever = NeedToKnowRetriever(permissioned, Subject("bob", ["engineering"]), k=4)
+retriever = WardowlRetriever(permissioned, Subject("bob", ["engineering"]), k=4)
 
 engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 ```

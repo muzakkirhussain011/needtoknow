@@ -1,7 +1,7 @@
-# Vespa application for needtoknow
+# Vespa application for wardowl
 
 `app/` is a single-node application package with the schema `VespaBackend` expects, for 16-dimensional
-vectors (`needtoknow.backends.vespa.schema(16)` writes `app/schemas/needtoknow.sd`). CI deploys it the
+vectors (`wardowl.backends.vespa.schema(16)` writes `app/schemas/wardowl.sd`). CI deploys it the
 same way:
 
 ```bash

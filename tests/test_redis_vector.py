@@ -10,13 +10,13 @@ import uuid
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
-from needtoknow.backends._engines import TERMS_FIELD, tag, terms
-from needtoknow.backends.redis import RedisBackend, create_index, filter_to_query, permission_terms
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, Subject
+from wardowl.backends._engines import TERMS_FIELD, tag, terms
+from wardowl.backends.redis import RedisBackend, create_index, filter_to_query, permission_terms
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-REDIS_URL = os.environ.get("NEEDTOKNOW_TEST_REDIS_URL")
+REDIS_URL = os.environ.get("WARDOWL_TEST_REDIS_URL")
 
 
 def _h(field, value):
@@ -33,7 +33,7 @@ def test_filters_become_tag_queries_on_hex_terms():
 
 
 def test_hostile_values_become_hex_digits():
-    query = filter_to_query(In("allowed_groups", ["x} | @needtoknow_terms:{*"]))
+    query = filter_to_query(In("allowed_groups", ["x} | @wardowl_terms:{*"]))
     body = query.split("{", 1)[1].rstrip("}")
     assert set(body) <= set("0123456789abcdef")
 
@@ -85,21 +85,21 @@ def test_the_search_command_puts_the_filter_before_the_knn():
     RedisBackend(client, "idx", EMBED).search("leave", 3)
     filtered, unfiltered = client.commands
     assert filtered[:2] == ("FT.SEARCH", "idx")
-    knn = "KNN 7 @embedding $vec EF_RUNTIME 64 AS __needtoknow_distance"
+    knn = "KNN 7 @embedding $vec EF_RUNTIME 64 AS __wardowl_distance"
     assert filtered[2] == f"(@{TERMS_FIELD}:{{{_h('team', 'hr')}}})=>[{knn}]"
     vector = filtered[filtered.index("vec") + 1]
     assert vector == struct.pack(f"<{EMBED.dim}f", *EMBED("leave"))
     assert filtered[-2:] == ("DIALECT", "2") and filtered[filtered.index("LIMIT") + 2] == "7"
-    assert unfiltered[2] == "*=>[KNN 3 @embedding $vec AS __needtoknow_distance]"
+    assert unfiltered[2] == "*=>[KNN 3 @embedding $vec AS __wardowl_distance]"
 
 
 def test_replies_become_hits_best_first_in_both_protocols():
     resp2 = [
         3,
-        b"needtoknow:b", [b"needtoknow_id", b"b", b"content", b"text b", b"metadata", b'{"level": 1}',
-                          b"__needtoknow_distance", b"0.5"],
-        b"needtoknow:a", [b"needtoknow_id", b"a", b"metadata", b"not json", b"__needtoknow_distance", b"0.5"],
-        b"needtoknow:raw", [b"__needtoknow_distance", b"0.1"],
+        b"wardowl:b", [b"wardowl_id", b"b", b"content", b"text b", b"metadata", b'{"level": 1}',
+                          b"__wardowl_distance", b"0.5"],
+        b"wardowl:a", [b"wardowl_id", b"a", b"metadata", b"not json", b"__wardowl_distance", b"0.5"],
+        b"wardowl:raw", [b"__wardowl_distance", b"0.1"],
     ]  # fmt: skip
     hits = RedisBackend(FakeClient(resp2), "idx", EMBED).search("leave", 3)
     expected = [("raw", "", {}), ("a", "", {}), ("b", "text b", {"level": 1})]
@@ -107,7 +107,7 @@ def test_replies_become_hits_best_first_in_both_protocols():
     assert hits[0].score == pytest.approx(0.9)
     resp3 = {
         "total_results": 1,
-        "results": [{"id": "needtoknow:c", "extra_attributes": {"needtoknow_id": "c", "__needtoknow_distance": "0.2"}}],
+        "results": [{"id": "wardowl:c", "extra_attributes": {"wardowl_id": "c", "__wardowl_distance": "0.2"}}],
     }
     (hit,) = RedisBackend(FakeClient(resp3), "idx", EMBED).search("leave", 1)
     assert hit.id == "c" and hit.score == pytest.approx(0.8)
@@ -120,7 +120,7 @@ def test_add_replaces_whole_hashes_with_hex_terms_and_exact_json():
     assert sum(1 for c in client.calls if c == ("execute",)) == 2  # batches of 500
     assert client.calls[0] == ("delete", "p:d0")
     _, key, mapping = client.calls[1]
-    assert key == "p:d0" and mapping["needtoknow_id"] == "d0" and mapping["content"] == "leave"
+    assert key == "p:d0" and mapping["wardowl_id"] == "d0" and mapping["content"] == "leave"
     assert json.loads(mapping["metadata"]) == {"allowed_groups": ["hr", 0], "flag": True}
     assert mapping[TERMS_FIELD] == ",".join(t.encode().hex() for t in terms("d0", docs[0].metadata))
     assert mapping["embedding"] == struct.pack(f"<{EMBED.dim}f", *EMBED("leave"))
@@ -134,7 +134,7 @@ def test_delete_and_configuration():
     backend = RedisBackend(client, "idx", EMBED)
     backend.delete([])
     backend.delete(["a", "a", "b"])
-    assert client.calls == [("delete-many", ("needtoknow:a", "needtoknow:b"))]
+    assert client.calls == [("delete-many", ("wardowl:a", "wardowl:b"))]
     for options in ({"ef_runtime": 0}, {"prefix": ""}):
         with pytest.raises(ValueError):
             RedisBackend(client, "idx", EMBED, **options)
@@ -168,12 +168,12 @@ def test_create_index_tolerates_an_existing_index_only():
 def test_keyword_mode_passes_each_word_as_a_parameter_beside_the_filter():
     client = FakeClient()
     backend = RedisBackend(client, "idx", mode="keyword")
-    backend.search("Leave? leave POLICY } | @needtoknow_terms:{*", 7, In("team", ["hr"]))
+    backend.search("Leave? leave POLICY } | @wardowl_terms:{*", 7, In("team", ["hr"]))
     backend.search("leave", 3)
     filtered, unfiltered = client.commands
     assert filtered[2] == f"@content:($w0 | $w1 | $w2) (@{TERMS_FIELD}:{{{_h('team', 'hr')}}})"
     params = filtered[filtered.index("PARAMS") + 1 :]
-    assert params[:7] == ("6", "w0", "leave", "w1", "policy", "w2", "needtoknow_terms")
+    assert params[:7] == ("6", "w0", "leave", "w1", "policy", "w2", "wardowl_terms")
     assert filtered[3:6] == ("WITHSCORES", "SCORER", "BM25STD")
     assert filtered[-2:] == ("DIALECT", "2") and filtered[filtered.index("LIMIT") + 2] == "7"
     assert unfiltered[2] == "@content:($w0)" and "vec" not in unfiltered
@@ -196,14 +196,14 @@ def test_keyword_mode_needs_words_and_keeps_the_first_sixty_four():
 def test_keyword_replies_carry_bm25_scores_in_both_protocols():
     resp2 = [
         2,
-        b"needtoknow:a", b"1.5", [b"needtoknow_id", b"a", b"content", b"leave policy", b"metadata", b"{}"],
-        b"needtoknow:b", b"3.25", [b"needtoknow_id", b"b", b"metadata", b'{"level": 1}'],
+        b"wardowl:a", b"1.5", [b"wardowl_id", b"a", b"content", b"leave policy", b"metadata", b"{}"],
+        b"wardowl:b", b"3.25", [b"wardowl_id", b"b", b"metadata", b'{"level": 1}'],
     ]  # fmt: skip
     hits = RedisBackend(FakeClient(resp2), "idx", mode="keyword").search("leave", 2)
     assert [(h.id, h.score, h.metadata) for h in hits] == [("b", 3.25, {"level": 1}), ("a", 1.5, {})]
     resp3 = {
         "total_results": 1,
-        "results": [{"id": "needtoknow:c", "score": 0.75, "extra_attributes": {"needtoknow_id": "c"}}],
+        "results": [{"id": "wardowl:c", "score": 0.75, "extra_attributes": {"wardowl_id": "c"}}],
     }
     (hit,) = RedisBackend(FakeClient(resp3), "idx", mode="keyword").search("leave", 1)
     assert hit.id == "c" and hit.score == 0.75
@@ -240,7 +240,7 @@ def test_create_index_builds_hnsw_or_an_exact_flat_index():
 
 
 def test_asearch_uses_the_async_client_or_a_thread():
-    reply = [1, b"needtoknow:a", [b"needtoknow_id", b"a", b"metadata", b"{}", b"__needtoknow_distance", b"0.3"]]
+    reply = [1, b"wardowl:a", [b"wardowl_id", b"a", b"metadata", b"{}", b"__wardowl_distance", b"0.3"]]
 
     class AsyncClient:
         def __init__(self):
@@ -264,7 +264,7 @@ def test_asearch_uses_the_async_client_or_a_thread():
 @pytest.fixture
 def redis_client():
     if not REDIS_URL:
-        pytest.skip("set NEEDTOKNOW_TEST_REDIS_URL to run against Redis")
+        pytest.skip("set WARDOWL_TEST_REDIS_URL to run against Redis")
     redis = pytest.importorskip("redis")
     client = redis.Redis.from_url(REDIS_URL)
     yield client
@@ -334,7 +334,7 @@ def test_hostile_and_case_variant_groups_are_only_values(redis_client):
     )
     retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy="prefilter")
     hr = retriever.retrieve("leave", Subject("ann", ["hr"]), 5)
-    hostile = retriever.retrieve("leave", Subject("mallory", ["x} | @needtoknow_terms:{*"]), 5)
+    hostile = retriever.retrieve("leave", Subject("mallory", ["x} | @wardowl_terms:{*"]), 5)
     _drop(redis_client, name)
     assert [h.id for h in hr.hits] == ["plain"] and hr.violations == 0
     assert hostile.hits == [] and hostile.violations == 0
@@ -344,7 +344,7 @@ def test_hashes_written_by_another_tool_need_their_permission_terms(redis_client
     name, backend = _store(redis_client)
     metadata = {"allowed_groups": ["hr"]}
     fields = {
-        "needtoknow_id": "raw-1",
+        "wardowl_id": "raw-1",
         "content": "leave policy",
         "metadata": json.dumps(metadata),
         "embedding": struct.pack(f"<{EMBED.dim}f", *EMBED("leave policy")),
@@ -436,7 +436,7 @@ def test_server_keyword_mode_passes_the_conformance_kit(redis_client):
 
 
 def test_server_hybrid_search_over_one_index_passes_the_conformance_kit(redis_client):
-    from needtoknow import RankFusion
+    from wardowl import RankFusion
 
     made: list[str] = []
 
@@ -471,7 +471,7 @@ def test_server_keyword_mode_ranks_by_bm25_inside_the_filter(redis_client):
         assert [h.id for h in hits] == ["b", "a"] and hits[0].score > hits[1].score > 0
         assert [h.id for h in keyword.search("leave", 5, In("allowed_groups", ["*"]))] == ["a"]
         assert [h.id for h in keyword.search("the", 5)] == ["c"]  # no stop word is dropped
-        hostile = 'leave"} | @needtoknow_terms:{* | -@content:(x)'
+        hostile = 'leave"} | @wardowl_terms:{* | -@content:(x)'
         assert keyword.search(hostile, 5, In("allowed_groups", ["nobody"])) == []
         assert {h.id for h in keyword.search(hostile, 5, In("allowed_groups", ["*"]))} == {"a"}
     finally:

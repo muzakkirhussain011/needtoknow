@@ -15,7 +15,7 @@ and request rates were within 4% of these.
 | PostgreSQL | shared_buffers 4 GB, effective_cache_size 16 GB; indexes built with maintenance_work_mem 4 GB and 3 parallel workers |
 | Load | Throughput and permission-service runs: 20 s per setting, users pre-filtering at 1% readable, cycling through the 300 questions |
 | Hardware | Kaggle, 4 CPUs, shared by PostgreSQL, OPA and the benchmark's client threads; Tesla T4 for the embeddings only |
-| Software | Python 3.13.15, needtoknow at `910f16b`, NumPy 2.1.3, sentence-transformers 5.7.0, PyTorch 2.11.0, PostgreSQL 16.15, pgvector 0.8.7, OPA 1.21.2 |
+| Software | Python 3.13.15, wardowl at `910f16b`, NumPy 2.1.3, sentence-transformers 5.7.0, PyTorch 2.11.0, PostgreSQL 16.15, pgvector 0.8.7, OPA 1.21.2 |
 
 Recall@10 is measured against the exact top 10 among the chunks the subject may read, computed by
 brute force over the same vectors. *Leaks* is the number of returned chunks the subject may not

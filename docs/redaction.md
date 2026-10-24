@@ -6,7 +6,7 @@ parts from the people who may read the rest. It runs inside the retriever, after
 check and before a reranker, a model or the caller sees the text.
 
 ```python
-from needtoknow import PermissionedRetriever, SpanRedactor
+from wardowl import PermissionedRetriever, SpanRedactor
 
 retriever = PermissionedRetriever(backend, authorizer, redactor=SpanRedactor())
 ```
@@ -40,7 +40,7 @@ permissions, and update them with `set_metadata`.
 exempt from that pattern:
 
 ```python
-from needtoknow import PatternRedactor
+from wardowl import PatternRedactor
 
 redactor = PatternRedactor(
     {"email": r"[\w.+-]+@[\w-]+\.[\w.]+", "iban": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"},

@@ -10,7 +10,7 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import (
+from wardowl import (
     AuthorizationError,
     CachingAuthorizer,
     Document,
@@ -22,8 +22,8 @@ from needtoknow import (
     PermissionedRetriever,
     Subject,
 )
-from needtoknow.caching import CacheStats
-from needtoknow.events import query_fingerprint
+from wardowl.caching import CacheStats
+from wardowl.events import query_fingerprint
 
 BOB = Subject("bob", ["eng"])
 DOCS = [
@@ -188,7 +188,7 @@ def test_an_event_that_cannot_be_built_never_replaces_the_error_or_the_result(mo
     def broken(query, key):
         raise RuntimeError("fingerprint bug")
 
-    monkeypatch.setattr("needtoknow.retriever.query_fingerprint", broken)
+    monkeypatch.setattr("wardowl.retriever.query_fingerprint", broken)
     events = []
     authz = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
     failing = PermissionedRetriever(InMemoryBackend(DOCS), authz, observers=[events.append], audit_key=b"k")
@@ -215,7 +215,7 @@ def test_opentelemetry_spans_hold_counts_not_content():
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-    from needtoknow.otel import OpenTelemetryObserver
+    from wardowl.otel import OpenTelemetryObserver
 
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -225,11 +225,11 @@ def test_opentelemetry_spans_hold_counts_not_content():
         "leave salary", BOB
     )
     (span,) = exporter.get_finished_spans()
-    assert span.name == "needtoknow.retrieve"
-    assert span.attributes["needtoknow.strategy"] == "prefilter" and span.attributes["needtoknow.returned"] == 1
+    assert span.name == "wardowl.retrieve"
+    assert span.attributes["wardowl.strategy"] == "prefilter" and span.attributes["wardowl.returned"] == 1
     assert span.attributes["gen_ai.operation.name"] == "retrieval" and span.attributes["gen_ai.retrieval.top_k"] == 5
-    assert span.attributes["needtoknow.searches"] == 1 and "error.type" not in span.attributes
-    assert "needtoknow.subject.id" not in span.attributes
+    assert span.attributes["wardowl.searches"] == 1 and "error.type" not in span.attributes
+    assert "wardowl.subject.id" not in span.attributes
     assert all("leave" not in str(v) for v in span.attributes.values())
     assert span.end_time >= span.start_time
 
@@ -281,7 +281,7 @@ def test_opentelemetry_metrics_count_outcomes_and_never_identify_anyone():
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-    from needtoknow.otel import GENAI_DURATION_BUCKETS, OpenTelemetryMetrics
+    from wardowl.otel import GENAI_DURATION_BUCKETS, OpenTelemetryMetrics
 
     reader = InMemoryMetricReader()
     observer = OpenTelemetryMetrics(MeterProvider(metric_readers=[reader]).get_meter("test"))
@@ -295,24 +295,24 @@ def test_opentelemetry_metrics_count_outcomes_and_never_identify_anyone():
     points = _points(reader)
     assert set(points) == {
         "gen_ai.client.operation.duration",
-        "needtoknow.retrievals",
-        "needtoknow.search.duration",
-        "needtoknow.authorize.duration",
-        "needtoknow.chunks.returned",
-        "needtoknow.chunks.examined",
-        "needtoknow.chunks.denied",
-        "needtoknow.violations",
+        "wardowl.retrievals",
+        "wardowl.search.duration",
+        "wardowl.authorize.duration",
+        "wardowl.chunks.returned",
+        "wardowl.chunks.examined",
+        "wardowl.chunks.denied",
+        "wardowl.violations",
     }
-    outcomes = {p.attributes["needtoknow.outcome"]: p.value for p in points["needtoknow.retrievals"]}
+    outcomes = {p.attributes["wardowl.outcome"]: p.value for p in points["wardowl.retrievals"]}
     assert outcomes == {"complete": 2, "error": 1}
-    (error,) = [p for p in points["needtoknow.retrievals"] if "error.type" in p.attributes]
+    (error,) = [p for p in points["wardowl.retrievals"] if "error.type" in p.attributes]
     assert error.attributes["error.type"] == "AuthorizationError"
     durations = points["gen_ai.client.operation.duration"]
     assert all(p.attributes["gen_ai.operation.name"] == "retrieval" for p in durations)
     assert sum(p.count for p in durations) == 3
     assert tuple(durations[0].explicit_bounds) == GENAI_DURATION_BUCKETS
-    assert sum(p.value for p in points["needtoknow.chunks.returned"]) == 3  # bob 1, ann 2
-    assert [p.value for p in points["needtoknow.violations"]] == [0, 0]  # recorded, so alerts have a series
+    assert sum(p.value for p in points["wardowl.chunks.returned"]) == 3  # bob 1, ann 2
+    assert [p.value for p in points["wardowl.violations"]] == [0, 0]  # recorded, so alerts have a series
     for metric in points.values():
         for point in metric:
             assert not {"bob", "ann", "leave", "salary"} & {str(v) for v in point.attributes.values()}
@@ -343,7 +343,7 @@ def test_opentelemetry_spans_name_the_cause_of_a_failure():
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-    from needtoknow.otel import OpenTelemetryObserver
+    from wardowl.otel import OpenTelemetryObserver
 
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
@@ -358,7 +358,7 @@ def test_opentelemetry_spans_name_the_cause_of_a_failure():
         retriever.retrieve("leave", BOB)
     (span,) = exporter.get_finished_spans()
     assert span.attributes["error.type"] == "AuthorizationError"
-    assert span.attributes["needtoknow.error.cause"] == "TimeoutError"
+    assert span.attributes["wardowl.error.cause"] == "TimeoutError"
 
 
 def test_cache_stats_count_hits_and_the_answers_the_authorizer_was_asked_for():

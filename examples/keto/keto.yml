@@ -1,4 +1,4 @@
-# Ory Keto configuration for needtoknow's tests and the KetoAuthorizer guide: an in-memory store
+# Ory Keto configuration for wardowl's tests and the KetoAuthorizer guide: an in-memory store
 # with the namespaces in namespaces.ts (a Document's `view` relation lists users and the members of
 # groups). Not for production: data lives in memory.
 dsn: memory

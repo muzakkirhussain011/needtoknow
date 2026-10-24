@@ -1,7 +1,7 @@
 cff-version: 1.2.0
-message: "If you use needtoknow in your work, please cite it as below."
+message: "If you use wardowl in your work, please cite it as below."
 type: software
-title: "needtoknow: permission-aware retrieval for RAG"
+title: "wardowl: permission-aware retrieval for RAG"
 abstract: >-
   A Python library that makes retrieval-augmented generation respect permissions: every user gets
   only the chunks they are allowed to read, whatever vector store, permission system or framework
@@ -13,8 +13,8 @@ authors:
 version: 1.6.0
 date-released: 2026-10-23
 license: MIT
-repository-code: "https://github.com/muzakkirhussain011/needtoknow"
-url: "https://muzakkirhussain011.github.io/needtoknow/"
+repository-code: "https://github.com/muzakkirhussain011/wardowl"
+url: "https://muzakkirhussain011.github.io/wardowl/"
 keywords:
   - retrieval-augmented generation
   - access control

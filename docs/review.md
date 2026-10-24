@@ -1,16 +1,16 @@
 # For security reviewers
 
-Where to start when reviewing needtoknow: what to read, which code decides what, the contracts it
+Where to start when reviewing wardowl: what to read, which code decides what, the contracts it
 relies on, the APIs worth a second look, the evidence, and how to reproduce it. **No independent
 security audit has been carried out yet.** Everything below is the project's own work, which a
 review should check rather than take on trust.
 
 ## Scope
 
-The `needtoknow` package: the retriever, the filter language, the authorizers, the caching layer,
+The `wardowl` package: the retriever, the filter language, the authorizers, the caching layer,
 the store backends and the framework adapters. The example gateway in `examples/gateway` is a
 separate deployment with its
-[own threat model](https://github.com/muzakkirhussain011/needtoknow/blob/main/examples/gateway/threat-model.md).
+[own threat model](https://github.com/muzakkirhussain011/wardowl/blob/main/examples/gateway/threat-model.md).
 
 ## Read first
 
@@ -28,25 +28,25 @@ separate deployment with its
 
 | Module | Decides | Read for |
 |---|---|---|
-| `needtoknow/retriever.py` | Which strategy runs, the pre-filter and its re-check, post-filtering and how far it widens, reranking, the validation of every answer, the events | Every result passes through it. One plan serves `retrieve` and `aretrieve`. |
-| `needtoknow/filters.py` | The filter language and `matches`, its reference semantics | Every store translation must agree with `matches`; parsing is depth-limited. |
-| `needtoknow/authz.py` | `MetadataACLAuthorizer`, `TenantAuthorizer`, `AllOf`, `AnyOf` | Composition, and when a combined filter or scope exists. |
-| `needtoknow/caching.py` | Cached decisions, the shared cache, signing, epochs, `invalidate()` | Revocation and replay. |
-| `needtoknow/authorizers/` | Requests to OPA, OpenFGA, SpiceDB and Cerbos, and the parsing of their answers | Partial, malformed and truncated answers. |
-| `needtoknow/backends/` | Each store's translation of a filter into its query | Injection, type confusion, a filter made broader. |
-| `needtoknow/mcp.py`, `langchain.py`, `llamaindex.py`, `haystack.py` | How each framework binds the subject | Impersonation by a client or a model. |
+| `wardowl/retriever.py` | Which strategy runs, the pre-filter and its re-check, post-filtering and how far it widens, reranking, the validation of every answer, the events | Every result passes through it. One plan serves `retrieve` and `aretrieve`. |
+| `wardowl/filters.py` | The filter language and `matches`, its reference semantics | Every store translation must agree with `matches`; parsing is depth-limited. |
+| `wardowl/authz.py` | `MetadataACLAuthorizer`, `TenantAuthorizer`, `AllOf`, `AnyOf` | Composition, and when a combined filter or scope exists. |
+| `wardowl/caching.py` | Cached decisions, the shared cache, signing, epochs, `invalidate()` | Revocation and replay. |
+| `wardowl/authorizers/` | Requests to OPA, OpenFGA, SpiceDB and Cerbos, and the parsing of their answers | Partial, malformed and truncated answers. |
+| `wardowl/backends/` | Each store's translation of a filter into its query | Injection, type confusion, a filter made broader. |
+| `wardowl/mcp.py`, `langchain.py`, `llamaindex.py`, `haystack.py` | How each framework binds the subject | Impersonation by a client or a model. |
 
 ## The contracts
 
 - **A backend** returns hits best first, applies a filter exactly as `matches` defines it, returns
   "nothing can match" as no results (never as no filter), and returns each chunk's metadata as
-  stored. `needtoknow.testing.check_backend` checks all four, and every built-in backend passes it
+  stored. `wardowl.testing.check_backend` checks all four, and every built-in backend passes it
   against its real store in CI.
 - **An authorizer**'s `check` returns one real `bool` per hit, in order; `filter_for` returns a filter
   that selects exactly what `check` allows, or None; `scope_for`, when present, returns a condition
-  every readable chunk meets. `needtoknow.testing.check_authorizer` checks the first two agree. Any
+  every readable chunk meets. `wardowl.testing.check_authorizer` checks the first two agree. Any
   failure raises, and the retriever then returns nothing.
-- **The subject** comes from your authentication. needtoknow cannot verify it.
+- **The subject** comes from your authentication. wardowl cannot verify it.
 
 ## APIs that deserve a second look
 
@@ -91,8 +91,8 @@ separate deployment with its
 - Without external services: `pip install -e ".[dev]"`, then `pytest`. The suites that need a store
   or a permission service skip themselves.
 - With them: the `test` job in
-  [`.github/workflows/ci.yml`](https://github.com/muzakkirhussain011/needtoknow/blob/main/.github/workflows/ci.yml)
-  starts each server (images and versions are listed there) and sets the `NEEDTOKNOW_TEST_*`
+  [`.github/workflows/ci.yml`](https://github.com/muzakkirhussain011/wardowl/blob/main/.github/workflows/ci.yml)
+  starts each server (images and versions are listed there) and sets the `WARDOWL_TEST_*`
   variables that switch each suite on. Run the same containers and set the same variables.
 - For your own backend or authorizer: the [conformance kit](extending.md#test-it-with-the-conformance-kit).
 
@@ -100,7 +100,7 @@ separate deployment with its
 
 Found by the project's own review and tests, all fixed with regression tests. The first six are
 published as advisory
-[GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/needtoknow/security/advisories/GHSA-prfv-2pwr-5rx2).
+[GHSA-prfv-2pwr-5rx2](https://github.com/muzakkirhussain011/wardowl/security/advisories/GHSA-prfv-2pwr-5rx2).
 
 | Found | Problem | Fixed in |
 |---|---|---|
@@ -120,5 +120,5 @@ published as advisory
 
 ## Reporting
 
-Report anything you find privately, as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md)
+Report anything you find privately, as [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md)
 describes.

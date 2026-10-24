@@ -139,7 +139,7 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:19071/state/v1/health | grep -q '"up"' && break; sleep 2; done
           (cd examples/vespa/app && zip -qr - .) | curl -sf --header Content-Type:application/zip --data-binary @- \
             http://127.0.0.1:19071/application/v2/tenant/default/prepareandactivate || { docker logs --tail 80 vespa; exit 1; }
-          probe=http://127.0.0.1:8090/document/v1/needtoknow/needtoknow/docid/ready
+          probe=http://127.0.0.1:8090/document/v1/wardowl/wardowl/docid/ready
           for i in $(seq 1 90); do curl -sf -X POST -H 'Content-Type: application/json' -d '{"fields":{}}' "$probe" && break; sleep 2; done
           curl -sf -X DELETE "$probe" || { docker logs --tail 80 vespa; exit 1; }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -167,34 +167,34 @@ jobs:
           [ "$(docker inspect -f '{{.State.Health.Status}}' mongodb)" = healthy ] || { docker logs --tail 50 mongodb; exit 1; }
       - name: Library and adapter tests (property-based, against real PostgreSQL, Chroma, Qdrant, Milvus, MongoDB, Weaviate, Elasticsearch, OpenSearch, Vespa, Cassandra, OPA, OpenFGA, SpiceDB, Cerbos and Redis)
         env:
-          NEEDTOKNOW_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
-          NEEDTOKNOW_TEST_OPA_URL: http://127.0.0.1:8181
-          NEEDTOKNOW_TEST_OPENFGA_URL: http://127.0.0.1:8080
-          NEEDTOKNOW_TEST_SPICEDB_URL: http://127.0.0.1:8443
-          NEEDTOKNOW_TEST_SPICEDB_TOKEN: ntk-test
-          NEEDTOKNOW_TEST_CERBOS_URL: http://127.0.0.1:3592
-          NEEDTOKNOW_TEST_KETO_URL: http://127.0.0.1:4466
-          NEEDTOKNOW_TEST_KETO_WRITE_URL: http://127.0.0.1:4467
-          NEEDTOKNOW_TEST_REDIS_URL: redis://127.0.0.1:6379/0
-          NEEDTOKNOW_TEST_QDRANT_URL: http://127.0.0.1:6333
-          NEEDTOKNOW_TEST_VESPA_URL: http://127.0.0.1:8090
-          NEEDTOKNOW_TEST_CASSANDRA_HOST: 127.0.0.1
-          NEEDTOKNOW_TEST_MILVUS_URL: http://127.0.0.1:19530
-          NEEDTOKNOW_TEST_MONGODB_URL: mongodb://127.0.0.1:27017/?directConnection=true
-          NEEDTOKNOW_TEST_WEAVIATE_URL: http://127.0.0.1:8079
-          NEEDTOKNOW_TEST_WEAVIATE_GRPC_PORT: "50051"
-          NEEDTOKNOW_TEST_ELASTICSEARCH_URL: http://127.0.0.1:9200
-          NEEDTOKNOW_TEST_OPENSEARCH_URL: http://127.0.0.1:9201
+          WARDOWL_TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test
+          WARDOWL_TEST_OPA_URL: http://127.0.0.1:8181
+          WARDOWL_TEST_OPENFGA_URL: http://127.0.0.1:8080
+          WARDOWL_TEST_SPICEDB_URL: http://127.0.0.1:8443
+          WARDOWL_TEST_SPICEDB_TOKEN: ntk-test
+          WARDOWL_TEST_CERBOS_URL: http://127.0.0.1:3592
+          WARDOWL_TEST_KETO_URL: http://127.0.0.1:4466
+          WARDOWL_TEST_KETO_WRITE_URL: http://127.0.0.1:4467
+          WARDOWL_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          WARDOWL_TEST_QDRANT_URL: http://127.0.0.1:6333
+          WARDOWL_TEST_VESPA_URL: http://127.0.0.1:8090
+          WARDOWL_TEST_CASSANDRA_HOST: 127.0.0.1
+          WARDOWL_TEST_MILVUS_URL: http://127.0.0.1:19530
+          WARDOWL_TEST_MONGODB_URL: mongodb://127.0.0.1:27017/?directConnection=true
+          WARDOWL_TEST_WEAVIATE_URL: http://127.0.0.1:8079
+          WARDOWL_TEST_WEAVIATE_GRPC_PORT: "50051"
+          WARDOWL_TEST_ELASTICSEARCH_URL: http://127.0.0.1:9200
+          WARDOWL_TEST_OPENSEARCH_URL: http://127.0.0.1:9201
         run: |
           pytest -q -ra --cov --cov-report=
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
           coverage report --fail-under=90
           # The code that decides who reads what is held to a higher bar: the retriever, the filter
           # language, composition, caching and the permission-service clients, together.
-          coverage report --fail-under=95 --include="needtoknow/retriever.py,needtoknow/filters.py,needtoknow/authz.py,needtoknow/caching.py,needtoknow/authorizers/*.py"
+          coverage report --fail-under=95 --include="wardowl/retriever.py,wardowl/filters.py,wardowl/authz.py,wardowl/caching.py,wardowl/authorizers/*.py"
       - name: Pinecone, the service (only this step gets the key; skipped without the secret)
         env:
-          NEEDTOKNOW_TEST_PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+          WARDOWL_TEST_PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
         run: pytest -q -p no:cacheprovider tests/test_pinecone.py
       - name: Cassandra and Vespa server errors, when a step failed
         if: failure()
@@ -208,7 +208,7 @@ jobs:
           python -m pytest -q examples/fastapi_rag
       - name: Benchmark harness (synthetic smoke run against real Chroma and PostgreSQL)
         env:
-          NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
+          WARDOWL_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: |
           python benchmarks/permissions_bench.py --teams 100 --docs 3000 --queries 15 \
             --selectivity 0.01,0.1,1 --backends exact,chroma,pgvector,pgvector-rls --check \
@@ -216,7 +216,7 @@ jobs:
           cat bench.md >> "$GITHUB_STEP_SUMMARY"
       - name: Load benchmark harness (synthetic smoke run against real PostgreSQL and OPA)
         env:
-          NEEDTOKNOW_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
+          WARDOWL_BENCH_DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: |
           python benchmarks/load_bench.py --docs 3000 --queries 20 --selectivity 0.01,1 --users 1,4 \
             --seconds 1 --repeat 2 --ef-search 100 --opa-url http://127.0.0.1:8181 --check --out load.json \
@@ -260,7 +260,7 @@ jobs:
           pip install --no-deps --no-build-isolation -e .
       - run: pytest -q
 
-  # The same library tests on macOS and Windows: needtoknow is pure Python, and this checks it.
+  # The same library tests on macOS and Windows: wardowl is pure Python, and this checks it.
   platform:
     name: platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -308,7 +308,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/sbom"
           "$RUNNER_TEMP/sbom/bin/pip" install --no-deps dist/*.whl
           cyclonedx-py environment "$RUNNER_TEMP/sbom" --output-format JSON --output-file sbom.cdx.json
-          python -c "import json; names = [c['name'] for c in json.load(open('sbom.cdx.json'))['components']]; assert 'needtoknow' in names, names"
+          python -c "import json; names = [c['name'] for c in json.load(open('sbom.cdx.json'))['components']]; assert 'wardowl' in names, names"
       - name: The sdist must not ship the example deployments
         run: |
           tar -tzf dist/*.tar.gz > sdist-files.txt
@@ -395,4 +395,4 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - name: Build the example gateway image
-        run: docker build --target runtime -t needtoknow-gateway:ci examples/gateway
+        run: docker build --target runtime -t wardowl-gateway:ci examples/gateway

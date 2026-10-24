@@ -2,11 +2,11 @@ name: Release
 
 # Publishing a GitHub release builds the package and uploads it to PyPI with trusted publishing:
 # no API token exists anywhere. PyPI must list a trusted publisher with these values:
-#   project needtoknow, owner muzakkirhussain011, repository needtoknow,
+#   project wardowl, owner muzakkirhussain011, repository wardowl,
 #   workflow release.yml, environment pypi.
 # The publish action also uploads PEP 740 attestations that tie each file to this workflow run,
 # and the attach job puts the same files on the GitHub release with Sigstore signatures, an SBOM
-# and the SLSA build provenance the build job records (needtoknow-<version>.intoto.jsonl).
+# and the SLSA build provenance the build job records (wardowl-<version>.intoto.jsonl).
 
 on:
   release:
@@ -37,7 +37,7 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${TAG#v}"
-          if [ ! -f "dist/needtoknow-${version}-py3-none-any.whl" ]; then
+          if [ ! -f "dist/wardowl-${version}-py3-none-any.whl" ]; then
             echo "Tag ${TAG} does not match the built package:"; ls dist; exit 1
           fi
       # SLSA build provenance: an in-toto statement, signed with Sigstore, naming this workflow run
@@ -51,7 +51,7 @@ jobs:
           BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
         run: |
           mkdir provenance
-          cp "$BUNDLE" "provenance/needtoknow-${TAG#v}.intoto.jsonl"
+          cp "$BUNDLE" "provenance/wardowl-${TAG#v}.intoto.jsonl"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: dist, path: dist/, if-no-files-found: error }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -63,7 +63,7 @@ jobs:
     # The only job that can obtain a PyPI credential, and it runs no project code.
     environment:
       name: pypi
-      url: https://pypi.org/project/needtoknow/
+      url: https://pypi.org/project/wardowl/
     permissions:
       id-token: write
     steps:
@@ -101,7 +101,7 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/sbom"
           "$RUNNER_TEMP/sbom/bin/pip" install --no-deps dist/*.whl
-          cyclonedx-py environment "$RUNNER_TEMP/sbom" --output-format JSON --output-file "dist/needtoknow-${TAG#v}.cdx.json"
+          cyclonedx-py environment "$RUNNER_TEMP/sbom" --output-format JSON --output-file "dist/wardowl-${TAG#v}.cdx.json"
       - name: Sign every file with Sigstore
         run: |
           python -m sigstore sign dist/*

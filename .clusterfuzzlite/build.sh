@@ -1,6 +1,6 @@
 #!/bin/bash -eu
 # Install the package with no extras (the translations under test need no client library), then
-# package each fuzz target with its interpreter so ClusterFuzzLite can run it. needtoknow has no
+# package each fuzz target with its interpreter so ClusterFuzzLite can run it. wardowl has no
 # dependencies, and its build backend comes from the hash-pinned build.txt, so nothing is
 # installed unpinned.
 pip3 install --require-hashes --no-deps -r .github/requirements/build.txt

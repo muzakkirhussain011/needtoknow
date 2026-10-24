@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from rag_service import Settings, build_retriever, create_app, demo_documents
 
-from needtoknow import FunctionAuthorizer, InMemoryBackend, PermissionedRetriever
+from wardowl import FunctionAuthorizer, InMemoryBackend, PermissionedRetriever
 
 SETTINGS = Settings("test-secret-" + "x" * 40)
 QUERY = "leave deploys salary"  # words from every document, so only permissions decide
@@ -121,9 +121,9 @@ def test_a_failed_permission_check_answers_503_and_reveals_nothing():
 
 
 def test_settings_refuse_a_missing_or_short_secret(monkeypatch):
-    monkeypatch.delenv("NEEDTOKNOW_DEMO_JWT_SECRET", raising=False)
+    monkeypatch.delenv("WARDOWL_DEMO_JWT_SECRET", raising=False)
     with pytest.raises(RuntimeError):
         Settings.from_env()
-    monkeypatch.setenv("NEEDTOKNOW_DEMO_JWT_SECRET", "short")
+    monkeypatch.setenv("WARDOWL_DEMO_JWT_SECRET", "short")
     with pytest.raises(RuntimeError):
         Settings.from_env()

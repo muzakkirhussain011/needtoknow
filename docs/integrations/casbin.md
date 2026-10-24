@@ -6,14 +6,14 @@ service. `CasbinAuthorizer` asks the `casbin.Enforcer` you already use about eac
 process.
 
 ```bash
-pip install "needtoknow[casbin]"
+pip install "wardowl[casbin]"
 ```
 
 ```python
 import casbin
 
-from needtoknow import PermissionedRetriever
-from needtoknow.authorizers.casbin import CasbinAuthorizer
+from wardowl import PermissionedRetriever
+from wardowl.authorizers.casbin import CasbinAuthorizer
 
 enforcer = casbin.Enforcer("rbac_model.conf", adapter)  # your model and policy adapter
 retriever = PermissionedRetriever(backend, CasbinAuthorizer(enforcer))

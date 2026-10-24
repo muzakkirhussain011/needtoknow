@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from needtoknow import (
+from wardowl import (
     CachingAuthorizer,
     Document,
     FunctionAuthorizer,

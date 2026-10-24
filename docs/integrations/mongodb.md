@@ -1,13 +1,13 @@
 # MongoDB Atlas Vector Search
 
 ```bash
-pip install "needtoknow[mongodb]"
+pip install "wardowl[mongodb]"
 ```
 
 The backend runs `$vectorSearch` with the permission filter as its pre-filter, so the k nearest
 chunks the subject may read come back however few of the collection's chunks that is. It works on
 MongoDB Atlas and on local Atlas deployments (the `mongodb/mongodb-atlas-local` image, or
-`atlas deployments setup --type local`). CI runs needtoknow's
+`atlas deployments setup --type local`). CI runs wardowl's
 [conformance kit](../extending.md#test-it-with-the-conformance-kit) against
 `mongodb/mongodb-atlas-local:8.0.30`; Atlas itself serves the same `$vectorSearch` stage, but CI
 does not test it.
@@ -15,7 +15,7 @@ does not test it.
 ```python
 from pymongo import MongoClient
 
-from needtoknow.backends.mongodb import MongoDBBackend, create_search_index
+from wardowl.backends.mongodb import MongoDBBackend, create_search_index
 
 collection = MongoClient(MONGODB_URI)["rag"]["chunks"]
 create_search_index(collection, dim=768)  # waits until the index is queryable
@@ -24,8 +24,8 @@ backend.add(documents)  # waits until the index shows them
 ```
 
 Each chunk is one document: `_id` (the document id), `content`, `metadata`, `embedding`, and two
-fields needtoknow maintains, `needtoknow_terms` and `needtoknow_write`. `create_search_index`
-creates the collection if needed and a `vectorSearch` index named `needtoknow`, with the vector
+fields wardowl maintains, `wardowl_terms` and `wardowl_write`. `create_search_index`
+creates the collection if needed and a `vectorSearch` index named `wardowl`, with the vector
 (cosine similarity by default) and, as filter fields, the permission terms, the write marker and
 `_id`.
 
@@ -33,10 +33,10 @@ creates the collection if needed and a `vectorSearch` index named `needtoknow`, 
 
 Atlas Vector Search indexes a write a moment after MongoDB stores it, not at once. A retrieval made
 in between would not see a new chunk, and, worse for permissions, could still match a replaced
-chunk by its old permission terms. needtoknow's re-check reads the stored metadata, so such a
+chunk by its old permission terms. wardowl's re-check reads the stored metadata, so such a
 chunk is dropped rather than leaked, but `add` and `delete` close the gap by default:
 
-- every `add` writes a fresh value of `needtoknow_write` on each chunk, and returns once an exact
+- every `add` writes a fresh value of `wardowl_write` on each chunk, and returns once an exact
   search filtered on that value finds every chunk it wrote. That is also when their new permission
   terms are searchable.
 - every `delete` returns once the index no longer returns the deleted ids.
@@ -66,13 +66,13 @@ whatever your metadata looks like.
 
 ## Collections written by other tools
 
-A document without `needtoknow_terms` is invisible to a pre-filtered search, though post-filtering
+A document without `wardowl_terms` is invisible to a pre-filtered search, though post-filtering
 still finds it and checks its metadata. Fill the field in your ingestion pipeline:
 
 ```python
-from needtoknow.backends.mongodb import permission_terms
+from wardowl.backends.mongodb import permission_terms
 
-document["needtoknow_terms"] = permission_terms(document["metadata"])
+document["wardowl_terms"] = permission_terms(document["metadata"])
 ```
 
 ## Keyword search and hybrid search
@@ -84,12 +84,12 @@ terms, the write marker and `_id` as tokens. One collection then serves both hal
 [hybrid search](../hybrid.md):
 
 ```python
-from needtoknow import RankFusion
-from needtoknow.backends.mongodb import create_text_index
+from wardowl import RankFusion
+from wardowl.backends.mongodb import create_text_index
 
 create_search_index(collection, dim=768)
-create_text_index(collection)  # the "needtoknow_text" index
-vector = MongoDBBackend(collection, embed=embed, text_index="needtoknow_text")
+create_text_index(collection)  # the "wardowl_text" index
+vector = MongoDBBackend(collection, embed=embed, text_index="wardowl_text")
 keyword = MongoDBBackend(collection, mode="keyword")
 retriever = PermissionedRetriever(RankFusion(vector, keyword), authorizer)
 ```

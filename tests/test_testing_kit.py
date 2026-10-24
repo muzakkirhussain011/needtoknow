@@ -7,7 +7,7 @@ import dataclasses
 import pytest
 from helpers import FilterIgnoringBackend
 
-from needtoknow import (
+from wardowl import (
     CachingAuthorizer,
     Document,
     FunctionAuthorizer,
@@ -17,7 +17,7 @@ from needtoknow import (
     MetadataACLAuthorizer,
     Subject,
 )
-from needtoknow.testing import ConformanceError, HashingEmbedder, check_authorizer, check_backend
+from wardowl.testing import ConformanceError, HashingEmbedder, check_authorizer, check_backend
 
 
 def test_the_reference_backend_conforms():

@@ -18,18 +18,18 @@ import re
 import sys
 from typing import Any
 
-from needtoknow.backends.lancedb import filter_to_sql as lancedb_predicate
-from needtoknow.backends.pgvector import filter_to_sql as pgvector_condition
-from needtoknow.backends.redis import filter_to_query as redis_query
-from needtoknow.filters import And, Filter, In, Or, filter_from_dict, filter_to_dict, matches
+from wardowl.backends.lancedb import filter_to_sql as lancedb_predicate
+from wardowl.backends.pgvector import filter_to_sql as pgvector_condition
+from wardowl.backends.redis import filter_to_query as redis_query
+from wardowl.filters import And, Filter, In, Or, filter_from_dict, filter_to_dict, matches
 
 _PG_PARTS = re.compile(
     r"metadata @> %s::jsonb"
     r"|\(metadata -> %s = ANY\(%s::jsonb\[\]\) OR metadata -> %s @> ANY\(%s::jsonb\[\]\)\)"
     r"|TRUE|FALSE| OR | AND |[()]"
 )
-_LANCE_PARTS = re.compile(r"array_has_any\(needtoknow_terms, \[('[0-9a-f]+'(, )?)+\]\)| AND | OR |[()]")
-_REDIS_PARTS = re.compile(r"@needtoknow_terms:\{[0-9a-f]+( \| [0-9a-f]+)*\}| \| | |[()]")
+_LANCE_PARTS = re.compile(r"array_has_any\(wardowl_terms, \[('[0-9a-f]+'(, )?)+\]\)| AND | OR |[()]")
+_REDIS_PARTS = re.compile(r"@wardowl_terms:\{[0-9a-f]+( \| [0-9a-f]+)*\}| \| | |[()]")
 _METADATA = [{}, {"team": "a"}, {"team": ["a", 1]}, {"level": 1}, {"tags": [["a"]]}, {"team": True}]
 
 

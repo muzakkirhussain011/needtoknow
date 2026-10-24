@@ -40,10 +40,10 @@ this table:
 | The permission service was behind | Its consistency mode (OpenFGA's `MINIMIZE_LATENCY`, SpiceDB's `minimizeLatency`) or its bundle or policy reload interval covers the gap | Use the stricter modes for this kind of access ([Strict revocation](revocation.md#strict-revocation)). |
 | The chunk's metadata was wrong or not yet updated | The metadata stored on the chunk does not match the source document's sharing | Correct it with `set_metadata`, and run your permission sync on every sharing change, not on a schedule only. |
 | The subject had a group, tenant or id it should not have | The claims logged with that request | Build the subject only from verified authentication ([Security model](security.md#the-subject-must-come-from-authentication)). |
-| None of these | | Treat it as a possible bug in needtoknow: report it privately as [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md) describes, with the versions, the authorizer, the backend and the event. |
+| None of these | | Treat it as a possible bug in wardowl: report it privately as [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md) describes, with the versions, the authorizer, the backend and the event. |
 
 Check your version against the project's
-[security advisories](https://github.com/muzakkirhussain011/needtoknow/security/advisories) as well.
+[security advisories](https://github.com/muzakkirhussain011/wardowl/security/advisories) as well.
 
 **Afterwards.** If the chunks reached a model, its answers in that conversation may contain them;
 handle that under your data-incident process. Record the cause and what changed, and if the cache's
@@ -60,8 +60,8 @@ passed through, so upgrade if you use it.
    and since when.
 2. Look at what changed then: the store's version, the index mapping or schema, the type of a
    permission field (a number where the filter has strings), your own backend's translation, or a
-   needtoknow upgrade.
-3. Run `needtoknow.testing.check_backend` against a staging copy of that store at that version
+   wardowl upgrade.
+3. Run `wardowl.testing.check_backend` against a staging copy of that store at that version
    ([conformance kit](extending.md#test-it-with-the-conformance-kit)). It compares the store's
    answers with the reference semantics on generated documents and filters.
 4. Report it as SECURITY.md describes: a store that returns what the filter excludes is a bug in its
@@ -69,11 +69,11 @@ passed through, so upgrade if you use it.
 
 ## Retrievals fail with AuthorizationError
 
-**What it means.** needtoknow could not get a decision it can trust, so it returned nothing. Users
+**What it means.** wardowl could not get a decision it can trust, so it returned nothing. Users
 get errors; nothing is exposed.
 
 1. Find which part is failing. From 1.4.0, `RetrievalEvent.cause` (or the span attribute
-   `needtoknow.error.cause`) names the underlying error: `TimeoutError` for a slow permission
+   `wardowl.error.cause`) names the underlying error: `TimeoutError` for a slow permission
    service, `ConnectionRefusedError` or another `OSError` for one that cannot be reached, and none
    for an error status (HTTP 503) or an answer in the wrong shape, which the service's own logs
    explain.
@@ -106,8 +106,8 @@ confirmed: retry it once Redis is back.
 
 1. Read the advisory for the affected and patched versions, and any workaround.
 2. Upgrade to a patched release of the line you run (supported lines are in
-   [SECURITY.md](https://github.com/muzakkirhussain011/needtoknow/blob/main/SECURITY.md#supported-versions)),
-   for example `pip install --upgrade "needtoknow>=1.2.1,<1.3"`.
+   [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md#supported-versions)),
+   for example `pip install --upgrade "wardowl>=1.2.1,<1.3"`.
 3. Read that release's notes in the [changelog](changelog.md) before a rolling upgrade: a release
    that changes shared-cache keys asks you to call `invalidate()` once every replica runs it.
 4. Apply the advisory's workaround to anything you cannot upgrade at once.

@@ -1,6 +1,6 @@
 """The vector stores the load benchmark can run against, behind one interface.
 
-Each store loads the corpus through needtoknow's own backend (so the measured layout is the one
+Each store loads the corpus through wardowl's own backend (so the measured layout is the one
 users get), waits until its index is built, reports what that took, and makes a backend for the
 retrieval runs. `--ef-search` is each store's search breadth: pgvector's `hnsw.ef_search`,
 Qdrant's `hnsw_ef`, Milvus's `ef`, the candidates per shard of Elasticsearch and OpenSearch,
@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 from permissions_bench import documents, log
 
-NAME = "needtoknow_load"
+NAME = "wardowl_load"
 BATCH = 5000
 
 
@@ -106,7 +106,7 @@ class PgVector:
     def backend(self, embed: Any, users: int) -> Any:
         from psycopg_pool import ConnectionPool
 
-        from needtoknow.backends.pgvector import PgVectorBackend
+        from wardowl.backends.pgvector import PgVectorBackend
 
         pool = ConnectionPool(self.url, min_size=users, max_size=users, open=True)
         return PgVectorBackend(pool, embed, table=NAME, ef_search=self.ef_search)
@@ -122,7 +122,7 @@ class Qdrant:
         self.ef_search = ef_search
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
-        from needtoknow.backends.qdrant import QdrantBackend, create_collection
+        from wardowl.backends.qdrant import QdrantBackend, create_collection
 
         if self.client.collection_exists(NAME):
             self.client.delete_collection(NAME)
@@ -143,7 +143,7 @@ class Qdrant:
     def backend(self, embed: Any, users: int) -> Any:
         from qdrant_client import models
 
-        from needtoknow.backends.qdrant import QdrantBackend
+        from wardowl.backends.qdrant import QdrantBackend
 
         params = models.SearchParams(hnsw_ef=self.ef_search) if self.ef_search else None
         return QdrantBackend(self.client, NAME, embed, search_params=params)
@@ -159,7 +159,7 @@ class Milvus:
         self.ef_search = ef_search
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
-        from needtoknow.backends.milvus import MilvusBackend, create_collection
+        from wardowl.backends.milvus import MilvusBackend, create_collection
 
         if self.client.has_collection(NAME):
             self.client.drop_collection(NAME)
@@ -186,7 +186,7 @@ class Milvus:
         }
 
     def backend(self, embed: Any, users: int) -> Any:
-        from needtoknow.backends.milvus import MilvusBackend
+        from wardowl.backends.milvus import MilvusBackend
 
         return MilvusBackend(self.client, NAME, embed, ef=self.ef_search or 100)
 
@@ -199,7 +199,7 @@ class SearchEngine:
         if name == "elasticsearch":
             from elasticsearch import Elasticsearch
 
-            from needtoknow.backends import elasticsearch
+            from wardowl.backends import elasticsearch
 
             self.client: Any = Elasticsearch(url, request_timeout=600)
             self._backend: Any = elasticsearch.ElasticsearchBackend
@@ -207,7 +207,7 @@ class SearchEngine:
         else:
             from opensearchpy import OpenSearch
 
-            from needtoknow.backends import opensearch
+            from wardowl.backends import opensearch
 
             self.client = OpenSearch(hosts=[url], timeout=600)
             self._backend = opensearch.OpenSearchBackend
@@ -246,10 +246,10 @@ class Weaviate:
         parts = urlsplit(url)
         self.client = weaviate.connect_to_local(host=parts.hostname, port=parts.port or 8080, grpc_port=grpc_port)
         self.ef_search = ef_search
-        self.collection = "NeedtoknowLoad"
+        self.collection = "WardowlLoad"
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
-        from needtoknow.backends.weaviate import WeaviateBackend, create_collection
+        from wardowl.backends.weaviate import WeaviateBackend, create_collection
 
         if self.client.collections.exists(self.collection):
             self.client.collections.delete(self.collection)
@@ -266,7 +266,7 @@ class Weaviate:
         }
 
     def backend(self, embed: Any, users: int) -> Any:
-        from needtoknow.backends.weaviate import WeaviateBackend
+        from wardowl.backends.weaviate import WeaviateBackend
 
         return WeaviateBackend(self.client, self.collection, embed)
 
@@ -290,7 +290,7 @@ class LanceDB:
         """
         import pyarrow as pa
 
-        from needtoknow.backends.lancedb import KEY_FIELD, TERMS_FIELD, create_indexes, create_table, permission_terms
+        from wardowl.backends.lancedb import KEY_FIELD, TERMS_FIELD, create_indexes, create_table, permission_terms
 
         self.db.drop_table(NAME, ignore_missing=True)
         table = create_table(self.db, NAME, int(vectors.shape[1]))
@@ -322,7 +322,7 @@ class LanceDB:
         }
 
     def backend(self, embed: Any, users: int) -> Any:
-        from needtoknow.backends.lancedb import LanceDBBackend
+        from wardowl.backends.lancedb import LanceDBBackend
 
         return LanceDBBackend(self.db.open_table(NAME), embed, nprobes=self.ef_search, refine_factor=self.refine_factor)
 
@@ -343,7 +343,7 @@ class Redis:
         return {(k.decode() if isinstance(k, bytes) else str(k)): v for k, v in pairs}
 
     def load(self, ids: Sequence[str], texts: Sequence[str], vectors: np.ndarray, metadata: list) -> dict:
-        from needtoknow.backends.redis import RedisBackend, create_index
+        from wardowl.backends.redis import RedisBackend, create_index
 
         if NAME.encode() in self.client.execute_command("FT._LIST"):
             self.client.execute_command("FT.DROPINDEX", NAME, "DD")
@@ -365,7 +365,7 @@ class Redis:
         }
 
     def backend(self, embed: Any, users: int) -> Any:
-        from needtoknow.backends.redis import RedisBackend
+        from wardowl.backends.redis import RedisBackend
 
         return RedisBackend(self.client, NAME, embed, prefix=f"{NAME}:", ef_runtime=self.ef_search)
 

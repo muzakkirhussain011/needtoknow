@@ -11,9 +11,9 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import AuthorizationError, Hit, InMemoryBackend, PermissionedRetriever, Subject
-from needtoknow.authorizers.cedar import _SKIP, CedarAuthorizer, _value
-from needtoknow.testing import check_authorizer
+from wardowl import AuthorizationError, Hit, InMemoryBackend, PermissionedRetriever, Subject
+from wardowl.authorizers.cedar import _SKIP, CedarAuthorizer, _value
+from wardowl.testing import check_authorizer
 
 cedarpy = pytest.importorskip("cedarpy")
 
@@ -107,7 +107,7 @@ def test_a_chunk_whose_evaluation_errors_is_denied_even_when_a_permit_applies(ca
         hit("c", classification=0.5),
         hit("d", classification="secret"),
     ]
-    with caplog.at_level(logging.WARNING, logger="needtoknow"):
+    with caplog.at_level(logging.WARNING, logger="wardowl"):
         assert CedarAuthorizer(policy).check(ANN, hits) == [True, False, False, False]
     assert "2 of 4 chunks" in caplog.text
 

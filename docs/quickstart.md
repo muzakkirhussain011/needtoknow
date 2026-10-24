@@ -3,12 +3,12 @@
 ## Install
 
 ```bash
-pip install needtoknow
+pip install wardowl
 ```
 
 Python 3.11 or newer: every Python version CPython still supports, each dropped in the first minor
 release after its end of life. The core has no dependencies; each integration is an optional extra, for
-example `pip install "needtoknow[pgvector]"`.
+example `pip install "wardowl[pgvector]"`.
 
 ## A first permissioned search
 
@@ -16,7 +16,7 @@ Chunks carry their permissions in metadata. Here `MetadataACLAuthorizer` reads t
 `allowed_groups` field, where `"*"` means everyone:
 
 ```python
-from needtoknow import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl import Document, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
 
 backend = InMemoryBackend(
     [
@@ -66,13 +66,13 @@ asyncio.run(main())
 
 ## Connect a vector store
 
-With PostgreSQL and pgvector (`pip install "needtoknow[pgvector]"`):
+With PostgreSQL and pgvector (`pip install "wardowl[pgvector]"`):
 
 ```python
 from psycopg_pool import ConnectionPool
 
-from needtoknow import Document, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from needtoknow.backends.pgvector import PgVectorBackend, create_schema
+from wardowl import Document, MetadataACLAuthorizer, PermissionedRetriever, Subject
+from wardowl.backends.pgvector import PgVectorBackend, create_schema
 
 pool = ConnectionPool("postgresql://localhost/app")
 create_schema(pool, dim=768)  # the table, a GIN index on metadata and an HNSW index

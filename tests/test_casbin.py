@@ -9,9 +9,9 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from needtoknow import AuthorizationError, Hit, InMemoryBackend, PermissionedRetriever, Subject
-from needtoknow.authorizers.casbin import CasbinAuthorizer
-from needtoknow.testing import check_authorizer
+from wardowl import AuthorizationError, Hit, InMemoryBackend, PermissionedRetriever, Subject
+from wardowl.authorizers.casbin import CasbinAuthorizer
+from wardowl.testing import check_authorizer
 
 casbin = pytest.importorskip("casbin")
 from casbin.model import Model  # noqa: E402

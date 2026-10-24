@@ -10,7 +10,7 @@ pytest.importorskip("haystack")
 
 from haystack import Pipeline
 
-from needtoknow import (
+from wardowl import (
     AuthorizationError,
     Document,
     FunctionAuthorizer,
@@ -21,7 +21,7 @@ from needtoknow import (
     Query,
     Subject,
 )
-from needtoknow.haystack import NeedToKnowRetriever
+from wardowl.haystack import WardowlRetriever
 
 DOCS = [
     Document("handbook", "leave policy", {"allowed_groups": ["*"]}),
@@ -31,7 +31,7 @@ BOB, ANN = Subject("bob", ["eng"]), Subject("ann", ["hr"])
 
 
 def _component(**options):
-    return NeedToKnowRetriever(PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer()), **options)
+    return WardowlRetriever(PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer()), **options)
 
 
 def test_a_pipeline_returns_only_what_the_run_subject_may_read():
@@ -67,7 +67,7 @@ def test_a_missing_or_wrong_subject_is_refused():
 
 def test_authorizer_failures_reach_the_caller():
     failing = FunctionAuthorizer(lambda s, h, a: (_ for _ in ()).throw(ConnectionError("down")))
-    component = NeedToKnowRetriever(PermissionedRetriever(InMemoryBackend(DOCS), failing))
+    component = WardowlRetriever(PermissionedRetriever(InMemoryBackend(DOCS), failing))
     with pytest.raises(AuthorizationError):
         component.run("leave", BOB)
 
@@ -85,7 +85,7 @@ class _Recording:
 
 def test_a_query_embedding_is_searched_with_instead_of_the_text():
     backend = _Recording()
-    component = NeedToKnowRetriever(PermissionedRetriever(backend, MetadataACLAuthorizer()))
+    component = WardowlRetriever(PermissionedRetriever(backend, MetadataACLAuthorizer()))
     pipeline = Pipeline()
     pipeline.add_component("retriever", component)
     run = {"query": "leave", "subject": BOB, "query_embedding": [1.0, 0.0]}

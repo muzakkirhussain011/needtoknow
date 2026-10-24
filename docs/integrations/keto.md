@@ -6,8 +6,8 @@
 dependency.
 
 ```python
-from needtoknow import PermissionedRetriever
-from needtoknow.authorizers.keto import KetoAuthorizer
+from wardowl import PermissionedRetriever
+from wardowl.authorizers.keto import KetoAuthorizer
 
 authorizer = KetoAuthorizer("http://keto:4466")  # Keto's read API
 retriever = PermissionedRetriever(backend, authorizer)
@@ -15,7 +15,7 @@ retriever = PermissionedRetriever(backend, authorizer)
 
 ## How chunks map to Keto
 
-| needtoknow | Keto |
+| wardowl | Keto |
 |---|---|
 | The chunk's document | Object `metadata["doc_id"]` in namespace `Document` (`resource_field`, `namespace`); a chunk without it is denied |
 | `read` | Relation `view` (`actions={"read": "view"}`) |

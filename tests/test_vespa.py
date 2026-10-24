@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from needtoknow import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
-from needtoknow.backends._engines import tag
-from needtoknow.backends.vespa import TERMS_FIELD, VespaBackend, filter_to_yql, schema
-from needtoknow.testing import QUERY, HashingEmbedder, check_backend
+from wardowl import And, Document, In, MetadataACLAuthorizer, Or, PermissionedRetriever, Query, RankFusion, Subject
+from wardowl.backends._engines import tag
+from wardowl.backends.vespa import TERMS_FIELD, VespaBackend, filter_to_yql, schema
+from wardowl.testing import QUERY, HashingEmbedder, check_backend
 
 EMBED = HashingEmbedder()
-URL = os.environ.get("NEEDTOKNOW_TEST_VESPA_URL")
+URL = os.environ.get("WARDOWL_TEST_VESPA_URL")
 APP = Path(__file__).parent.parent / "examples" / "vespa" / "app"
 
 
@@ -49,7 +49,7 @@ def test_an_empty_in_matches_nothing():
 
 
 def test_the_example_package_holds_the_schema():
-    assert (APP / "schemas" / "needtoknow.sd").read_text(encoding="utf-8") == schema(16)
+    assert (APP / "schemas" / "wardowl.sd").read_text(encoding="utf-8") == schema(16)
     with pytest.raises(ValueError):
         schema(0)
     with pytest.raises(ValueError):
@@ -79,8 +79,8 @@ class Fake:
 
 
 def _hit(doc_id, metadata=None):
-    fields = {"needtoknow_id": doc_id, "text": doc_id, "needtoknow_metadata": json.dumps(metadata or {})}
-    return {"id": f"id:needtoknow:needtoknow::{doc_id}", "relevance": 0.5, "fields": fields}
+    fields = {"wardowl_id": doc_id, "text": doc_id, "wardowl_metadata": json.dumps(metadata or {})}
+    return {"id": f"id:wardowl:wardowl::{doc_id}", "relevance": 0.5, "fields": fields}
 
 
 def test_requests_carry_the_filter_vectors_and_escaped_ids():
@@ -90,7 +90,7 @@ def test_requests_carry_the_filter_vectors_and_escaped_ids():
     assert [(h.id, h.metadata) for h in hits] == [("a b", {"team": ["x"]})]
     body = json.loads(fake.requests[0].content)
     assert body["yql"] == (
-        "select * from needtoknow where {targetHits: 3, approximate: false}nearestNeighbor(embedding, q)"
+        "select * from wardowl where {targetHits: 3, approximate: false}nearestNeighbor(embedding, q)"
         f" and {TERMS_FIELD} in ({_h('team', 'x')})"
     )
     assert body["hits"] == 3 and len(body["input.query(q)"]) == EMBED.dim
@@ -98,7 +98,7 @@ def test_requests_carry_the_filter_vectors_and_escaped_ids():
     backend.set_metadata({"a/b": {"team": ["y"]}})
     backend.delete(["a/b", "c"])
     put, update = json.loads(fake.requests[1].content), json.loads(fake.requests[2].content)
-    assert fake.requests[1].url.raw_path == b"/document/v1/needtoknow/needtoknow/docid/a%2Fb"
+    assert fake.requests[1].url.raw_path == b"/document/v1/wardowl/wardowl/docid/a%2Fb"
     assert put["fields"]["text"] == "two" and len(fake.requests) == 5  # the last of a repeated id wins
     assert update["fields"][TERMS_FIELD]["assign"] == [tag("team", "y").encode().hex()]
 
@@ -108,7 +108,7 @@ def test_keyword_mode_sends_the_text():
     backend = VespaBackend("http://vespa:8080", None, mode="keyword", client=fake.client)
     assert backend.search("leave policy", 5) == []
     body = json.loads(fake.requests[0].content)
-    assert body["query"] == "leave policy" and body["ranking.profile"] == "needtoknow_bm25"
+    assert body["query"] == "leave policy" and body["ranking.profile"] == "wardowl_bm25"
     backend.add([Document("a", "text", {})])
     assert "embedding" not in json.loads(fake.requests[1].content)["fields"]
     with pytest.raises(ValueError, match="text"):
@@ -152,7 +152,7 @@ def test_failed_writes_raise_and_settings_are_checked():
 
 # ---- a real Vespa ------------------------------------------------------------------------------
 
-needs_vespa = pytest.mark.skipif(not URL, reason="set NEEDTOKNOW_TEST_VESPA_URL to run against Vespa")
+needs_vespa = pytest.mark.skipif(not URL, reason="set WARDOWL_TEST_VESPA_URL to run against Vespa")
 _STORED: set[str] = set()
 
 

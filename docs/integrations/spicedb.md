@@ -8,7 +8,7 @@ spicedb serve --grpc-preshared-key "$SPICEDB_KEY" --http-enabled   # HTTP on :84
 ```
 
 ```python
-from needtoknow.authorizers.spicedb import SpiceDBAuthorizer
+from wardowl.authorizers.spicedb import SpiceDBAuthorizer
 
 authorizer = SpiceDBAuthorizer("http://localhost:8443", token=SPICEDB_KEY, resource_field="doc_id")
 ```
