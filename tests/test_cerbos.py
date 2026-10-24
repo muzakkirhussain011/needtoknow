@@ -202,6 +202,13 @@ def test_configuration_errors():
         CerbosAuthorizer("http://127.0.0.1:1").check(ANN, HITS, action="delete")
     with pytest.raises(AuthorizationError, match="role"):
         CerbosAuthorizer("http://127.0.0.1:1", roles=[]).check(ANN, HITS)
+
+    def directory(subject):
+        raise LookupError("ldap://dir.internal refused svc-wardowl")
+
+    with pytest.raises(AuthorizationError, match="roles failed") as failure:
+        CerbosAuthorizer("http://127.0.0.1:1", roles=directory).check(ANN, HITS)
+    assert "dir.internal" not in str(failure.value) and "dir.internal" in str(failure.value.__cause__)
     assert CerbosAuthorizer("http://127.0.0.1:1").check(ANN, []) == []
 
 

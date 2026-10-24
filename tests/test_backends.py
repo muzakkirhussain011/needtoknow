@@ -11,6 +11,7 @@ import contextlib
 import json
 import os
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from helpers import QUERY, HashingEmbedder, corpora, expected_ids, filters, labelled_docs, may_read, queries, subjects
@@ -177,6 +178,92 @@ def test_chroma_search_drops_a_hit_only_a_stale_list_field_matches(chroma_factor
     assert backend.search("leave plan", 5, In("allowed_groups", ["eng"])) == []
     (hit,) = backend.search("leave plan", 5, In("allowed_groups", ["sales"]))
     assert hit.id == "a" and hit.metadata == {"allowed_groups": ["sales"]}
+
+
+class SmallBatches:
+    """A Chroma collection that refuses, as Chroma does, a call with more records than its maximum."""
+
+    def __init__(self, maximum):
+        self._client = SimpleNamespace(get_max_batch_size=lambda: maximum)  # where Chroma reports it
+        self.maximum = maximum
+        self.records = {}
+        self.calls = []
+
+    def _sized(self, name, ids):
+        self.calls.append((name, len(ids)))
+        if len(ids) > self.maximum:
+            raise ValueError(f"Batch size {len(ids)} exceeds maximum batch size {self.maximum}")
+
+    def add(self, ids, documents, metadatas, embeddings=None):
+        self._sized("add", ids)
+        for doc_id, text, metadata in zip(ids, documents, metadatas, strict=True):
+            self.records[doc_id] = (text, dict(metadata))
+
+    def delete(self, ids):
+        self._sized("delete", ids)
+        for doc_id in ids:
+            self.records.pop(doc_id, None)
+
+    def get(self, ids, include):
+        self._sized("get", ids)
+        found = [doc_id for doc_id in ids if doc_id in self.records]
+        return {"ids": found, "metadatas": [self.records[doc_id][1] for doc_id in found]}
+
+    def update(self, ids, metadatas):
+        self._sized("update", ids)
+        for doc_id, new in zip(ids, metadatas, strict=True):
+            text, old = self.records[doc_id]
+            self.records[doc_id] = (text, {k: v for k, v in {**old, **new}.items() if v is not None})
+
+
+def test_chroma_writes_in_batches_no_larger_than_the_clients_maximum():
+    from wardowl.backends.chroma import JSON_KEY, ChromaBackend
+
+    collection = SmallBatches(maximum=3)
+    backend = ChromaBackend(collection, EMBED)
+    assert backend.batch_size == 3  # read from the collection's client
+    docs = [Document(f"d{i}", f"text {i}", {"allowed_groups": ["eng"]}) for i in range(10)]
+    backend.add(docs)
+    assert set(collection.records) == {d.id for d in docs}
+    backend.set_metadata({**{d.id: {"allowed_groups": ["hr"]} for d in docs}, "not-stored": {}})
+    stored = [metadata for _, metadata in collection.records.values()]
+    assert all(
+        json.loads(m[JSON_KEY]) == {"allowed_groups": ["hr"]} and "allowed_groups::s:eng" not in m for m in stored
+    )
+    backend.delete([*(d.id for d in docs), "not-stored"])
+    assert collection.records == {}
+    assert {name for name, _ in collection.calls} == {"add", "delete", "get", "update"}
+    assert max(size for _, size in collection.calls) == 3
+    # Every record is checked before the first batch is written.
+    with pytest.raises(ValueError):
+        backend.add([*docs, Document("bad", "text", {"a::b": 1})])
+    assert collection.records == {}
+    assert ChromaBackend(collection, batch_size=2).batch_size == 2
+    assert ChromaBackend(SimpleNamespace()).batch_size == 1000  # a collection that reports no maximum
+    with pytest.raises(ValueError):
+        ChromaBackend(collection, batch_size=0)
+
+
+def test_chroma_takes_more_records_than_its_maximum_batch_with_the_defaults(chroma_factory):
+    backend = chroma_factory([])
+    maximum = backend.collection._client.get_max_batch_size()
+    assert backend.batch_size == maximum  # read from the client
+    docs = [Document(f"d{i:05d}", "leave", {"allowed_groups": ["eng"]}) for i in range(maximum + 1)]
+    backend.add(docs)  # in one call, Chroma would refuse it
+    assert backend.collection.count() == maximum + 1
+    backend.set_metadata({d.id: {"allowed_groups": ["hr"]} for d in docs})
+    assert backend.search("leave", 5, In("allowed_groups", ["eng"])) == []
+    assert len(backend.search("leave", 5, In("allowed_groups", ["hr"]))) == 5
+    backend.delete([d.id for d in docs])
+    assert backend.collection.count() == 0
+
+
+def test_the_in_memory_backend_deletes_chunks_and_ignores_ids_it_does_not_hold():
+    backend = InMemoryBackend([Document("a", "leave plan", {}), Document("b", "leave rota", {})])
+    backend.delete(["a", "not-stored"])
+    assert [h.id for h in backend.search("leave", 5)] == ["b"] and len(backend) == 1
+    backend.delete([])
+    assert len(backend) == 1
 
 
 # ---- pgvector specifics ----------------------------------------------------------------------

@@ -42,6 +42,7 @@ JSON_KEY = "wardowl_metadata"
 
 _SEP = "::"
 _LISTS = (list, tuple, set, frozenset)
+_DEFAULT_BATCH = 1000  # records per write when the collection's client reports no maximum
 
 
 def _flat_key(field: str, value: str | int) -> str:
@@ -115,6 +116,17 @@ def _decode_metadata(stored: Mapping[str, Any] | None) -> dict[str, Any]:
     return metadata if isinstance(metadata, dict) else {}
 
 
+def _max_batch_size(collection: Any) -> int:
+    """The most records Chroma accepts in one call, as the collection's client reports it, or
+    `_DEFAULT_BATCH` when the collection does not say."""
+    client = getattr(collection, "_client", None)
+    ask = getattr(client, "get_max_batch_size", None)
+    size: object = ask() if callable(ask) else None
+    if isinstance(size, int) and not isinstance(size, bool) and size >= 1:
+        return size
+    return _DEFAULT_BATCH
+
+
 class ChromaBackend:
     """Search a Chroma collection with the permission filter applied by Chroma.
 
@@ -122,13 +134,26 @@ class ChromaBackend:
     collection's own embedding function is used. A `Query` with a vector is searched with that
     vector. Scores are `1 - distance`, so create the collection with cosine distance for scores in
     [-1, 1].
+
+    `add`, `delete` and `set_metadata` send at most `batch_size` records per call, since Chroma
+    refuses larger batches. By default it is the client's own maximum (`get_max_batch_size()`,
+    about 5,400 for a local client), or 1,000 when the collection does not report one. Each write is
+    checked whole before the first batch is sent; a store that fails part way leaves the batches
+    before it written.
     """
 
     supports_filters = True
 
-    def __init__(self, collection: Any, embed: Embed | None = None) -> None:
+    def __init__(self, collection: Any, embed: Embed | None = None, *, batch_size: int | None = None) -> None:
+        if batch_size is not None and batch_size < 1:
+            raise ValueError("batch_size must be positive")
         self.collection = collection
         self.embed = embed
+        self.batch_size = batch_size if batch_size is not None else _max_batch_size(collection)
+
+    def _batches(self, count: int) -> range:
+        """The start of each batch of `count` records."""
+        return range(0, count, self.batch_size)
 
     def add(self, documents: Iterable[Document], embeddings: Iterable[Sequence[float]] | None = None) -> None:
         docs = list(documents)
@@ -143,14 +168,21 @@ class ChromaBackend:
             vectors = [list(map(float, self.embed(d.text))) for d in docs]
         # The last version of each id wins, as it would in sequence.
         keep = sorted({d.id: i for i, d in enumerate(docs)}.values())
-        kwargs: dict[str, Any] = {
-            "ids": [docs[i].id for i in keep],
-            "documents": [docs[i].text for i in keep],
-            "metadatas": [_encode_metadata(docs[i].id, docs[i].metadata) for i in keep],
-        }
-        if vectors is not None:
-            kwargs["embeddings"] = [vectors[i] for i in keep]
-        self._replace(kwargs)
+        # Every record is encoded, and so checked, before the first batch is written.
+        ids = [docs[i].id for i in keep]
+        texts = [docs[i].text for i in keep]
+        metadatas = [_encode_metadata(docs[i].id, docs[i].metadata) for i in keep]
+        chosen = None if vectors is None else [vectors[i] for i in keep]
+        for start in self._batches(len(keep)):
+            end = start + self.batch_size
+            records: dict[str, Any] = {
+                "ids": ids[start:end],
+                "documents": texts[start:end],
+                "metadatas": metadatas[start:end],
+            }
+            if chosen is not None:
+                records["embeddings"] = chosen[start:end]
+            self._replace(records)
 
     def _replace(self, records: dict[str, Any]) -> None:
         # Delete, then add: a replaced chunk keeps none of its old metadata keys, whatever an
@@ -169,20 +201,22 @@ class ChromaBackend:
         key never makes a chunk match.
         """
         encoded = {doc_id: _encode_metadata(doc_id, new) for doc_id, new in metadata.items()}
-        if not encoded:
-            return
-        stored = self.collection.get(ids=list(encoded), include=["metadatas"])
-        found = list(stored["ids"])
-        if not found:
-            return
-        updates: list[dict[str, Any]] = []
-        for doc_id, old in zip(found, stored["metadatas"], strict=True):
-            new = encoded[doc_id]
-            updates.append({**{key: None for key in old or {} if key not in new}, **new})
-        self.collection.update(ids=found, metadatas=updates)
+        names = list(encoded)
+        for start in self._batches(len(names)):
+            stored = self.collection.get(ids=names[start : start + self.batch_size], include=["metadatas"])
+            found = list(stored["ids"])
+            if not found:
+                continue
+            updates: list[dict[str, Any]] = []
+            for doc_id, old in zip(found, stored["metadatas"], strict=True):
+                new = encoded[doc_id]
+                updates.append({**{key: None for key in old or {} if key not in new}, **new})
+            self.collection.update(ids=found, metadatas=updates)
 
     def delete(self, ids: Iterable[str]) -> None:
-        self.collection.delete(ids=list(ids))
+        chosen = list(ids)
+        for start in self._batches(len(chosen)):
+            self.collection.delete(ids=chosen[start : start + self.batch_size])
 
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
         q = Query.of(query)

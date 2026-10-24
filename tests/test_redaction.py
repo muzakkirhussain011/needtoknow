@@ -86,15 +86,41 @@ def test_a_span_whose_text_changed_hides_the_whole_chunk():
 @pytest.mark.parametrize(
     "spans",
     [
+        [SALARIES],
+        [{"start": 0, "end": 999, "allowed_groups": ["*"]}],  # readable by everyone, but past the end
+        [{"start": 0, "end": 4}, {"start": 31, "end": 999, "allowed_groups": ["hr"]}],
+        [{"start": 40, "end": 45}],  # starts past the end too
+    ],
+)
+def test_a_span_past_the_end_of_the_text_hides_the_whole_chunk_for_everyone(spans):
+    # The text was shortened after its spans were written: the offsets no longer say what to hide.
+    shortened = TEXT[:30]
+    for subject in (ANN, HR):
+        [result] = SpanRedactor().redact(subject, [hit(text=shortened, redactions=spans, source="wiki")])
+        assert result.text == "[REDACTED]" and result.metadata == {"source": "wiki"}
+    retriever = PermissionedRetriever(
+        InMemoryBackend([Document("plan", shortened, {"allowed_groups": ["*"], "redactions": spans})]),
+        MetadataACLAuthorizer(),
+        redactor=SpanRedactor(),
+    )
+    for subject in (ANN, HR):  # hidden, not refused: retrieval still works for everyone
+        assert [h.text for h in retriever.retrieve("plan", subject).hits] == ["[REDACTED]"]
+
+
+@pytest.mark.parametrize(
+    "spans",
+    [
         "11-38",
         ["11-38"],
         [{"start": "11", "end": 38}],
         [{"start": True, "end": 38}],
         [{"start": 38, "end": 11}],
-        [{"start": 0, "end": 999}],
+        [{"start": 4, "end": 4}],
+        [{"start": -1, "end": 4}],
         [{"start": 0, "end": 4, "allowed_groups": "hr"}],
         [{"start": 0, "end": 4, "allowed_users": [7]}],
         [{"start": 0, "end": 4, "sha256": 7}],
+        [{"start": 0, "end": 999, "allowed_groups": "hr"}],  # past the end, but malformed whatever the text
     ],
 )
 def test_malformed_spans_fail_closed(spans):
@@ -105,8 +131,9 @@ def test_malformed_spans_fail_closed(spans):
         MetadataACLAuthorizer(),
         redactor=SpanRedactor(),
     )
-    with pytest.raises(AuthorizationError, match="redaction failed"):
+    with pytest.raises(AuthorizationError, match="redaction failed") as failure:
         retriever.retrieve("plan", ANN)
+    assert str(failure.value) == "redaction failed" and isinstance(failure.value.__cause__, ValueError)
 
 
 @settings(max_examples=200, deadline=None)

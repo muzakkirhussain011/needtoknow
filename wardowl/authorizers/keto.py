@@ -35,9 +35,11 @@ class KetoAuthorizer:
     """Asks an Ory Keto server for relationship checks over its HTTP read API.
 
     `actions` maps wardowl actions to Keto relations (default `{"read": "view"}`). Objects live in
-    `namespace` and come from `resource_field`. `batch_size` is how many tuples one request checks.
-    `timeout`, `retries`, `circuit_breaker`, `ssl_context`, `max_response_bytes` and `allow_insecure`
-    work as in `OPAAuthorizer`. Every failure raises `AuthorizationError`.
+    `namespace` and come from `resource_field`. `batch_size` is how many tuples one request checks:
+    10 by default, because Keto refuses a batch check of more than its `limit.max_batch_check_size`
+    tuples, 10 unless configured otherwise. Raise both together. `timeout`, `retries`,
+    `circuit_breaker`, `ssl_context`, `max_response_bytes` and `allow_insecure` work as in
+    `OPAAuthorizer`. Every failure raises `AuthorizationError`.
     """
 
     def __init__(
@@ -50,7 +52,7 @@ class KetoAuthorizer:
         group_subjects: bool = False,
         group_namespace: str = "Group",
         group_relation: str = "members",
-        batch_size: int = 100,
+        batch_size: int = 10,
         timeout: float = 2.0,
         headers: Mapping[str, str] | None = None,
         retries: int = 1,

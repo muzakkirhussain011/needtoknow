@@ -104,7 +104,7 @@ class CasbinAuthorizer:
             batch = getattr(self.enforcer, "batch_enforce", None)
             answers = list(batch(requests)) if callable(batch) else [self.enforcer.enforce(*r) for r in requests]
         except Exception as exc:
-            raise AuthorizationError(f"Casbin failed: {exc}") from exc
+            raise AuthorizationError("Casbin failed") from exc
         if len(answers) != len(requests) or not all(isinstance(a, bool) for a in answers):
             raise AuthorizationError("Casbin did not answer each request with a boolean")
         decisions: list[bool] = []

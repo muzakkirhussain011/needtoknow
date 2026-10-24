@@ -95,6 +95,16 @@ class Hit:
     metadata: Mapping[str, Any] = field(default_factory=dict, hash=False)
 
 
+class InvalidQuery(ValueError):
+    """A query that cannot be searched as asked, through a fault of the query, not the system.
+
+    Raised for a `k` outside what the retriever allows, a query with only a vector for keyword
+    search, only text for a backend with no embed function, or a vector whose length the backend
+    knows is wrong. It is a `ValueError`, so code catching that keeps working; the HTTP service
+    answers it with 422. A backend of your own can raise it for queries it cannot search.
+    """
+
+
 @dataclass(frozen=True)
 class Query:
     """What to search for: text, a vector you computed, or both.
@@ -110,7 +120,7 @@ class Query:
 
     def __init__(self, text: str | None = None, vector: Iterable[float] | None = None) -> None:
         if text is None and vector is None:
-            raise ValueError("a query needs text, a vector, or both")
+            raise InvalidQuery("a query needs text, a vector, or both")
         if text is not None and not isinstance(text, str):
             raise TypeError(f"text must be a string, not {type(text).__name__}")
         values: tuple[float, ...] | None = None
@@ -119,7 +129,7 @@ class Query:
                 raise TypeError("vector must be a sequence of numbers")
             values = tuple(float(x) for x in vector)
             if not values or not all(math.isfinite(x) for x in values):
-                raise ValueError("vector must be non-empty and finite")
+                raise InvalidQuery("vector must be non-empty and finite")
         object.__setattr__(self, "text", text)
         object.__setattr__(self, "vector", values)
 
@@ -141,12 +151,12 @@ class Query:
         if self.vector is not None:
             return list(self.vector)
         if embed is None:
-            raise ValueError("this backend has no embed function: pass Query(vector=...), or give it one")
+            raise InvalidQuery("this backend has no embed function: pass Query(vector=...), or give it one")
         assert self.text is not None  # __init__ requires text or a vector
         return [float(x) for x in embed(self.text)]
 
     def keywords(self) -> str:
         """The text to match words against; keyword search cannot use a vector."""
         if self.text is None:
-            raise ValueError("keyword search needs the query's text, and this query has only a vector")
+            raise InvalidQuery("keyword search needs the query's text, and this query has only a vector")
         return self.text

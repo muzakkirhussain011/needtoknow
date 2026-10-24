@@ -127,8 +127,8 @@ class PermissionNodePostprocessor(BaseNodePostprocessor):
             decisions = list(self.authorizer.check(self.subject, hits, self.action))
         except AuthorizationError:
             raise
-        except Exception as exc:  # fail closed
-            raise AuthorizationError(f"authorizer failed: {exc}") from exc
+        except Exception as exc:  # fail closed, with a fixed message: the details stay in __cause__
+            raise AuthorizationError("authorizer failed") from exc
         if len(decisions) != len(nodes) or not all(isinstance(d, bool) for d in decisions):
             raise AuthorizationError("authorizer must return one boolean per node")
         return [

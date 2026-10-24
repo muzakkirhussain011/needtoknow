@@ -44,6 +44,11 @@ class InMemoryBackend:
         self.add(documents)
 
     def add(self, documents: Iterable[Document]) -> None:
+        """Store chunks, replacing any with the same id.
+
+        Unlike the vector backends, it takes no `embeddings`: it ranks by the words a chunk shares
+        with the query and never uses a vector, so it has nowhere to keep one.
+        """
         for doc in documents:
             self._docs[doc.id] = Document(doc.id, doc.text, _copy(doc.metadata))
 
@@ -53,6 +58,11 @@ class InMemoryBackend:
             old = self._docs.get(doc_id)
             if old is not None:
                 self._docs[doc_id] = Document(doc_id, old.text, _copy(new))
+
+    def delete(self, ids: Iterable[str]) -> None:
+        """Remove chunks by id. Ids not stored are ignored."""
+        for doc_id in ids:
+            self._docs.pop(doc_id, None)
 
     def __len__(self) -> int:
         return len(self._docs)

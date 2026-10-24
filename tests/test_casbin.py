@@ -120,8 +120,9 @@ def test_a_failing_or_malformed_enforcer_raises(answer):
                 raise answer
             return answer if isinstance(answer, list) else [answer] * len(requests)
 
-    with pytest.raises(AuthorizationError):
+    with pytest.raises(AuthorizationError) as failure:
         CasbinAuthorizer(Broken()).check(Subject("ann"), [hit("c1", "plan"), hit("c2", "pay")])
+    assert "model error" not in str(failure.value)  # an enforcer's text stays in the cause
 
 
 def test_actions_configuration_and_no_pre_filter():

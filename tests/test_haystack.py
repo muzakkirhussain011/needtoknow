@@ -102,6 +102,34 @@ def test_authorizer_failures_reach_the_caller():
         component.run("leave", BOB)
 
 
+DETAILS = "could not reach opa.internal:8181 as svc-wardowl (password hunter2)"
+
+
+def _leaks(subject, hits, action):
+    raise ConnectionError(DETAILS)
+
+
+def test_a_failure_shown_to_the_model_names_no_host_or_password():
+    # Haystack's Agent turns a tool's exception into a message the model reads.
+    retriever = PermissionedRetriever(InMemoryBackend(DOCS), FunctionAuthorizer(_leaks))
+    calls = [
+        lambda: WardowlRetriever(retriever).run("leave", BOB),
+        lambda: asyncio.run(WardowlRetriever(retriever).run_async("leave", BOB)),
+        lambda: BoundWardowlRetriever(retriever, lambda: BOB).run("leave"),
+    ]
+    tools = pytest.importorskip("haystack.tools")
+    tool = tools.ComponentTool(
+        component=WardowlRetriever(retriever), name="search", inputs_from_state={"subject": "subject"}
+    )
+    calls.append(lambda: tool.function(query="leave", subject=BOB))
+    for call in calls:
+        with pytest.raises(AuthorizationError) as failure:
+            call()
+        shown = f"{failure.value} {failure.value!r}"
+        assert "hunter2" not in shown and "opa.internal" not in shown
+        assert DETAILS in str(failure.value.__cause__)
+
+
 class _Recording:
     supports_filters = False
 

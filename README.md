@@ -291,7 +291,8 @@ import redis
 
 from wardowl.backends.redis import RedisBackend, create_index
 
-client = redis.Redis.from_url(REDIS_URL)
+# Timeouts, so a Redis that stops answering fails the search instead of holding it forever.
+client = redis.Redis.from_url(REDIS_URL, socket_timeout=2, socket_connect_timeout=2)
 create_index(client, "chunks", dim=768)
 backend = RedisBackend(client, "chunks", embed=my_embedding_model)
 ```
@@ -382,9 +383,10 @@ authorizer = OpenFGAAuthorizer("http://localhost:8080", store_id, resource_field
 <summary><b>SpiceDB</b></summary>
 
 **SpiceDB** (no extra dependency). Zanzibar-style permissions through SpiceDB's HTTP API.
-CheckBulkPermissions decides each chunk, LookupResources gives the pre-filter, and the subject's
-groups are checked as subject sets (`group:<name>#member`), so memberships from your identity
-provider need no syncing.
+CheckBulkPermissions decides each chunk, LookupResources gives the pre-filter, and SpiceDB follows
+the group memberships it stores. For memberships that live only in your identity provider,
+`group_subjects=True` checks the subject's groups as subject sets (`group:<name>#member`), but not
+with permissions that exclude or intersect (`viewer - banned`).
 
 ```python
 from wardowl.authorizers.spicedb import SpiceDBAuthorizer

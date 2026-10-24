@@ -51,6 +51,17 @@ from wardowl.redaction import span_digest
 span = {"start": 11, "end": 38, "allowed_groups": ["hr"], "sha256": span_digest(text[11:38])}
 ```
 
+**A span that ends past the text hides the whole chunk**, with or without `sha256`: the text was
+shortened after the span was written, so its offsets no longer say what to hide. The chunk is
+returned as `[REDACTED]` to everyone, readers of the span included, until its spans are written
+again for the new text.
+
+**Malformed spans fail the retrieval.** A `redactions` field that is not a list, a span that is
+not a mapping, offsets that are not two integers with `0 <= start < end`, a `sha256` that is not a
+string, or `allowed_users` and `allowed_groups` that are not lists of strings are wrong whatever the
+text, so they point at the code that writes spans: the retrieval raises `AuthorizationError` and
+returns nothing.
+
 When you change a chunk's permissions with `set_metadata`, which replaces the whole metadata, pass
 its spans again along with them (see [Operations](operations.md#changing-a-documents-permissions)).
 
@@ -98,9 +109,10 @@ def redact(subject, hits):
 - It may change a hit's text and metadata, never which hits are returned or their order; a
   redactor that adds, drops or reorders hits makes the retrieval raise `AuthorizationError`.
 - A redactor that fails, including on malformed spans, makes the retrieval raise
-  `AuthorizationError`: nothing is returned rather than an unredacted chunk.
-- `SpanRedactor` hides the whole text of a chunk whose spans are missing, or whose text no longer
-  matches a span's `sha256`.
+  `AuthorizationError` with the fixed message "redaction failed" (the redactor's own exception is
+  its `__cause__`): nothing is returned rather than an unredacted chunk.
+- `SpanRedactor` hides the whole text of a chunk whose spans are missing, whose text is shorter than
+  a span's end, or whose text no longer matches a span's `sha256`.
 - `aretrieve` runs the redactor in a thread, so a slow one does not hold up the event loop.
 - Redaction changes the text after the search. Embeddings and keyword indexes were built from the
   full text, so a query can still match a chunk because of words in a hidden span, and the chunk's

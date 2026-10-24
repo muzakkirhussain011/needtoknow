@@ -25,7 +25,7 @@ from typing import Any
 
 from wardowl.backends._vectors import document_vectors
 from wardowl.filters import Filter, matches
-from wardowl.types import Document, Embed, Hit, Query
+from wardowl.types import Document, Embed, Hit, InvalidQuery, Query
 
 __all__ = ["FaissBackend"]
 
@@ -120,7 +120,11 @@ class FaissBackend:
         return len(self._docs)
 
     def search(self, query: str | Query, k: int, filter: Filter | None = None) -> list[Hit]:
-        x = self._matrix([Query.of(query).embedded(self.embed)])
+        q = Query.of(query)
+        if q.vector is not None and len(q.vector) != self.dim:
+            # The caller's vector, not one `embed` made: the query is at fault, not the backend.
+            raise InvalidQuery(f"the query vector has {len(q.vector)} dimensions, not {self.dim}")
+        x = self._matrix([q.embedded(self.embed)])
         with self._lock:
             if k < 1 or not self._docs:
                 return []

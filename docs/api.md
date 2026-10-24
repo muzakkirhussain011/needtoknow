@@ -50,6 +50,8 @@ modules and need their extra.
 
 .. autoclass:: wardowl.Query
    :members: of, embedded, keywords
+
+.. autoclass:: wardowl.InvalidQuery
 ```
 
 ## Filters
@@ -119,6 +121,8 @@ modules and need their extra.
 
 .. autoclass:: wardowl.authorizers.CircuitBreaker
    :members: is_open
+
+.. autoclass:: wardowl.authorizers.CircuitOpenError
 ```
 
 ## Permission sync
@@ -163,7 +167,7 @@ An observer is any callable that takes a `RetrievalEvent`.
 
 ```{eval-rst}
 .. autoclass:: wardowl.InMemoryBackend
-   :members: add, set_metadata, search
+   :members: add, set_metadata, delete, search
 
 .. autoexception:: wardowl.backends.NothingMatches
 

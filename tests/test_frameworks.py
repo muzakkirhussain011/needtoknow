@@ -9,6 +9,7 @@ import pytest
 from wardowl import (
     AuthorizationError,
     Document,
+    FunctionAuthorizer,
     InMemoryBackend,
     MetadataACLAuthorizer,
     PermissionedRetriever,
@@ -32,6 +33,25 @@ def permissioned() -> PermissionedRetriever:
 
 def _boom(*_args):
     raise ConnectionError("permission service unreachable")
+
+
+def _leaks(*_args):
+    raise ConnectionError("could not reach opa.internal:8181 as svc-wardowl (password hunter2)")
+
+
+def leaky() -> PermissionedRetriever:
+    """A retriever whose authorizer fails with an error naming a host and a password."""
+    return PermissionedRetriever(InMemoryBackend(DOCS), FunctionAuthorizer(_leaks))
+
+
+def _reveals_nothing(call) -> None:
+    """`call` fails with `AuthorizationError`, whose message and repr (what a tool error shows the
+    model) hold neither the host nor the password, while its cause keeps both for the logs."""
+    with pytest.raises(AuthorizationError) as failure:
+        call()
+    shown = f"{failure.value} {failure.value!r}"
+    assert "hunter2" not in shown and "opa.internal" not in shown
+    assert "hunter2" in str(failure.value.__cause__)
 
 
 # ---- LangChain -------------------------------------------------------------------------------
@@ -70,6 +90,16 @@ def test_langchain_bound_subject_sync_and_async(lc):
 def test_langchain_without_a_subject_refuses_to_run(lc):
     with pytest.raises(ValueError):
         lc.WardowlRetriever(retriever=permissioned()).invoke("leave")
+
+
+def test_a_langchain_tool_whose_permission_check_fails_reveals_nothing_to_the_model(lc):
+    from langchain_core.tools import create_retriever_tool
+
+    retriever = lc.WardowlRetriever(retriever=leaky()).for_subject(BOB)
+    tool = create_retriever_tool(retriever, "search", "docs")
+    _reveals_nothing(lambda: tool.invoke({"query": "leave"}))  # LangGraph's ToolNode shows repr(error)
+    _reveals_nothing(lambda: asyncio.run(tool.ainvoke({"query": "leave"})))
+    _reveals_nothing(lambda: retriever.invoke("leave"))
 
 
 def test_any_langchain_vector_store_can_be_post_filtered(lc):
@@ -178,6 +208,22 @@ def test_llamaindex_postprocessor_drops_nodes_and_fails_closed(li):
 
     with pytest.raises(AuthorizationError):
         li.PermissionNodePostprocessor(authorizer=Broken(), subject=BOB).postprocess_nodes(nodes)
+
+
+def test_a_llamaindex_permission_failure_reveals_nothing_to_the_model(li):
+    # LlamaIndex agents give a failed tool's error text to the model.
+    from llama_index.core.schema import NodeWithScore, TextNode
+
+    retriever = li.WardowlRetriever(leaky(), BOB, k=5)
+    _reveals_nothing(lambda: retriever.retrieve("leave"))
+    _reveals_nothing(lambda: asyncio.run(retriever.aretrieve("leave")))
+
+    class Leaky:
+        check = staticmethod(_leaks)
+
+    nodes = [NodeWithScore(node=TextNode(id_=d.id, text=d.text, metadata=dict(d.metadata)), score=1.0) for d in DOCS]
+    postprocessor = li.PermissionNodePostprocessor(authorizer=Leaky(), subject=BOB)
+    _reveals_nothing(lambda: postprocessor.postprocess_nodes(nodes))
 
 
 def test_llamaindex_postprocessor_nodes_carry_only_the_metadata_named(li):

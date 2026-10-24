@@ -18,8 +18,16 @@ from helpers import corpora, oracle_top_k, queries, subjects
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from wardowl import AuthorizationError, Hit, InMemoryBackend, MetadataACLAuthorizer, PermissionedRetriever, Subject
-from wardowl.authorizers import CircuitBreaker, _http
+from wardowl import (
+    AuthorizationError,
+    Document,
+    Hit,
+    InMemoryBackend,
+    MetadataACLAuthorizer,
+    PermissionedRetriever,
+    Subject,
+)
+from wardowl.authorizers import CircuitBreaker, CircuitOpenError, _http
 from wardowl.authorizers._http import JsonClient
 from wardowl.authorizers.opa import OPAAuthorizer
 from wardowl.authorizers.spicedb import SpiceDBAuthorizer
@@ -401,3 +409,42 @@ def test_a_refused_connection_is_kept_as_the_cause_of_the_failure():
     with pytest.raises(AuthorizationError) as failure:
         OPAAuthorizer("http://127.0.0.1:9", retries=0, timeout=2).check(BOB, HITS)
     assert isinstance(failure.value.__cause__, OSError)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [OSError, ConnectionResetError, ssl.SSLCertVerificationError],
+)
+def test_a_failure_names_its_kind_but_not_its_text(monkeypatch, error):
+    # The text can name hosts and credentials, and agent frameworks show the message to the model.
+    details = "could not reach opa.internal:8181 as svc-wardowl (password hunter2)"
+
+    def send(self, path, body, deadline):
+        raise error(details)
+
+    monkeypatch.setattr(JsonClient, "_send", send)
+    with pytest.raises(AuthorizationError) as failure:
+        OPAAuthorizer("http://127.0.0.1:9", retries=0).check(BOB, HITS)
+    assert "hunter2" not in str(failure.value) and "opa.internal" not in str(failure.value)
+    assert details in str(failure.value.__cause__)  # kept for the logs
+    if error is not ssl.SSLCertVerificationError:
+        assert str(failure.value).endswith(f"failed: {error.__name__}")
+
+
+def test_an_open_circuit_breaker_is_the_cause_of_the_failures_it_refuses(server):
+    # Monitoring tells a paused service from a malformed answer, which has no cause.
+    events = []
+    breaker = CircuitBreaker(failures=1, reset_after=60)
+    authz = OPAAuthorizer(server.url, retries=0, circuit_breaker=breaker)
+    backend = InMemoryBackend([Document("a", "leave", {"allowed_groups": ["eng"]})])
+    retriever = PermissionedRetriever(backend, authz, strategy="postfilter", observers=[events.append])
+    server.script = ["503"]
+    with pytest.raises(AuthorizationError) as first:
+        authz.check(BOB, HITS)
+    assert breaker.is_open and first.value.__cause__ is None  # an error status: no cause
+    with pytest.raises(AuthorizationError) as paused:
+        authz.check(BOB, HITS)
+    assert isinstance(paused.value.__cause__, CircuitOpenError) and len(server.requests) == 1
+    with pytest.raises(AuthorizationError):
+        retriever.retrieve("leave", BOB)
+    assert [(e.error, e.cause) for e in events] == [("AuthorizationError", "CircuitOpenError")]

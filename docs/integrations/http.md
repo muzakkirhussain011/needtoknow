@@ -62,8 +62,13 @@ Content-Type: application/json
 | 200 | The hits the caller may read, best first, and whether the result is `complete` |
 | 401 | No bearer token, or one that fails verification |
 | 413 | A body over `max_body_bytes` |
-| 422 | A malformed body, including one with a field the API does not define, or a value over its limit |
+| 422 | A malformed body, including one with a field the API does not define, or a value over its limit. Also a well-formed query the service cannot search as sent (`InvalidQuery`): `k` over the retriever's `max_candidates`, only a vector for a keyword backend, only text for a backend without an embed function, or a vector of the wrong length where the backend checks it (`FaissBackend`). The answer echoes nothing from the request or the backend |
+| 500 | A fault on the server's side, such as a misconfigured backend or reranker. Nothing is returned, and the error goes to the server's log |
 | 503 | The permission check, or the token's verification, could not be completed: nothing is returned, and the reason goes to the `wardowl` logger, not to the caller |
+
+A vector of the wrong length for a store that does not check it before searching (pgvector, Qdrant,
+Chroma and the other database clients report it with their own errors) answers 500: only the backend
+can tell that the request was at fault, and it says so by raising `wardowl.InvalidQuery`.
 
 ## Who the caller is
 
@@ -83,6 +88,23 @@ a key your provider rotates out stops verifying within that time. A token naming
 in the set fetches the keys again, at most once every `cooldown` (30 seconds); until then such a
 token answers 401 at once, so made-up key ids cannot make the service hammer your provider. If the
 key endpoint cannot be reached or returns no usable keys, requests answer 503.
+
+`jwks_url` must be `https://`. The keys are fetched with the system's trust store; for an identity
+provider whose certificate your own CA signed, pass `ssl_context`, as for the
+[permission services](../operations.md#resilience-of-remote-permission-services), instead of
+setting `SSL_CERT_FILE` for the whole process:
+
+```python
+import ssl
+
+tls = ssl.create_default_context(cafile="/etc/ssl/internal-ca.pem")
+authenticate = OIDCAuthenticator(
+    issuer="https://login.internal/",
+    audience="knowledge-api",
+    jwks_url="https://login.internal/.well-known/jwks.json",
+    ssl_context=tls,
+)
+```
 
 For other token formats, pass your own function: it receives the bearer token and returns the
 `Subject`, or raises `wardowl.server.InvalidToken`. It may be async; a synchronous function, such

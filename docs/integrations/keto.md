@@ -25,7 +25,27 @@ The subject id, and each group with `group_subjects=True`, travel as separate JS
 (`subject_id`, or `subject_set` with its own namespace, object and relation), so a `:` or `#` in a
 name cannot change what it refers to.
 
-Checks go to `POST /relation-tuples/batch/check`, `batch_size` tuples at a time (100 by default).
+Checks go to `POST /relation-tuples/batch/check`, `batch_size` tuples at a time (10 by default).
+Each chunk is one tuple, plus one for each of the subject's groups with `group_subjects=True`.
+
+## Batch size
+
+Keto refuses a batch check of more than `limit.max_batch_check_size` tuples with HTTP 400, and that
+limit is 10 unless you configure it. `batch_size` defaults to the same 10, so the defaults work
+together. To check more tuples per request, raise both, the server's limit first:
+
+```yaml
+# keto.yml
+limit:
+  max_batch_check_size: 100
+```
+
+```python
+authorizer = KetoAuthorizer("http://keto:4466", batch_size=100)
+```
+
+A `batch_size` above the server's limit makes every check of more tuples than the limit fail, and
+the retriever then returns nothing.
 
 ## Groups from the token
 

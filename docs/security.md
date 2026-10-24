@@ -13,7 +13,9 @@ Given an authorizer that answers correctly:
 2. **Failures return nothing.** An authorizer that raises, times out, returns the wrong number of
    decisions or returns non-boolean decisions makes the call raise `AuthorizationError`. There is
    no fallback to unfiltered results, and a `PermissionNodePostprocessor` in a LlamaIndex pipeline
-   behaves the same way.
+   behaves the same way. The error's message is fixed, never the text of the exception behind it,
+   which can name hosts or credentials and is kept as its `__cause__` for your logs: agent
+   frameworks such as Haystack's show a tool's error to the model.
 3. **A backend's filtering bugs cannot leak.** With `recheck=True` (the default), pre-filtered hits
    are checked again, and anything the backend returned outside the filter is dropped and counted
    in `violations`. With `recheck=False`, hits are still matched against the filter locally, at no
@@ -42,7 +44,7 @@ services. The tests compare with an oracle written without the library's own fil
 | S7 | An incomplete candidate search is never reported as complete. | `test_core.py` (post-filtering capped), truncated or deadline-cut lists in `test_openfga.py` and `test_spicedb.py`. `complete` cannot see what an approximate index failed to return. |
 | S8 | The documented defaults keep every protection on. | `recheck=True`, `strategy="auto"`, empty `And`/`Or` and single-string groups refused (`test_core.py`) |
 | S9 | Cached decisions are used for at most `ttl`, and not at all after `invalidate()`. | `test_caching_events.py`, `test_shared_cache.py`, `test_revocation.py` (revocation under concurrent retrievals, one and three replicas) |
-| S10 | Errors and telemetry reveal no content, credentials or query text. | `test_caching_events.py` (events and OpenTelemetry), `test_mcp.py` (a failing permission service, store or subject function) |
+| S10 | Errors and telemetry reveal no content, credentials or query text. `AuthorizationError` messages are fixed: the text of the exception behind one stays in its `__cause__`. | `test_caching_events.py` (events and OpenTelemetry), `test_core.py` (a failing authorizer or redactor whose error names a password), `test_frameworks.py` and `test_haystack.py` (the same failure seen through LangChain, LlamaIndex and Haystack), `test_mcp.py` (a failing permission service, store or subject function), each authorizer's tests |
 
 S1 to S10 assume the authorizer answers correctly, the backend returns the metadata it stored, and
 the subject comes from authentication; the next sections cover those assumptions. The test files

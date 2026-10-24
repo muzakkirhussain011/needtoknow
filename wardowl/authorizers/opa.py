@@ -111,4 +111,4 @@ class OPAAuthorizer:
         try:
             return filter_from_dict(result)
         except ValueError as exc:
-            raise AuthorizationError(f"OPA filter {self.filter_path} is malformed: {exc}") from exc
+            raise AuthorizationError(f"OPA filter {self.filter_path} is malformed") from exc

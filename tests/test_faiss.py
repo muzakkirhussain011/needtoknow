@@ -9,6 +9,7 @@ pytest.importorskip("faiss")
 from wardowl import (
     Document,
     In,
+    InvalidQuery,
     MetadataACLAuthorizer,
     PermissionedRetriever,
     Query,
@@ -129,3 +130,13 @@ def test_dimensions_are_checked():
         FaissBackend(EMBED, 8, index=FaissBackend(EMBED, 16).index)
     with pytest.raises(ValueError, match="dimensions"):
         FaissBackend(EMBED, EMBED.dim).add([Document("x", "text")], [[1.0, 2.0]])
+
+
+def test_a_query_vector_of_the_wrong_length_is_the_querys_fault_and_a_bad_embed_is_not():
+    # The HTTP service answers InvalidQuery with 422; any other ValueError is a server fault (500).
+    with pytest.raises(InvalidQuery, match="3 dimensions, not 16"):
+        backend().search(Query(vector=[1.0, 0.0, 0.0]), 3)
+    broken = FaissBackend(lambda text: [1.0, 0.0], EMBED.dim)  # the backend's own embed is wrong
+    with pytest.raises(ValueError, match="dimensions") as failure:
+        broken.search("launch", 3)
+    assert not isinstance(failure.value, InvalidQuery)

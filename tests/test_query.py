@@ -13,6 +13,7 @@ from wardowl import (
     Document,
     Hit,
     InMemoryBackend,
+    InvalidQuery,
     MetadataACLAuthorizer,
     PermissionedRetriever,
     Query,
@@ -106,14 +107,15 @@ def test_embedded_prefers_the_given_vector_and_embeds_text_otherwise():
 
     assert Query("leave", [1.0, 0.0]).embedded(embed) == [1.0, 0.0] and calls == []
     assert Query("leave").embedded(embed) == [2.0, 0.0] and calls == ["leave"]
-    with pytest.raises(ValueError, match="no embed function"):
+    with pytest.raises(InvalidQuery, match="no embed function"):  # the query's fault, not the system's
         Query("leave").embedded(None)
 
 
 def test_keyword_search_needs_text():
     assert Query("leave", [1.0]).keywords() == "leave"
-    with pytest.raises(ValueError, match="only a vector"):
+    with pytest.raises(InvalidQuery, match="only a vector"):
         Query(vector=[1.0]).keywords()
+    assert issubclass(InvalidQuery, ValueError)  # code that catches ValueError keeps working
 
 
 # ---- the retriever ------------------------------------------------------------------------------

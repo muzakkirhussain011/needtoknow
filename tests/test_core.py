@@ -244,8 +244,68 @@ def _raises(*_args):
 def test_authorizer_errors_return_nothing(strategy):
     authorizer = FunctionAuthorizer(_raises, filter_for=_raises if strategy == "prefilter" else None)
     retriever = PermissionedRetriever(InMemoryBackend(corpus()), authorizer, strategy=strategy)
-    with pytest.raises(AuthorizationError, match="unreachable"):
+    with pytest.raises(AuthorizationError) as failure:
         retriever.retrieve("leave", BOB)
+    assert "unreachable" in str(failure.value.__cause__)
+
+
+# What a real authorizer's error said, word for word but for the host and the password.
+DETAILS = "could not reach opa.internal:8181 as svc-wardowl (password hunter2)"
+
+
+def _leaks():
+    raise ConnectionError(DETAILS)
+
+
+class _Leaky:
+    """An authorizer whose every call fails with an error that names a host and a password."""
+
+    def check(self, subject, hits, action="read"):
+        _leaks()
+
+    def filter_for(self, subject, action="read"):
+        _leaks()
+
+    def scope_for(self, subject, action="read"):
+        _leaks()
+
+
+class _LeakyAsync:
+    async def acheck(self, subject, hits, action="read"):
+        _leaks()
+
+    async def afilter_for(self, subject, action="read"):
+        _leaks()
+
+    check = _Leaky.check
+    filter_for = _Leaky.filter_for
+
+
+def _fails_without_the_secret(call):
+    with pytest.raises(AuthorizationError) as failure:
+        call()
+    error = failure.value
+    assert "hunter2" not in str(error) and "hunter2" not in repr(error) and "opa.internal" not in str(error)
+    assert DETAILS in str(error.__cause__)  # kept for the logs, which record the traceback
+    return error
+
+
+@pytest.mark.parametrize("strategy", ["auto", "postfilter"])
+@pytest.mark.parametrize("authorizer", [_Leaky(), _LeakyAsync()], ids=["sync", "async"])
+def test_an_authorizer_error_reaches_no_message_but_stays_the_cause(strategy, authorizer):
+    # Agent frameworks show a tool's error message to the model: it must hold no host or password.
+    retriever = PermissionedRetriever(InMemoryBackend(corpus()), authorizer, strategy=strategy)
+    assert str(_fails_without_the_secret(lambda: retriever.retrieve("leave", BOB))) == "authorizer failed"
+    _fails_without_the_secret(lambda: asyncio.run(retriever.aretrieve("leave", BOB)))
+
+
+def test_a_redactor_error_reaches_no_message_but_stays_the_cause():
+    def redact(subject, hits):
+        _leaks()
+
+    retriever = PermissionedRetriever(InMemoryBackend(corpus()), MetadataACLAuthorizer(), redactor=redact)
+    assert str(_fails_without_the_secret(lambda: retriever.retrieve("leave", BOB))) == "redaction failed"
+    _fails_without_the_secret(lambda: asyncio.run(retriever.aretrieve("leave", BOB)))
 
 
 @pytest.mark.parametrize(
