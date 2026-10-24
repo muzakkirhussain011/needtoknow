@@ -1326,11 +1326,17 @@ def audit_trail(report: Report, run: Run) -> None:
             "[EMAIL_1]" in masked and "[PHONE_1]" in masked and email not in masked and phone not in masked,
             f"question_masked {masked!r}",
         )
-        if (by_seq.get(seq) or {}).get("question_sha256") == hashlib.sha256(question.encode()).hexdigest()[:16]:
-            report.note(
-                "the audit record keeps an unsalted 16-hex SHA-256 of the raw question (threat-model T2): "
-                "the phone number masked in question_masked can be recovered from it by brute force"
-            )
+        # threat-model T2: an unkeyed hash of the raw question would let anyone who reads the log
+        # recover the masked phone number by hashing every possible number.
+        record = by_seq.get(seq) or {}
+        unkeyed = hashlib.sha256(question.encode()).hexdigest()[:16]
+        report.check(
+            "bob's question is linked by a keyed fingerprint, never an unkeyed hash of the raw question",
+            bool(record.get("question_hmac"))
+            and record.get("question_hmac") != unkeyed
+            and unkeyed not in json.dumps(record),
+            f"record fields {sorted(record)}",
+        )
     injected = by_seq.get(run.injected_seq) or {}
     report.check(
         "the injected question is recorded as denied, with its injection score of 0.8 or more",
