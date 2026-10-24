@@ -143,15 +143,15 @@ def test_timeouts_client_errors_bad_answers_and_redirects_are_not_retried(server
 
 
 def test_the_urllib_path_used_behind_a_proxy_behaves_the_same(server):
-    def client():
-        c = JsonClient(server.url, service="test", timeout=0.2, headers={}, max_response_bytes=1000)
+    def client(timeout=0.2):
+        c = JsonClient(server.url, service="test", timeout=timeout, headers={}, max_response_bytes=1000)
         c._proxied = True  # as if a proxy applied; without proxy variables urllib connects directly
         return c
 
     payload = {"input": {"subject": {"id": "bob", "groups": ["eng"]}, "resources": []}}
-    assert client().post_json("/x", payload, "test") == {"result": []}
+    assert client(2).post_json("/x", payload, "test") == {"result": []}  # the deadline covers the retry too
     server.script = ["503"]
-    assert client().post_json("/x", payload, "test") == {"result": []}
+    assert client(2).post_json("/x", payload, "test") == {"result": []}
     for fault in ["302", "400", "slow", "drip", "big", "big-chunked"]:
         server.script = [fault]
         with pytest.raises(AuthorizationError):
