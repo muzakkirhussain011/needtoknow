@@ -72,6 +72,8 @@ class ElasticsearchBackend(EngineBackend):
     hybrid search with `RankFusion`; `embed` may then be None.
     """
 
+    _engine = "Elasticsearch"
+
     def _search_request(self, vector: list[float], k: int, query: dict[str, Any] | None) -> dict[str, Any]:
         knn: dict[str, Any] = {
             "field": self.vector_field,

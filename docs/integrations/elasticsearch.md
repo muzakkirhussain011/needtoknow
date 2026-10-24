@@ -98,3 +98,10 @@ Both engines return at most 10,000 hits per search, so a search with `k` above 1
 `ValueError` rather than return 10,000 hits as if no more matched. A `terms` query holds at most
 `index.max_terms_count` values (65,536 by default), which bounds how many groups a single
 subject's filter can name; see [Operations](../operations.md#subjects-in-very-many-groups).
+
+## Partial results
+
+Every search sends `allow_partial_search_results=false`, so a shard that fails or times out fails
+the search instead of leaving its hits out. An answer that still reports a failed shard
+(`_shards.failed` above 0) or `timed_out: true` raises `RuntimeError` naming the engine, rather than
+return its hits as complete.

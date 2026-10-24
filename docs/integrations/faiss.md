@@ -48,3 +48,7 @@ backend = FaissBackend(embed, dim=768, index=index)
 if they were added in turn. `delete` removes chunks by id, and `set_metadata` changes a chunk's
 permissions without embedding it again. A lock serializes changes and searches, so one
 backend can serve several threads.
+
+The backend keeps its own copy of each chunk's metadata and returns copies in search results, so
+changing a hit's metadata, or a dict after passing it to `add` or `set_metadata`, changes no stored
+permission.

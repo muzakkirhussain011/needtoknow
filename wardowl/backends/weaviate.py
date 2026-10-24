@@ -251,7 +251,9 @@ class WeaviateBackend:
         stored = handle.query.fetch_objects(
             filters=Where.by_id().contains_any(uuids), limit=len(uuids), return_properties=[ID_PROPERTY]
         )
-        return [str(o.uuid) for o in stored.objects if not (o.properties or {}).get(ID_PROPERTY)]
+        # No `wardowl_id` means no string there, as in `_hit`, which then reports the UUID. An empty
+        # string is an id `add` wrote, and the object holds that id, not its UUID.
+        return [str(o.uuid) for o in stored.objects if not isinstance((o.properties or {}).get(ID_PROPERTY), str)]
 
     def delete(self, ids: Iterable[str]) -> None:
         """Remove chunks by id: the objects holding each id, and no other. Ids not stored are ignored."""

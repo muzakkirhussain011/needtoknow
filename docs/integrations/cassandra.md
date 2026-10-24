@@ -31,11 +31,36 @@ AND becomes one ANN query whose `WHERE` requires its terms with `wardowl_terms C
 queries run concurrently and the best `k` hits of their union are returned. A subject in the groups
 `eng` and `sales` costs two ANN queries.
 
+The vector index is approximate, so a search can now and then return fewer than `k` hits when more
+match. The filter is exact: no hit is ever a chunk the filter excludes.
+
 `max_queries` (256 by default) bounds how many ANN queries one search sends; ANDs that another AND
-implies are dropped first. A filter that still needs more is sent as one ANN query on the terms
-every match must have, for 1,000 rows, and the backend applies the filter to those rows itself. It
-never returns a chunk the filter excludes, but it can miss matches beyond those 1,000 rows, as
-Cassandra's ANN search is approximate in any case.
+implies are dropped first.
+
+### Filters that need more than `max_queries` queries
+
+A filter that still needs more ANDs than `max_queries` is sent as one ANN query on the terms every
+match must have, for 1,000 rows, and the backend applies the filter to those rows itself. With
+`MetadataACLAuthorizer` this happens for a subject in more than 254 groups at the default (one
+query for the user, one per group and one for `"*"`). An `And` multiplies the counts: two tenants
+and 200 groups make 404.
+
+The search never returns a chunk the filter excludes, but it can return **fewer than `k` hits, or
+none, though more chunks match**, and nothing says so: the retriever reports the result as
+complete. That happens when more than 1,000 rows hold the terms every match needs and fewer than
+`k` of the 1,000 nearest pass the filter. An `Or` of users and groups needs no term in common, so
+the query reads the 1,000 nearest rows of the whole table; on a large table where the subject may
+read a small part, few of them pass.
+
+To avoid it:
+
+- Raise `max_queries` above the largest number of ANDs your filters need. Each AND is one ANN
+  query, sent `concurrency` (32) at a time.
+- Narrow the group lists: give the authorizer only the groups that grant access to chunks, not
+  every group in the directory.
+- Put a term every match must have in the filter, such as a tenant: in
+  `And(In("tenant", ["acme"]), Or(...))` the one query requires the tenant's term, so it reads the
+  1,000 nearest rows of that tenant rather than of the whole table.
 
 ## Production notes
 

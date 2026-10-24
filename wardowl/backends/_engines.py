@@ -80,6 +80,7 @@ class EngineBackend:
     """
 
     supports_filters = True
+    _engine = "The search engine"  # the name errors give
 
     def __init__(
         self,
@@ -184,10 +185,21 @@ class EngineBackend:
             if query is None:
                 return None  # nothing can match
         if self.mode == "keyword":
-            return self._keyword_request(q.keywords(), k, query)
-        return self._search_request(q.embedded(self.embed), k, query)
+            request = self._keyword_request(q.keywords(), k, query)
+        else:
+            request = self._search_request(q.embedded(self.embed), k, query)
+        # The engine then fails the search when a shard fails or times out, rather than leave its hits out.
+        return request | {"allow_partial_search_results": False}
 
     def _hits(self, response: Any) -> list[Hit]:
+        # An HTTP 200 answer can still leave hits out (a shard that failed or timed out, on an engine that
+        # ignores the parameter): `timed_out` and `_shards.failed` say so.
+        shards = response.get("_shards") or {}
+        if response.get("timed_out"):
+            raise RuntimeError(f"{self._engine} returned partial results: the search timed out")
+        if shards.get("failed"):
+            failed, total = shards["failed"], shards.get("total")
+            raise RuntimeError(f"{self._engine} returned partial results: {failed} of {total} shards failed")
         hits = []
         for h in response["hits"]["hits"]:
             source = h.get("_source") or {}

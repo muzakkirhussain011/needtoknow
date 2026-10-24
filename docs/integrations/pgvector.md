@@ -62,9 +62,13 @@ stored number, or an element of the stored list, to read as that integer:
 EXISTS (SELECT 1 FROM jsonb_path_query(metadata -> 'level', 'lax $[*]') AS e(v) WHERE v::text = ANY('{1}'))
 ```
 
-The text of a jsonb number keeps its scale (`1.0` reads `1.0`), so a float never matches. Metadata
-keys must be strings: `add` and `set_metadata` refuse others with `ValueError`, since JSON would
-turn the key `1` into `"1"`, which a filter on the field `"1"` would then match.
+The text of a jsonb number keeps its scale (`1.0` reads `1.0`), so a float never matches. It does
+not keep an exponent: `json.dumps` writes the float `1e16` as `1e+16`, which jsonb would store as
+the integer `10000000000000000`. So `add` and `set_metadata` write every whole float with its
+fraction (`10000000000000000.0`), in lists and nested objects too, and floats come back as floats.
+This matters for large ids from a pandas integer column with a missing value, which holds them as
+floats. Metadata keys must be strings: `add` and `set_metadata` refuse others with `ValueError`,
+since JSON would turn the key `1` into `"1"`, which a filter on the field `"1"` would then match.
 
 ## Iterative index scans
 

@@ -103,6 +103,19 @@ def test_requests_carry_the_filter_vectors_and_escaped_ids():
     assert fake.requests[1].url.raw_path == b"/document/v1/wardowl/wardowl/docid/a%2Fb"
     assert put["fields"]["text"] == "two" and len(fake.requests) == 5  # the last of a repeated id wins
     assert update["fields"][TERMS_FIELD]["assign"] == [tag("team", "y").encode().hex()]
+    # httpx drops "." and ".." from a path, so their requests would reach another one: they are
+    # refused before anything is sent. Ids that merely hold dots keep them.
+    for bad in (".", ".."):
+        with pytest.raises(ValueError, match="Vespa cannot address"):
+            backend.delete(["c", bad])
+        with pytest.raises(ValueError, match="Vespa cannot address"):
+            backend.set_metadata({bad: {"team": ["y"]}})
+        with pytest.raises(ValueError, match="Vespa cannot address"):
+            backend.add([Document(bad, "text", {})])
+    assert len(fake.requests) == 5
+    backend.delete(["...", "a..b", "./x"])
+    paths = sorted(request.url.raw_path for request in fake.requests[5:])
+    assert paths == [b"/document/v1/wardowl/wardowl/docid/" + p for p in (b".%2Fx", b"...", b"a..b")]
 
 
 def test_keyword_mode_sends_the_text():

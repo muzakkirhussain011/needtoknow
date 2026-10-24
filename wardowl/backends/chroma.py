@@ -30,7 +30,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from wardowl.backends._errors import required
-from wardowl.filters import And, Filter, In, Or, _is_value, _ordered
+from wardowl.filters import And, Filter, In, Or, _is_value, _ordered, matches
 from wardowl.types import Document, Hit, Query
 
 __all__ = ["JSON_KEY", "ChromaBackend", "filter_to_where"]
@@ -164,6 +164,9 @@ class ChromaBackend:
         An update, which Chroma applies to stored records only: a chunk deleted meanwhile is not
         recreated, and its text and vector are never read and written back. Keys of the stored
         metadata that the new one lacks are removed (set to None), so no old list key survives.
+        The read and the update are two calls, so an `add` between them can leave list keys the
+        update does not know of; `search` checks each hit's JSON copy against the filter, so such a
+        key never makes a chunk match.
         """
         encoded = {doc_id: _encode_metadata(doc_id, new) for doc_id, new in metadata.items()}
         if not encoded:
@@ -198,5 +201,10 @@ class ChromaBackend:
             result["ids"][0], result["documents"][0], result["metadatas"][0], result["distances"][0], strict=True
         )
         hits = [Hit(i, t or "", 1.0 - float(d), _decode_metadata(m)) for i, t, m, d in rows]
+        if filter is not None:
+            # Chroma matched its own fields, which can disagree with the JSON copy: an `add` landing
+            # between `set_metadata`'s read and update leaves the list keys it wrote, which the
+            # update does not know to remove. Only hits whose true metadata the filter matches count.
+            hits = [h for h in hits if matches(filter, h.metadata)]
         hits.sort(key=lambda h: (-h.score, h.id))
         return hits

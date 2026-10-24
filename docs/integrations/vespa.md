@@ -59,5 +59,9 @@ scores in keyword mode.
   return its partial results as complete.
 - **Writes** go `concurrency` requests at a time (8 by default). A write that fails raises; repeated
   ids in one `add` keep the last.
+- **Ids:** a chunk id goes into the `/document/v1` path percent-encoded, `/` included. The ids `.`
+  and `..` are refused with `ValueError` by `add`, `set_metadata` and `delete`, before any request:
+  HTTP clients drop such a path segment, which would send the request to another path, and Vespa
+  refuses them percent-encoded too.
 - **Visibility:** a write is searchable when Vespa acknowledges it, so `add` returning means the chunk
   is searchable.

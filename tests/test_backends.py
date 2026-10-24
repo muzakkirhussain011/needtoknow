@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import uuid
 
@@ -152,6 +153,32 @@ def test_chroma_set_metadata_never_recreates_a_deleted_chunk_nor_restores_old_te
     assert backend.search("text", 5, In("allowed_groups", ["eng"])) == []  # the old list field is gone
 
 
+def test_chroma_search_drops_a_hit_only_a_stale_list_field_matches(chroma_factory):
+    from wardowl.backends.chroma import ChromaBackend
+
+    backend = chroma_factory([Document("a", "leave plan", {"allowed_groups": ["hr"]})])
+    collection = backend.collection
+
+    class Interleaved:
+        """The collection, with another writer's add landing between set_metadata's read and update."""
+
+        def __getattr__(self, name):
+            return getattr(collection, name)
+
+        def get(self, **kwargs):
+            stored = collection.get(**kwargs)
+            backend.add([Document("a", "leave plan", {"allowed_groups": ["eng"]})])
+            return stored
+
+    ChromaBackend(Interleaved(), EMBED).set_metadata({"a": {"allowed_groups": ["sales"]}})
+    # The update knew only the list field it read, so the one the add wrote is left, and Chroma matches it.
+    (fields,) = collection.get(ids=["a"], include=["metadatas"])["metadatas"]
+    assert fields.get("allowed_groups::s:eng") is True
+    assert backend.search("leave plan", 5, In("allowed_groups", ["eng"])) == []
+    (hit,) = backend.search("leave plan", 5, In("allowed_groups", ["sales"]))
+    assert hit.id == "a" and hit.metadata == {"allowed_groups": ["sales"]}
+
+
 # ---- pgvector specifics ----------------------------------------------------------------------
 
 
@@ -204,6 +231,44 @@ def test_pgvector_matches_integers_only_where_the_reference_does(pgvector_factor
     many = list(range(2, MANY_VALUES + 5))
     for f in (In("level", [1]), In("level", [1, "x"]), In("level", [1, *many]), In("level", ["1"])):
         assert {h.id for h in backend.search("leave", 10, f)} == {d.id for d in docs if matches(f, d.metadata)}, f
+
+
+def test_pgvector_writes_whole_floats_with_a_fraction_as_jsonb_drops_an_exponent():
+    from wardowl.backends.pgvector import _metadata_json
+
+    big = 1.2345678901234568e16  # json.dumps writes it with an exponent, which jsonb stores as an integer
+    metadata = {"owner": big, "ids": [1e16, 7, -2e300], "acl": {"owner": [big], "1": 2.5e-7}, "flag": True}
+    text = _metadata_json("d", metadata)
+    assert "e+" not in text and "12345678901234568.0" in text
+    loaded = json.loads(text)
+    assert json.dumps(loaded) == json.dumps(metadata)  # the same values, each of the same type
+    assert type(loaded["owner"]) is float and type(loaded["ids"][1]) is int
+    # Everything else is written as json.dumps writes it, a nested object's keys that are not strings included.
+    other = {"team": "hr", "level": 1.0, "notes": ["é", None, 0.5], "acl": {1: "x", None: [True]}}
+    assert json.loads(_metadata_json("d", other)) == json.loads(json.dumps(other))
+    with pytest.raises(TypeError):
+        _metadata_json("d", {"tags": {"hr"}})
+
+
+def test_pgvector_keeps_whole_floats_apart_from_integers(pgvector_factory):
+    from wardowl.backends.pgvector import MANY_VALUES
+
+    big = 12345678901234568
+    docs = [
+        Document("int", "leave", {"owner": big}),
+        Document("float", "leave", {"owner": float(big)}),
+        Document("listed-float", "leave", {"owner": [float(big), 1e300]}),
+        Document("nested", "leave", {"owner": {"id": float(big)}}),
+    ]
+    backend = pgvector_factory(docs)
+    for f in (In("owner", [big]), In("owner", [big, *range(MANY_VALUES + 1)])):
+        assert {d.id for d in docs if matches(f, d.metadata)} == {"int"}
+        assert {h.id for h in backend.search("leave", 10, f)} == {"int"}, f
+    # Read back with the type each value was written with, so the retriever's re-check agrees too.
+    stored = {h.id: json.dumps(h.metadata) for h in backend.search("leave", 10)}
+    assert stored == {d.id: json.dumps(d.metadata) for d in docs}
+    backend.set_metadata({"int": {"owner": float(big)}})
+    assert backend.search("leave", 10, In("owner", [big])) == []
 
 
 def test_pgvector_refuses_metadata_keys_that_json_would_turn_into_strings(pgvector_factory):

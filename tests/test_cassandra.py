@@ -145,12 +145,14 @@ def _factory(session, *, vectors=False):
 
 @needs_cassandra
 def test_the_conformance_kit(session):
-    check_backend(_factory(session))
+    # Cassandra's vector index (jvector) is approximate: a search can miss a matching row now and then,
+    # even with k as large as the table. The kit still requires every hit to match the filter.
+    check_backend(_factory(session), exact=False)
 
 
 @needs_cassandra
 def test_the_conformance_kit_with_query_vectors(session):
-    check_backend(_factory(session, vectors=True), examples=8, query=Query(vector=EMBED(QUERY)))
+    check_backend(_factory(session, vectors=True), examples=8, query=Query(vector=EMBED(QUERY)), exact=False)
 
 
 @needs_cassandra
