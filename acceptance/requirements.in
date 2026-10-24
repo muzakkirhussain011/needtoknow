@@ -9,3 +9,5 @@ uvicorn
 httpx
 elasticsearch[async]
 opensearch-py[async]
+# The build backend, to install this checkout without fetching unpinned build tools.
+hatchling
