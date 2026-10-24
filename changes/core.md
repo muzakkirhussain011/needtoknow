@@ -19,6 +19,9 @@
 - `PermissionedRetriever(audit_key=...)` raises `TypeError` for a key that is not `bytes` or
   `bytearray`. A string passed the length check, then made every event fail to build: the error was
   logged, no observer received an event, and retrieval went on unaudited.
+- `RedisCache(signing_key=...)` raises `TypeError` for a key that is not `bytes` or `bytearray`, for
+  the same reason: a string passed the length check, then failed every read and write of the
+  shared cache.
 - A shared-cache entry whose expiry is an integer too large for a float is a miss. `float()` raised
   `OverflowError`, which escaped the read, so every retrieval for that subject failed.
 - The conformance kit requires `asearch` to refuse, with `ValueError`, every filter `search`

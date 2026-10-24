@@ -707,6 +707,10 @@ class RedisCache:
     """
 
     def __init__(self, client: Any, *, signing_key: bytes | None = None) -> None:
+        key: Any = signing_key
+        if key is not None and not isinstance(key, (bytes, bytearray)):
+            # hmac needs bytes: a string would fail on every read and write, turning the cache off.
+            raise TypeError(f"signing_key must be bytes, such as secrets.token_bytes(32), not {type(key).__name__}")
         if signing_key is not None and len(signing_key) < 16:
             raise ValueError("signing_key should be at least 16 random bytes")
         self.client = client

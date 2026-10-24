@@ -355,6 +355,8 @@ def _redis():
 def test_a_short_signing_key_is_refused():
     with pytest.raises(ValueError):
         RedisCache(None, signing_key=b"short")
+    with pytest.raises(TypeError, match="bytes"):
+        RedisCache(None, signing_key="a string of more than sixteen characters")
 
 
 @needs_redis
