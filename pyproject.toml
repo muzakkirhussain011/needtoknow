@@ -112,6 +112,8 @@ ignore = ["S101"]
 "wardowl/backends/cassandra.py" = ["S608"]
 "wardowl/backends/vespa.py" = ["S608"]
 "tests/test_vespa.py" = ["S608"]
+# Acceptance scenarios drive real servers and CLIs, and check outcomes with plain asserts.
+"acceptance/**" = ["S101", "S104", "S105", "S106", "S108", "S113", "S311", "S603", "S607"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
