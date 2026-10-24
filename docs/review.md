@@ -156,6 +156,11 @@ published as advisory
 | October 2026 | One chunk id OpenFGA or SpiceDB refused failed every retrieval that returned it | 2.0.0 |
 | October 2026 | A string `audit_key` or `signing_key` turned audit events or the shared cache off without an error | 2.0.0 |
 | October 2026 | The example gateway parsed bodies of any size before authentication, and two of its patterns took quadratic time | the gateway example |
+| October 2026 | With SpiceDB's `group_subjects=True`, the default, a banned user read a document shared with their group under an exclusion such as `viewer - banned` | 2.1.0 |
+| October 2026 | A permission service's error text, host names and credentials included, reached models through agent tools | 2.1.0 |
+| October 2026 | KetoAuthorizer's default batch of 100 exceeded Keto's default limit of 10, so retrievals of more than 10 chunks failed | 2.1.0 |
+| October 2026 | A chunk shortened after its redaction spans were written made every retrieval that reached it fail | 2.1.0 |
+| October 2026 | Chroma refused one large write, so loading a big corpus failed | 2.1.0 |
 
 ## Reporting
 
