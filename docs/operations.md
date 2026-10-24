@@ -11,7 +11,7 @@ retriever = PermissionedRetriever(
     backend,
     CachingAuthorizer(authorizer, ttl=30),
     observers=[JsonLinesAudit(audit_file), OpenTelemetryObserver(), OpenTelemetryMetrics()],
-    audit_key=audit_key,  # bytes from your secret store; enables query fingerprints
+    audit_key=audit_key,  # at least 16 random bytes from your secret store; enables query fingerprints
 )
 ```
 
@@ -28,13 +28,17 @@ authorizer = CachingAuthorizer(openfga, ttl=30, maxsize=100_000)
 
 - **What is cached:** per subject and action, the pre-filter from `filter_for` and each `check`
   decision. A decision is keyed by the chunk id *and* its metadata, so a chunk whose permission
-  metadata changed is decided again.
+  metadata changed is decided again. Keys encode every value with its type, so `1`, `"1"`, `True`
+  and `1.0` are different subjects' attributes or chunks' metadata. A subject or chunk holding a
+  value of another type than strings, numbers, booleans, None, bytes, dates, times, decimals, UUIDs
+  and lists, tuples, sets and mappings of them is never cached: the authorizer is asked every time.
 - **The revocation bound:** nothing older than `ttl` seconds is used. A permission revoked at the
   source stops granting access within `ttl` seconds, plus whatever delay the permission service
   itself has. Pick `ttl` as a security decision: 30 seconds is a common trade-off, and a few
   seconds still removes most repeated calls within one conversation.
 - **Never cached:** exceptions and malformed answers (non-booleans, the wrong number of
-  decisions). Every failure reaches the retriever, which fails closed.
+  decisions, a filter that is not a well-formed `In`, `And` or `Or`). Every failure reaches the
+  retriever, which fails closed.
 - **Size:** at most `maxsize` entries; the least recently used go first.
 - **Monitoring:** `stats()` returns a `CacheStats` with the answers served from this process (`hits`)
   and from the shared cache (`shared_hits`), those the authorizer was asked for (`misses`), the shared
@@ -61,7 +65,7 @@ from wardowl import CachingAuthorizer
 from wardowl.caching import RedisCache
 
 shared = RedisCache(redis.Redis.from_url(REDIS_URL), signing_key=CACHE_SIGNING_KEY)
-authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
+authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared, namespace="openfga-docs")
 ```
 
 - **Two tiers:** each process looks in its own cache first, then in Redis, and only then asks the
@@ -82,13 +86,18 @@ authorizer = CachingAuthorizer(openfga, ttl=30, shared=shared)
   for `ttl` plus an hour. An attacker who can write to your Redis and copies back a signed entry
   together with its old epoch can extend a decision only until that entry's own expiry, at most
   `ttl` after the permission service gave it.
-- **One namespace per policy.** Every `CachingAuthorizer` with the same Redis and `namespace` uses
-  the same answers, whatever authorizer it wraps. Give each differently configured authorizer
-  (another policy, OpenFGA store, tenant model or action mapping) its own `namespace`.
-- **Upgrading from 1.3 or earlier.** Entries written by those versions are not read (their keys and
-  format differ), so the first requests after an upgrade ask the permission service. During a rolling
-  upgrade, an `invalidate(subject)` made by a replica of one version does not clear the other
-  version's entries: call `invalidate()` once the upgrade is done, or allow for `ttl`.
+- **One namespace per policy.** `namespace` is required with a shared cache. Every
+  `CachingAuthorizer` with the same Redis and `namespace` uses the same answers, whatever authorizer
+  it wraps, so give each differently configured authorizer (another policy, OpenFGA store, tenant
+  model or action mapping) its own, and the same one in every replica. Within one process, a second
+  `CachingAuthorizer` that wraps an authorizer of another type under a Redis client and namespace
+  already in use raises `ValueError`. That check cannot tell two configurations of one type apart,
+  nor see other processes, so choosing the names stays your part.
+- **Upgrading.** Entries written by an earlier version are not read when the keys or format changed,
+  as they did in 1.3 and again with exact, type-aware keys, so the first requests after such an
+  upgrade ask the permission service. During a rolling upgrade, an `invalidate(subject)` made by a
+  replica of one version does not clear the other version's entries: call `invalidate()` once the
+  upgrade is done, or allow for `ttl`.
 - **A failing or slow Redis never decides anything.** A read or write that fails is logged and
   treated as a miss: the permission service is asked.
 - **Nothing identifying in key names.** Keys are digests of the subject and the chunk, so Redis
@@ -108,11 +117,14 @@ has to change before searches can see it. `set_metadata` replaces the metadata o
 without embedding them again:
 
 ```python
-backend.set_metadata({chunk_id: {"allowed_groups": ["hr"]} for chunk_id in chunk_ids})
+# `stored` is the metadata your ingestion wrote for each chunk: its tenant, source, redactions.
+backend.set_metadata({chunk_id: {**stored[chunk_id], "allowed_groups": ["hr"]} for chunk_id in chunk_ids})
 ```
 
-- The whole metadata is replaced: no key of the old permissions survives. Ids that are not stored
-  are ignored, so nothing is created from metadata alone.
+- The whole metadata is replaced: no key of the old permissions survives. Pass every field the
+  chunk keeps, not only the one that changed: a chunk written back without its `tenant` matches no
+  `TenantAuthorizer` filter, and one without its `redactions` is hidden whole by `SpanRedactor`. Ids
+  that are not stored are ignored, so nothing is created from metadata alone.
 - It returns once searches see the change, as `add` does for that store
   ([Choosing a store](integrations/index.md#choosing-a-store)); MongoDB waits for its search index.
 - Every built-in backend has it, and the [conformance kit](extending.md#test-it-with-the-conformance-kit)
@@ -212,7 +224,8 @@ passes it to each observer. An observer is any callable taking the event.
 | `query_hmac` | HMAC-SHA256 of the query, only when `audit_key` is set: of its text, or of its vector when a `Query` has no text |
 
 Events never contain query or chunk text, nor a query's vector. A plain hash of a short query could be reversed by
-guessing, so the fingerprint is an HMAC under your key, and there is none without a key. Equal
+guessing, so the fingerprint is an HMAC under your key, and there is none without a key. A key
+shorter than 16 bytes is refused, as a guessable key would make the fingerprints guessable too. Equal
 queries under the same key have equal fingerprints, which lets you spot repeated or probing queries
 without storing them. Rotating the key breaks that link, which can be what you want.
 

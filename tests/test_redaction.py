@@ -20,6 +20,7 @@ from wardowl import (
     SpanRedactor,
     Subject,
 )
+from wardowl.redaction import span_digest
 
 TEXT = "Team plan. Salaries: ann 90k, bob 80k. Launch in May."
 SALARIES = {"start": 11, "end": 38, "allowed_groups": ["hr"]}
@@ -55,9 +56,31 @@ def test_overlapping_and_touching_spans_are_replaced_once():
     assert hidden.text == "Team plan. # # in May."
 
 
-def test_a_chunk_without_spans_is_unchanged():
+def test_a_chunk_without_its_spans_is_hidden_whole_unless_spans_are_optional():
+    # A missing list cannot be told from one lost when the metadata was replaced: fail closed.
+    [hidden] = SpanRedactor().redact(ANN, [hit(source="wiki")])
+    assert hidden.text == "[REDACTED]" and hidden.metadata == {"source": "wiki"}
+    [nothing_hidden] = SpanRedactor().redact(ANN, [hit(redactions=[], source="wiki")])
+    assert nothing_hidden.text == TEXT and nothing_hidden.metadata == {"source": "wiki"}
     original = hit()
-    assert SpanRedactor().redact(ANN, [original]) == [original]
+    assert SpanRedactor(required=False).redact(ANN, [original]) == [original]
+
+
+def test_metadata_replaced_without_the_spans_hides_the_whole_chunk():
+    backend = InMemoryBackend([Document("plan", TEXT, {"allowed_groups": ["eng"], "redactions": [SALARIES]})])
+    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), redactor=SpanRedactor())
+    assert retriever.retrieve("plan", ANN).hits[0].text == "Team plan. [REDACTED] Launch in May."
+    backend.set_metadata({"plan": {"allowed_groups": ["eng", "sales"]}})  # replaces the spans too
+    assert retriever.retrieve("plan", ANN).hits[0].text == "[REDACTED]"
+
+
+def test_a_span_whose_text_changed_hides_the_whole_chunk():
+    span = {**SALARIES, "sha256": span_digest(TEXT[11:38])}
+    assert SpanRedactor().redact(ANN, [hit(redactions=[span])])[0].text == "Team plan. [REDACTED] Launch in May."
+    assert SpanRedactor().redact(HR, [hit(redactions=[span])])[0].text == TEXT
+    edited = "Updated. " + TEXT  # edited after the spans were written: offset 11 is no longer the salaries
+    for subject in (ANN, HR):
+        assert SpanRedactor().redact(subject, [hit(text=edited, redactions=[span])])[0].text == "[REDACTED]"
 
 
 @pytest.mark.parametrize(
@@ -71,6 +94,7 @@ def test_a_chunk_without_spans_is_unchanged():
         [{"start": 0, "end": 999}],
         [{"start": 0, "end": 4, "allowed_groups": "hr"}],
         [{"start": 0, "end": 4, "allowed_users": [7]}],
+        [{"start": 0, "end": 4, "sha256": 7}],
     ],
 )
 def test_malformed_spans_fail_closed(spans):
@@ -132,7 +156,7 @@ def test_pattern_configuration_is_checked(kwargs):
 
 DOCS = [
     Document("plan", TEXT, {"allowed_groups": ["eng", "hr"], "redactions": [SALARIES]}),
-    Document("memo", "A memo about the launch plan.", {"allowed_groups": ["eng"]}),
+    Document("memo", "A memo about the launch plan.", {"allowed_groups": ["eng"], "redactions": []}),
 ]
 
 
@@ -160,6 +184,22 @@ def test_redaction_applies_to_async_retrieval_and_plain_functions():
     result = asyncio.run(retriever.aretrieve("plan", ANN, k=2))
     assert result.hits and all(set(h.text) == {"*"} for h in result.hits)
     assert isinstance(SpanRedactor(), Redactor)
+
+
+def test_async_retrieval_runs_the_redactor_off_the_event_loop():
+    where = []
+
+    def redact(subject, hits):
+        try:
+            asyncio.get_running_loop()
+            where.append("on the event loop")
+        except RuntimeError:
+            where.append("in a thread")
+        return hits
+
+    retriever = PermissionedRetriever(InMemoryBackend(DOCS), MetadataACLAuthorizer(), redactor=redact)
+    assert asyncio.run(retriever.aretrieve("plan", ANN, k=2)).hits
+    assert where == ["in a thread"]  # a slow redactor would otherwise hold up every other request
 
 
 @pytest.mark.parametrize(

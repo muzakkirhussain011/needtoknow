@@ -17,7 +17,7 @@ from wardowl import (
 )
 
 DOCS = [
-    Document("handbook", "leave policy for all staff", {"allowed_groups": ["*"]}),
+    Document("handbook", "leave policy for all staff", {"allowed_groups": ["*"], "title": "Handbook"}),
     Document("salaries", "salary bands and leave payouts", {"allowed_groups": ["hr"]}),
     Document("runbook", "incident runbook and deploy steps", {"allowed_groups": ["eng"]}),
     Document("bob-review", "bob leave review notes", {"allowed_users": ["bob"]}),
@@ -49,6 +49,16 @@ def test_langchain_retriever_returns_only_permitted_documents(lc):
     docs = lc.WardowlRetriever(retriever=permissioned()).invoke("leave", subject=BOB)
     assert {d.id for d in docs} == {"handbook", "bob-review"}
     assert all(d.metadata["relevance_score"] > 0 for d in docs)
+
+
+def test_langchain_documents_carry_only_the_metadata_named(lc):
+    # Permission fields say who may read what; documents reach the model, prompts and traces.
+    default = lc.WardowlRetriever(retriever=permissioned()).invoke("leave", subject=BOB)
+    assert default and all(set(d.metadata) == {"relevance_score"} for d in default)
+    named = lc.WardowlRetriever(retriever=permissioned(), metadata_fields=["title"]).for_subject(BOB)
+    for docs in (named.invoke("leave"), asyncio.run(named.ainvoke("leave"))):
+        assert {d.id: d.metadata.get("title") for d in docs} == {"handbook": "Handbook", "bob-review": None}
+        assert all(set(d.metadata) <= {"title", "relevance_score"} for d in docs)
 
 
 def test_langchain_bound_subject_sync_and_async(lc):
@@ -133,6 +143,16 @@ def test_llamaindex_retriever_returns_only_permitted_nodes(li):
     retriever = li.WardowlRetriever(permissioned(), BOB, k=5)
     assert {n.node.node_id for n in retriever.retrieve("leave")} == {"handbook", "bob-review"}
     assert {n.node.node_id for n in asyncio.run(retriever.aretrieve("leave"))} == {"handbook", "bob-review"}
+
+
+def test_llamaindex_nodes_carry_only_the_metadata_named(li):
+    default = li.WardowlRetriever(permissioned(), BOB, k=5).retrieve("leave")
+    assert default and all(n.node.metadata == {} for n in default)
+    named = li.WardowlRetriever(permissioned(), BOB, k=5, metadata_fields=["title"])
+    for nodes in (named.retrieve("leave"), asyncio.run(named.aretrieve("leave"))):
+        assert {n.node.node_id: n.node.metadata for n in nodes} == {"handbook": {"title": "Handbook"}, "bob-review": {}}
+    with pytest.raises(TypeError):
+        li.WardowlRetriever(permissioned(), BOB, metadata_fields="title")
 
 
 def test_llamaindex_retrievers_sharing_one_permissioned_retriever_never_mix_users(li):

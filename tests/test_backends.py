@@ -100,7 +100,7 @@ def test_backend_returns_exactly_the_documents_the_filter_matches(factory, docs,
 )
 def test_retriever_on_backend_never_leaks_and_is_complete(factory, docs, subject, query, k, strategy):
     backend = factory(docs)
-    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(backend, MetadataACLAuthorizer(), strategy=strategy, max_candidates=len(docs) + k)
     result = retriever.retrieve(query, subject, k)
     assert all(may_read(subject, hit) for hit in result.hits)
     assert result.violations == 0 and result.complete

@@ -22,7 +22,10 @@ engine = RetrieverQueryEngine.from_args(retriever)  # uses your configured LLM
 ```
 
 Create one per request or session, from the authenticated user. Returned nodes carry the chunk's
-metadata and score; `aretrieve` uses wardowl's async path.
+score and the metadata named in `metadata_fields`, none by default:
+`WardowlRetriever(permissioned, subject, metadata_fields=["title", "source"])`. Permission fields
+such as `allowed_users`, `allowed_groups` and `tenant` say who may read what, and nodes reach the
+model, prompts and traces, so leave those out. `aretrieve` uses wardowl's async path.
 
 ## Adding permissions to an existing pipeline
 

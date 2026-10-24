@@ -89,7 +89,7 @@ def _tenant_acl() -> AllOf:
 )
 def test_no_subject_receives_another_tenants_chunk_even_through_a_shared_cache(docs, subjects, k, strategy):
     cache = CachingAuthorizer(_tenant_acl())  # one cache, used by every subject in turn
-    retriever = PermissionedRetriever(InMemoryBackend(docs), cache, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(docs), cache, strategy=strategy, max_candidates=len(docs) + k)
     by_id = {d.id: d for d in docs}
     for subject in subjects:
         readable = {d.id for d in docs if may_read(subject, d.metadata)}

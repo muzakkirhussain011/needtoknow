@@ -15,6 +15,7 @@ wardowl backend. Filter syntax differs between stores, so results are post-filte
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 from langchain_core.callbacks import AsyncCallbackManagerForRetrieverRun, CallbackManagerForRetrieverRun
@@ -29,21 +30,31 @@ from wardowl.types import Hit, Query, Subject
 __all__ = ["LangChainVectorStoreBackend", "WardowlRetriever"]
 
 
-def _documents(result: RetrievalResult) -> list[LCDocument]:
+def _documents(result: RetrievalResult, fields: Collection[str]) -> list[LCDocument]:
     return [
-        LCDocument(id=h.id, page_content=h.text, metadata={**h.metadata, "relevance_score": h.score})
+        LCDocument(
+            id=h.id,
+            page_content=h.text,
+            metadata={**{key: h.metadata[key] for key in fields if key in h.metadata}, "relevance_score": h.score},
+        )
         for h in result.hits
     ]
 
 
 class WardowlRetriever(BaseRetriever):
-    """Returns only the chunks the subject may read."""
+    """Returns only the chunks the subject may read.
+
+    Each `Document` carries `relevance_score` and the chunk's metadata keys named in
+    `metadata_fields`, none by default: permission fields such as `allowed_users`, `allowed_groups`
+    and `tenant` say who may read what, and documents reach the model, prompts and traces.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     retriever: PermissionedRetriever
     k: int = 4
     subject: Subject | None = None
+    metadata_fields: tuple[str, ...] = ()
 
     def for_subject(self, subject: Subject) -> WardowlRetriever:
         return self.model_copy(update={"subject": subject})
@@ -62,7 +73,7 @@ class WardowlRetriever(BaseRetriever):
         subject: Subject | None = None,
         k: int | None = None,
     ) -> list[LCDocument]:
-        return _documents(self.retriever.retrieve(query, self._subject(subject), k or self.k))
+        return _documents(self.retriever.retrieve(query, self._subject(subject), k or self.k), self.metadata_fields)
 
     async def _aget_relevant_documents(
         self,
@@ -72,7 +83,8 @@ class WardowlRetriever(BaseRetriever):
         subject: Subject | None = None,
         k: int | None = None,
     ) -> list[LCDocument]:
-        return _documents(await self.retriever.aretrieve(query, self._subject(subject), k or self.k))
+        result = await self.retriever.aretrieve(query, self._subject(subject), k or self.k)
+        return _documents(result, self.metadata_fields)
 
 
 class LangChainVectorStoreBackend:

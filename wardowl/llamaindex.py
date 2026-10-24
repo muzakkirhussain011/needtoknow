@@ -11,6 +11,7 @@ Any authorizer failure raises `AuthorizationError`; nothing is returned unfilter
 
 from __future__ import annotations
 
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
@@ -33,29 +34,49 @@ def _query(bundle: QueryBundle) -> str | Query:
     return Query(text=bundle.query_str or None, vector=bundle.embedding)
 
 
-def _nodes(result: RetrievalResult) -> list[NodeWithScore]:
+def _nodes(result: RetrievalResult, fields: Collection[str]) -> list[NodeWithScore]:
     return [
-        NodeWithScore(node=TextNode(id_=h.id, text=h.text, metadata=dict(h.metadata)), score=h.score)
+        NodeWithScore(node=TextNode(id_=h.id, text=h.text, metadata=_picked(h.metadata, fields)), score=h.score)
         for h in result.hits
     ]
 
 
-class WardowlRetriever(BaseRetriever):
-    """Returns only the nodes `subject` may read."""
+def _picked(metadata: Mapping[str, Any], fields: Collection[str]) -> dict[str, Any]:
+    return {key: metadata[key] for key in fields if key in metadata}
 
-    def __init__(self, retriever: PermissionedRetriever, subject: Subject, *, k: int = 4, **kwargs: Any) -> None:
+
+class WardowlRetriever(BaseRetriever):
+    """Returns only the nodes `subject` may read.
+
+    Each node carries the chunk's metadata keys named in `metadata_fields`, none by default:
+    permission fields such as `allowed_users`, `allowed_groups` and `tenant` say who may read what,
+    and nodes reach the model, prompts and traces.
+    """
+
+    def __init__(
+        self,
+        retriever: PermissionedRetriever,
+        subject: Subject,
+        *,
+        k: int = 4,
+        metadata_fields: Collection[str] = (),
+        **kwargs: Any,
+    ) -> None:
         if subject is None:
             raise ValueError("a subject is required; retrieval never runs unfiltered")
+        if isinstance(metadata_fields, str):
+            raise TypeError("metadata_fields is a collection of metadata keys, not a single string")
         self._permissioned = retriever
         self._subject = subject
         self._k = k
+        self._fields = tuple(metadata_fields)
         super().__init__(**kwargs)
 
     def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
-        return _nodes(self._permissioned.retrieve(_query(query_bundle), self._subject, self._k))
+        return _nodes(self._permissioned.retrieve(_query(query_bundle), self._subject, self._k), self._fields)
 
     async def _aretrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
-        return _nodes(await self._permissioned.aretrieve(_query(query_bundle), self._subject, self._k))
+        return _nodes(await self._permissioned.aretrieve(_query(query_bundle), self._subject, self._k), self._fields)
 
 
 class PermissionNodePostprocessor(BaseNodePostprocessor):

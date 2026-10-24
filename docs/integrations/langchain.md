@@ -25,8 +25,14 @@ bobs_retriever = retriever.for_subject(Subject("bob", ["sales"]))
 docs = bobs_retriever.invoke("What changed in Q3 pricing?")
 ```
 
-A call with no subject raises `ValueError` instead of returning unfiltered results. Each returned
-`Document` carries the chunk's metadata plus `relevance_score`. `ainvoke` uses `aretrieve`.
+A call with no subject raises `ValueError` instead of returning unfiltered results. `ainvoke` uses
+`aretrieve`.
+
+Each returned `Document` carries `relevance_score` and the chunk metadata named in
+`metadata_fields`, none by default, as in
+`WardowlRetriever(retriever=permissioned, metadata_fields=["title", "source"])`. Permission fields
+such as `allowed_users`, `allowed_groups` and `tenant` say who may read what, and documents reach
+the model, prompts, callbacks and traces, so leave those out.
 
 ## In an agent: bind the subject, do not expose it
 

@@ -261,7 +261,7 @@ def test_spicedb_gives_exactly_the_reference_answer(docs, subject, query, k, str
     _relationships_for(docs)
     stored = [Document(d.id, d.text, {**d.metadata, "doc_id": d.id}) for d in docs]
     retriever = PermissionedRetriever(
-        InMemoryBackend(stored), _authorizer(), strategy=strategy, max_candidates=len(docs) + 1
+        InMemoryBackend(stored), _authorizer(), strategy=strategy, max_candidates=len(docs) + k
     )
     assert [h.id for h in retriever.retrieve(query, subject, k).hits] == oracle_top_k(docs, subject, query, k)
 

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import json
+import pickle
 
 import pytest
 
 from wardowl import (
     And,
     AuthorizationError,
+    CachingAuthorizer,
     Document,
     FunctionAuthorizer,
+    Hit,
     In,
     InMemoryBackend,
     MetadataACLAuthorizer,
@@ -66,6 +71,59 @@ def test_subjects_are_hashable_for_caching():
     assert hash(Subject("bob", ["eng"])) == hash(Subject("bob", ["eng"], {"region": "eu"}))
 
 
+@pytest.mark.parametrize("bad", [lambda: Subject(42), lambda: Subject(b"bob"), lambda: Subject("bob", ["eng", 7])])
+def test_subject_ids_and_groups_are_strings(bad):
+    # 7 and "7" are different filter values, so a group of another type would match differently.
+    with pytest.raises(TypeError):
+        bad()
+
+
+def test_subject_attributes_cannot_change_once_the_subject_is_made():
+    roles, org = ["reader"], {"region": "eu"}
+    attributes = {"tenant": "acme", "roles": roles, "org": org, "tags": {"a"}}
+    subject = Subject("bob", ["eng"], attributes)
+    attributes["tenant"], org["region"] = "globex", "us"
+    roles.append("admin")
+    assert subject.attributes == {"tenant": "acme", "roles": ("reader",), "org": {"region": "eu"}, "tags": {"a"}}
+    changes = [
+        lambda: subject.attributes.__setitem__("tenant", "globex"),
+        lambda: subject.attributes.update(tenant="globex"),
+        lambda: subject.attributes.pop("tenant"),
+        lambda: subject.attributes.clear(),
+        lambda: subject.attributes["org"].__setitem__("region", "us"),
+        lambda: subject.attributes["org"].__ior__({"region": "us"}),
+    ]
+    for change in changes:
+        with pytest.raises(TypeError):
+            change()
+    assert subject.attributes["tenant"] == "acme" and subject.attributes["org"] == {"region": "eu"}
+    # Still a dict for the authorizers that send attributes to a permission service, and copyable.
+    plain = Subject("ann", [], {"tenant": "acme", "roles": ["reader"], "org": {"region": "eu"}})
+    assert json.loads(json.dumps(plain.attributes)) == {"tenant": "acme", "roles": ["reader"], "org": {"region": "eu"}}
+    assert pickle.loads(pickle.dumps(subject)) == subject == copy.deepcopy(subject)  # noqa: S301
+
+
+def test_a_decision_cached_for_a_subject_is_not_reused_after_its_attributes_change():
+    tenants = ["acme"]
+    bob = Subject("bob", [], {"tenants": tenants})
+    authz = CachingAuthorizer(FunctionAuthorizer(lambda s, hits, a: ["acme" in s.attributes["tenants"]] * len(hits)))
+    hits = [Hit("plan", "t", 1.0, {})]
+    assert authz.check(bob, hits) == [True]
+    tenants.remove("acme")  # the caller's list, changed after the decision was cached
+    assert authz.check(Subject("bob", [], {"tenants": []}), hits) == [False]
+
+
+def test_the_in_memory_backend_keeps_its_own_copy_of_the_metadata():
+    stored = {"allowed_groups": ["hr"]}
+    backend = InMemoryBackend([Document("d", "leave", stored)])
+    stored["allowed_groups"].append("eng")  # the caller's dict, changed after it was added
+    hit = backend.search("leave", 1)[0]
+    hit.metadata["allowed_groups"].append("sales")  # a hit handed out, changed by whoever got it
+    hit.metadata["allowed_users"] = ["bob"]
+    assert backend.search("leave", 1)[0].metadata == {"allowed_groups": ["hr"]}
+    assert PermissionedRetriever(backend, MetadataACLAuthorizer()).retrieve("leave", BOB).hits == []
+
+
 # ---- metadata ACL ------------------------------------------------------------------------------
 
 
@@ -119,6 +177,52 @@ def test_postfilter_widens_until_it_finds_k_permitted_hits():
     assert result.complete and result.denied >= 97
 
 
+@pytest.mark.parametrize("strategy", ["prefilter", "postfilter"])
+def test_k_above_max_candidates_is_refused(strategy):
+    # Pre-filtering searched for k hits and re-checked all of them, however large k was.
+    retriever = PermissionedRetriever(
+        InMemoryBackend(corpus()), MetadataACLAuthorizer(), strategy=strategy, max_candidates=3
+    )
+    with pytest.raises(ValueError, match="max_candidates"):
+        retriever.retrieve("leave", BOB, k=4)
+    with pytest.raises(ValueError, match="max_candidates"):
+        asyncio.run(retriever.aretrieve("leave", BOB, k=4))
+    assert retriever.retrieve("leave", ALICE, k=3).hits  # up to max_candidates is fine
+
+
+def test_postfilter_checks_no_more_candidates_than_it_asked_for():
+    class Generous(InMemoryBackend):
+        def search(self, query, k, filter=None):
+            return super().search(query, k + 100, filter)  # ignores k
+
+    asked = []
+
+    def deny(subject, hits, action):
+        asked.append(len(hits))
+        return [False] * len(hits)
+
+    docs = [Document(f"d{i:03d}", "leave", {}) for i in range(300)]
+    authz = FunctionAuthorizer(deny)
+    retriever = PermissionedRetriever(Generous(docs), authz, strategy="postfilter", max_candidates=20)
+    result = retriever.retrieve("leave", BOB, k=2)
+    assert asked == [8, 12] and result.examined == 20 and result.complete is False
+
+
+def test_the_rerank_depth_stays_within_max_candidates():
+    sizes = []
+
+    class Recording(InMemoryBackend):
+        def search(self, query, k, filter=None):
+            sizes.append(k)
+            return super().search(query, k, filter)
+
+    retriever = PermissionedRetriever(
+        Recording(corpus()), MetadataACLAuthorizer(), reranker=lambda query, hits: hits, max_candidates=10
+    )
+    retriever.retrieve("leave", BOB, k=2)
+    assert sizes == [10]  # not the default rerank_depth of 50
+
+
 def test_postfilter_reports_incomplete_results_when_capped():
     docs = [Document(f"d{i:03d}", "leave", {"allowed_groups": ["hr"]}) for i in range(50)]
     docs.append(Document("zzz", "leave", {"allowed_users": ["bob"]}))
@@ -167,6 +271,8 @@ def test_invalid_arguments():
         PermissionedRetriever(backend, authz, overfetch=1)
     with pytest.raises(ValueError):
         PermissionedRetriever(backend, authz).retrieve("leave", BOB, k=0)
+    with pytest.raises(ValueError, match="audit_key"):
+        PermissionedRetriever(backend, authz, audit_key=b"short")  # guessable, unlike 16 random bytes
 
 
 # ---- async -------------------------------------------------------------------------------------

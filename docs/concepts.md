@@ -96,7 +96,10 @@ permitted few among the global top ten.
 `k × overfetch` candidates (default 4), and while fewer than k are permitted it multiplies the
 fetch by `overfetch` and searches again, until k are found, the backend runs out, or
 `max_candidates` (default 1000) is reached. The last case is reported as `complete=False`, so you
-know the result may be missing permitted chunks rather than finding out from users. Subjects who
+know the result may be missing permitted chunks rather than finding out from users.
+`max_candidates` bounds every strategy: a `k` above it raises `ValueError`, a reranker's depth is
+capped at it, and post-filtering checks no more candidates than it asked the backend for, even if
+the backend returns more. Subjects who
 may read only a small share of the corpus are where post-filtering struggles; the
 [benchmarks](benchmarks.md) show by how much.
 

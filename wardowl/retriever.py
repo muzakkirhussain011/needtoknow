@@ -131,7 +131,12 @@ class _Rerank:
     hits: list[Hit]
 
 
-_Op = _FilterFor | _ScopeFor | _Search | _Check | _Rerank
+@dataclass(frozen=True)
+class _Redact:
+    hits: list[Hit]
+
+
+_Op = _FilterFor | _ScopeFor | _Search | _Check | _Rerank | _Redact
 _log = logging.getLogger("wardowl")
 _Plan = Generator[_Op, Any, RetrievalResult]
 RerankFunction = Callable[[Any, list[Hit]], Sequence[Hit]]
@@ -157,7 +162,7 @@ class _Timings:
             elif isinstance(op, _Rerank):
                 self.rerank += elapsed
                 self.reranked += len(op.hits)
-            else:
+            elif not isinstance(op, _Redact):  # redaction is not reported as time in the authorizer
                 self.authorize += elapsed
 
 
@@ -170,20 +175,24 @@ class PermissionedRetriever:
     `action` is passed to the authorizer on every call.
 
     Post-filtering fetches `k * overfetch` candidates and multiplies the fetch by `overfetch`
-    until k permitted hits are found, the backend has no more, or `max_candidates` is reached.
+    until k permitted hits are found, the backend has no more, or `max_candidates` is reached;
+    it never checks more candidates than it asked for, whatever the backend returns.
+    `max_candidates` bounds every retrieval: a `k` above it raises `ValueError`.
     `recheck` checks pre-filtered hits again with the authorizer, so a backend that ignores the
     filter cannot leak; with `recheck=False` they are matched against the filter locally instead,
     which needs the backend to return each chunk's metadata as stored (the conformance kit checks
-    that). `observers` receive a `RetrievalEvent` for every call, and `audit_key` adds an HMAC of
-    the query to those events.
+    that). `observers` receive a `RetrievalEvent` for every call, and `audit_key` (at least 16
+    random bytes) adds an HMAC of the query to those events.
 
     `reranker` reorders the result after the permission check: the retriever finds the top
-    `rerank_depth` hits the subject may read (or k, if larger), the reranker orders them, and the
-    first k are returned. The reranker never sees a chunk the subject may not read.
+    `rerank_depth` hits the subject may read (or k, if larger, and at most `max_candidates`), the
+    reranker orders them, and the first k are returned. The reranker never sees a chunk the
+    subject may not read.
 
     `redactor` (see `wardowl.redaction`) hides parts of the permitted hits, after the check and
     before the reranker: it may change a hit's text and metadata but must return the same hits in
-    the same order, and if it fails the retrieval raises `AuthorizationError`.
+    the same order, and if it fails the retrieval raises `AuthorizationError`. `aretrieve` runs it
+    in a thread, off the event loop.
     """
 
     def __init__(
@@ -216,6 +225,9 @@ class PermissionedRetriever:
             raise ValueError("rerank_depth must be positive")
         if redactor is not None and not (hasattr(redactor, "redact") or callable(redactor)):
             raise TypeError("redactor must have a redact method or be a function")
+        if audit_key is not None and len(audit_key) < 16:
+            # As for RedisCache's signing_key: a short key makes the fingerprints of short queries guessable.
+            raise ValueError("audit_key should be at least 16 random bytes")
         self.redactor = redactor
         self.reranker = reranker
         self.rerank_depth = rerank_depth
@@ -259,7 +271,7 @@ class PermissionedRetriever:
         """The async form of `retrieve`, with the same arguments and guarantees.
 
         It uses the backend's `asearch` and the authorizer's `afilter_for` and `acheck` when they
-        exist, and runs the sync methods in a thread otherwise.
+        exist, and runs the sync methods in a thread otherwise. The redactor runs in a thread.
         """
         started, clock, timings = time.time(), time.perf_counter(), _Timings()
         try:
@@ -343,26 +355,25 @@ class PermissionedRetriever:
     def _plan(self, query: str | Query, subject: Subject, k: int) -> _Plan:
         if k < 1:
             raise ValueError("k must be at least 1")
+        if k > self.max_candidates:
+            raise ValueError(f"k={k} is more than max_candidates={self.max_candidates}")
         if not isinstance(query, (str, Query)):
             raise TypeError(f"a query is a string or a Query, not {type(query).__name__}")
         if self.reranker is None:
-            return self._redacted(subject, (yield from self._permitted(query, k)))
-        result = self._redacted(subject, (yield from self._permitted(query, max(k, self.rerank_depth))))
+            return (yield from self._redacted((yield from self._permitted(query, k))))
+        depth = min(max(k, self.rerank_depth), self.max_candidates)
+        result = yield from self._redacted((yield from self._permitted(query, depth)))
         if not result.hits:
             return result
         # Only hits that passed the check reach the reranker, which can only reorder, score or drop them.
         ranked: list[Hit] = yield _Rerank(query, result.hits)
         return dataclasses.replace(result, hits=ranked[:k])
 
-    def _redacted(self, subject: Subject, result: RetrievalResult) -> RetrievalResult:
+    def _redacted(self, result: RetrievalResult) -> _Plan:
         """`result` with the redactor applied to its hits, which must stay the same hits in order."""
         if self.redactor is None or not result.hits:
             return result
-        redact: Any = getattr(self.redactor, "redact", self.redactor)
-        try:
-            hits = list(redact(subject, list(result.hits)))
-        except Exception as exc:
-            raise AuthorizationError(f"redaction failed: {exc}") from exc
+        hits: list[Hit] = yield _Redact(result.hits)
         if not all(isinstance(h, Hit) for h in hits) or [h.id for h in hits] != [h.id for h in result.hits]:
             raise AuthorizationError("the redactor must return the same hits, in the same order")
         return dataclasses.replace(result, hits=hits)
@@ -408,6 +419,7 @@ class PermissionedRetriever:
         examined = denied = 0
         while True:
             candidates: list[Hit] = yield _Search(query, fetch, scope)
+            candidates = list(candidates)[:fetch]  # a backend that ignores k must not widen the checks
             fresh = [h for h in candidates if h.id not in seen]
             seen.update(h.id for h in fresh)
             if fresh:
@@ -434,12 +446,21 @@ class PermissionedRetriever:
 
     # ---- drivers ---------------------------------------------------------------------------
 
+    def _redact(self, subject: Subject, hits: list[Hit]) -> list[Hit]:
+        redact: Any = getattr(self.redactor, "redact", self.redactor)
+        try:
+            return list(redact(subject, list(hits)))
+        except Exception as exc:
+            raise AuthorizationError(f"redaction failed: {exc}") from exc
+
     def _run(self, op: _Op, subject: Subject) -> Any:
         if isinstance(op, _Search):
             return self.backend.search(op.query, op.k, op.filter)
         if isinstance(op, _Rerank):
             rerank: Any = getattr(self.reranker, "rerank", self.reranker)
             return self._reranked(op.hits, rerank(op.query, list(op.hits)))
+        if isinstance(op, _Redact):
+            return self._redact(subject, op.hits)
         try:
             if isinstance(op, _FilterFor):
                 return self._filter(self.authorizer.filter_for(subject, self.action))
@@ -463,6 +484,10 @@ class PermissionedRetriever:
                 return self._reranked(op.hits, await arerank(op.query, list(op.hits)))
             rerank: Any = getattr(self.reranker, "rerank", self.reranker)
             return self._reranked(op.hits, await asyncio.to_thread(rerank, op.query, list(op.hits)))
+        if isinstance(op, _Redact):
+            # Redactors are plain functions, often regular expressions over every hit's text: not
+            # on the event loop, where they would hold up every other request.
+            return await asyncio.to_thread(self._redact, subject, op.hits)
         try:
             if isinstance(op, (_FilterFor, _ScopeFor)):
                 name = "filter_for" if isinstance(op, _FilterFor) else "scope_for"

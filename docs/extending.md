@@ -85,13 +85,20 @@ def test_my_authorizer_conforms():
 
 `check_backend` checks that a search returns exactly the documents `matches` selects, at most k,
 best first, with text and metadata exactly as stored (the retriever re-checks pre-filtered hits
-against that metadata), that `asearch` agrees with `search`, and that retrieval through
-`PermissionedRetriever` never returns a chunk the subject may not read. For an approximate index
-that may miss matches, pass `exact=False`: a result may then be short, but never wrong.
+against that metadata), that `asearch` returns the same hits as `search` (ids, order, text,
+metadata and scores, with and without a filter), and that retrieval through `PermissionedRetriever`,
+with `retrieve` and `aretrieve` alike, never returns a chunk the subject may not read. Its data
+holds what stores tend to confuse: `1` and `"1"`, `"a"` and `"A"`, one letter composed and
+decomposed, and field names with a dot or letters outside ASCII. A backend may refuse a filter on
+such a field name by raising `ValueError`; it may not answer wrongly. For an approximate index that
+may miss matches, pass `exact=False`: a result may then be short, but never wrong.
 
 `check_authorizer` checks that `check` returns one boolean per hit, that a hit's answer does not
 depend on the rest of the batch, and that `check` agrees with the filter from `filter_for`. If the
-two disagree, pre-filtered and post-filtered results differ.
+two disagree, pre-filtered and post-filtered results differ. It also checks that `acheck`,
+`afilter_for` and `ascope_for`, where they exist, agree with the sync methods, and it empties every
+`CachingAuthorizer` before each call, so a cached answer cannot hide what the authorizer behind it
+does.
 
 A failure raises `ConformanceError` with the seed, the example number, the documents, the filter
 and what came back. For shrinking to a minimal failing example, the same properties can be written

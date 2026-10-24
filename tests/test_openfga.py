@@ -223,6 +223,6 @@ def test_openfga_gives_exactly_the_reference_answer(docs, subject, query, k, str
     store, model = _store_for(docs)
     stored = [Document(d.id, d.text, {**d.metadata, "doc_id": d.id}) for d in docs]
     authz = OpenFGAAuthorizer(FGA_URL, store, authorization_model_id=model, consistency=consistency)
-    retriever = PermissionedRetriever(InMemoryBackend(stored), authz, strategy=strategy, max_candidates=len(docs) + 1)
+    retriever = PermissionedRetriever(InMemoryBackend(stored), authz, strategy=strategy, max_candidates=len(docs) + k)
     result = retriever.retrieve(query, subject, k)
     assert [h.id for h in result.hits] == oracle_top_k(docs, subject, query, k)

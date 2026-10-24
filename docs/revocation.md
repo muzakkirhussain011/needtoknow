@@ -40,6 +40,7 @@ authorizer = CachingAuthorizer(
     OpenFGAAuthorizer(FGA_URL, STORE_ID),
     ttl=30,
     shared=RedisCache(redis_client, signing_key=CACHE_SIGNING_KEY),
+    namespace="openfga-docs",  # one per authorizer configuration
     local_ttl=1,
 )
 ```
