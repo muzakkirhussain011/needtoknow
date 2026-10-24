@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import SecretStr
+from pydantic import PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # A port of 0 turns them off.
     metrics_host: str = "127.0.0.1"
     metrics_port: int = 9464
+
+    # A request body over this many bytes is refused with 413 before it is parsed or the caller is
+    # authenticated. Documents sent to /v1/documents count too: `rampart ingest` has no such limit.
+    max_body_bytes: PositiveInt = 1024 * 1024
 
     top_k: int = 5
     max_context_chars: int = 6000

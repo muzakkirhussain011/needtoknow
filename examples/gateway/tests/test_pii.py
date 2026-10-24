@@ -66,3 +66,15 @@ def test_email_detection_takes_linear_time_on_long_runs():
 def test_an_address_is_masked_from_where_it_starts():
     r = redact("mail:jo.smith@corp.example, or (a@b.example).")
     assert r.text == "mail:[EMAIL_1], or ([EMAIL_2])." and r.counts["EMAIL"] == 2
+
+
+def test_phone_detection_takes_linear_time_on_long_digit_runs():
+    start = time.perf_counter()
+    for text in ("0" * 40000, "+" + "0" * 39999):
+        redact(text)
+    assert time.perf_counter() - start < 2
+
+
+def test_a_phone_number_is_masked_from_where_it_starts():
+    r = redact("ring 00966 55 123 4567 or tel:+966551234567, order 12300966551234567.")
+    assert r.text == "ring [PHONE_1] or tel:[PHONE_2], order 12300966551234567." and r.counts == {"PHONE": 2}

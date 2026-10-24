@@ -5,7 +5,7 @@
 #        -d '{"question": "How many days of annual leave do I get?"}'
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:0.8.7-pg17@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
     environment:
       POSTGRES_USER: rampart
       POSTGRES_PASSWORD: rampart-dev-only
@@ -17,20 +17,21 @@ services:
       retries: 20
 
   opa:
-    image: openpolicyagent/opa:1.21.2-static
+    image: openpolicyagent/opa:1.21.2-static@sha256:0843d2adce51655422e8b95a803629ab9f424803c4bd27876e7f44cce9a2b84d
     command: ["run", "--server", "--addr=0.0.0.0:8181", "--log-level=error", "--ignore=*_test.rego", "/policies"]
     volumes: ["./policies:/policies:ro"]
 
   # Optional local model server. Prefer a GPU host: set RAMPART_LLM_BASE_URL / RAMPART_EMBED_BASE_URL
   # to any Ollama or vLLM endpoint and skip this profile. Local: docker compose --profile local-llm up -d
+  # Pinned to a release and its multi-arch digest, like the Dockerfile's base images.
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.6@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7
     profiles: [local-llm]
     volumes: [ollama:/root/.ollama]
 
   # One-shot: pulls the chat and embedding models into the ollama volume.
   ollama-pull:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.6@sha256:265409e1d931028a8f7d5a32bcbafddd7bffbc6cc629d77efe9560adf692a5e7
     profiles: [local-llm]
     depends_on: [ollama]
     environment: { OLLAMA_HOST: "ollama:11434" }

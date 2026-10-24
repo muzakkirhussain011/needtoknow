@@ -50,9 +50,14 @@ _RULES: tuple[tuple[re.Pattern[str], float, str], ...] = (
     # reads only up to the next image: this runs before the policy decides, and the form without
     # those stops took quadratic time on a question full of "![" or "?".
     (re.compile(r"!\[[^\[\]]*\]\(https?://[^)\s?\[]*\?[^)\s\[]*=", re.I), 0.7, "markdown-image-exfiltration"),
+    # An address starts only where a run of address characters starts, and its parts are bounded
+    # (64 and 63 characters, the most a local part and a domain label hold) and never given back:
+    # from every "to" in a question such as "send.to.send.to..." the unbounded form read to its end.
     (
         re.compile(
-            r"\b(send|post|upload|forward|email)\b.{0,40}\b(to|at)\b.{0,10}(https?://|[\w.+-]+@[\w-]+\.)", re.I | re.S
+            r"\b(send|post|upload|forward|email)\b.{0,40}\b(to|at)\b.{0,10}"
+            r"(https?://|(?<![\w.+-])[\w.+-]{1,64}+@[\w-]{1,63}+\.)",
+            re.I | re.S,
         ),
         0.5,
         "send-data-out",

@@ -10,6 +10,8 @@ GET  /dashboard              usage, denials and audit overview (HTTP Basic: user
 GET  /healthz
 
 Prometheus metrics are not on this port: `rampart serve` serves them on their own (9464).
+A request body over RAMPART_MAX_BODY_BYTES (1 MiB) is refused with 413 before it is parsed or the
+caller is authenticated, and a disabled principal is refused with 403 before any work.
 """
 
 # No `from __future__ import annotations` here: FastAPI must resolve the dependency annotations
@@ -26,6 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from rampart import __version__
 from rampart.audit import InMemoryAuditLog, PostgresAuditLog
@@ -112,6 +115,47 @@ class ChatCompletionRequest(BaseModel):
     collections: list[Name] = Field(default_factory=list, max_length=50)  # Rampart extension; others are ignored
 
 
+class _BodyLimit:
+    """Refuses a request body over `limit` bytes with 413 before the application parses it or
+    authenticates the caller, by its Content-Length and by the bytes actually received, then hands
+    the body on. Without it a 1 GB POST was read and parsed as JSON before the API key was checked."""
+
+    def __init__(self, app: ASGIApp, limit: int) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        too_large = JSONResponse({"detail": "the request body is too large"}, status_code=413)
+        declared = dict(scope.get("headers", [])).get(b"content-length", b"")
+        if declared.isdigit() and (len(declared) > 18 or int(declared) > self.limit):
+            await too_large(scope, receive, send)
+            return
+        body = bytearray()
+        more = True
+        while more:
+            message = await receive()
+            if message["type"] != "http.request":  # the client went away
+                return
+            body += message.get("body", b"")
+            if len(body) > self.limit:
+                await too_large(scope, receive, send)
+                return
+            more = bool(message.get("more_body", False))
+        replayed = False
+
+        async def replay() -> Message:
+            nonlocal replayed
+            if replayed:
+                return await receive()
+            replayed = True
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, replay, send)
+
+
 def create_app(
     settings: Settings | None = None,
     gateway: Gateway | None = None,
@@ -133,6 +177,7 @@ def create_app(
             pool.close()
 
     app = FastAPI(title="Rampart AI Gateway", version=__version__, lifespan=lifespan)
+    app.add_middleware(_BodyLimit, limit=settings.max_body_bytes)
     app.state.metrics = metrics  # served on a port of their own by `rampart serve`, not by this app
 
     def gw(request: Request) -> Gateway:
@@ -151,6 +196,9 @@ def create_app(
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED, "invalid or missing API key", headers={"WWW-Authenticate": "Bearer"}
             )
+        if found.disabled:
+            # Refused here, before its question is masked and scored; the policy denies it as well.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "account disabled")
         return found
 
     @app.exception_handler(PolicyDenied)
@@ -254,6 +302,8 @@ def create_app(
         p = request.app.state.directory.authenticate(creds.password)
         if p is None or not secrets.compare_digest(p.user_id, creds.username):
             raise HTTPException(401, "invalid credentials", headers={"WWW-Authenticate": "Basic"})
+        if p.disabled:
+            raise HTTPException(403, "account disabled")
         g = gw(request)
         g.require_audit_access(p)
         entries = g.audit.recent(2000)
