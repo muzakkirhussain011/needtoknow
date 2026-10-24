@@ -10,8 +10,8 @@ abstract: >-
 authors:
   - family-names: Hussain
     given-names: Syed Muzakkir
-version: 1.6.0
-date-released: 2026-10-23
+version: 2.0.0
+date-released: 2026-10-24
 license: MIT
 repository-code: "https://github.com/muzakkirhussain011/wardowl"
 url: "https://muzakkirhussain011.github.io/wardowl/"

@@ -16,16 +16,17 @@ are released as soon as they are ready, with credit to the reporter unless you p
 ## Supported versions
 
 The latest minor release gets every fix. The minor release before it gets security fixes, as patch
-releases, for six months after its successor came out. Older releases get none, except that a date
-already published below is kept.
+releases, for six months after its successor came out. Older releases get none.
+
+The project was called needtoknow until 2.0.0. needtoknow gets no further releases, security fixes
+included: the fixes its supported lines would have received are in wardowl 2.0.0, and moving to it
+is described in [Upgrading](https://muzakkirhussain011.github.io/wardowl/upgrading.html). The
+dates published for needtoknow 1.3 to 1.6 no longer apply.
 
 | Version | Security fixes | Until |
 |---|---|---|
-| 1.6.x | Yes (latest) | |
-| 1.5.x | Yes | 2027-04-23, six months after 1.6.0 |
-| 1.4.x | Yes | 2027-04-23, six months after 1.5.0 |
-| 1.3.x | Yes | 2027-04-22, six months after 1.4.0 |
-| 1.2.x and earlier | No | |
+| 2.0.x | Yes (latest) | |
+| needtoknow 1.6.x and earlier | No: upgrade to wardowl 2.0 | |
 
 ## How reports are handled
 
@@ -99,5 +100,5 @@ From 1.4.0, each release also carries SLSA build provenance (`wardowl-<version>.
 also stored as a GitHub attestation. With the GitHub CLI:
 
 ```bash
-gh attestation verify wardowl-1.6.0-py3-none-any.whl --repo muzakkirhussain011/wardowl
+gh attestation verify wardowl-2.0.0-py3-none-any.whl --repo muzakkirhussain011/wardowl
 ```
