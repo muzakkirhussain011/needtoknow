@@ -1,6 +1,12 @@
 """Sphinx configuration. Build with: sphinx-build -W -b html docs docs/_build/html"""
 
+import sys
+from pathlib import Path
+
 import wardowl
+
+# Local extensions: discoverability writes page descriptions, sitemap.xml and llms.txt.
+sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 project = "wardowl"
 author = "Syed Muzakkir Hussain"
@@ -14,6 +20,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx_design",
     "sphinx_copybutton",
+    "discoverability",
 ]
 source_suffix = {".md": "markdown"}
 templates_path = ["_templates"]

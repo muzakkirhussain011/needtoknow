@@ -327,6 +327,8 @@ api
 extending
 support
 benchmarks
+faq
+upgrading
 changelog
 contributing
 ```

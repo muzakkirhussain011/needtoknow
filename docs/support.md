@@ -102,7 +102,9 @@ wardowl follows [semantic versioning](https://semver.org). The public API is wha
   (invariant S8 in the [security model](security.md)).
 - **Major releases** (2.0.0) are the only ones that remove or change a public API. Anything removed
   is deprecated first: it emits a `DeprecationWarning` naming its replacement for at least one minor
-  release and at least six months, and the changelog lists it under Deprecated.
+  release and at least six months, and the changelog lists it under Deprecated. The one exception is
+  a security fix that cannot keep the old behaviour: it ships in the next major release without a
+  deprecation period, and the changelog lists it under Security.
 - **Security fixes** reach the latest minor release and, for six months after its successor came
   out, the one before it, as [SECURITY.md](https://github.com/muzakkirhussain011/wardowl/blob/main/SECURITY.md)
   describes. Each advisory names the fixed versions of both.
