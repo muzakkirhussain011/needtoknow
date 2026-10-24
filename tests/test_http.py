@@ -299,11 +299,11 @@ def test_a_connect_or_lookup_that_uses_up_the_timeout_times_out_without_trying_a
     client = JsonClient("http://authz.internal:8181", service="test", timeout=0.5, headers={}, retries=0)
     client._proxied = False  # whatever the proxy variables say
     _, made = _fake_network(monkeypatch, (5.0, None), (0.0, None))
-    with pytest.raises(AuthorizationError, match="timed out after 0.5 s"):
+    with pytest.raises(AuthorizationError, match=r"timed out after 0.5 s"):
         client.post_json("/x", {}, "test")
     assert len(made) == 1 and made[0].timeouts == [0.5] and made[0].closed
     _, made = _fake_network(monkeypatch, (0.0, None), lookup=0.6)  # resolving is not bounded, but counted
-    with pytest.raises(AuthorizationError, match="timed out after 0.5 s"):
+    with pytest.raises(AuthorizationError, match=r"timed out after 0.5 s"):
         client.post_json("/x", {}, "test")
     assert made == []
 
