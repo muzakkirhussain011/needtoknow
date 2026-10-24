@@ -159,7 +159,6 @@ jobs:
   gateway:
     # The example gateway, brought up with Docker Compose as its README says, and used by its demo
     # principals. A job of its own: its stack publishes ports the scenarios job already uses.
-    if: ${{ hashFiles('acceptance/s08_gateway.py') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
