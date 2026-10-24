@@ -1478,15 +1478,19 @@ def disabled_principal(report: Report, run: Run) -> None:
             screened == 0,
             f"guard_input ran {screened:.0f} times",
         )
-        seq_after = top_audit_seq(run)
+        # Each refusal is audited as a denial for the account, and nothing else ran: the records
+        # since then are erin's refusals, apart from dave's own reads of the log.
+        r = run.request("dave reads the refusals", "GET", "/v1/audit", user="dave", params={"limit": 50})
+        entries = [e for e in (parse(r) or []) if isinstance(e, dict) and int(e.get("seq") or 0) > seq_before]
+        refusals = [e for e in entries if e.get("user_id") != "dave"]
         report.check(
-            "the disabled principal's requests reached no audited step",
-            seq_after == seq_before,
-            f"#{seq_before} -> #{seq_after}",
-        )
-        report.note(
-            "as threat-model T6 says, a disabled principal's requests are not audited at all, though the README "
-            "says every request, allowed or denied, is"
+            "each request of the disabled principal is audited as a refusal, and only that",
+            bool(refusals)
+            and all(
+                e.get("user_id") == "erin" and e.get("allowed") is False and "account disabled" in e.get("reasons", [])
+                for e in refusals
+            ),
+            f"records since #{seq_before}: {[(e.get('seq'), e.get('user_id'), e.get('reasons')) for e in entries]}",
         )
     finally:
         done = compose("up", "-d", "--no-deps", "gateway")

@@ -366,7 +366,8 @@ def outcome(call: Callable[[], Any]) -> str:
     try:
         call()
     except Exception as error:  # the exception's type is what the checks compare
-        return type(error).__name__
+        # A ValueError subclass, such as InvalidQuery, is caught by `except ValueError` like its base.
+        return "ValueError" if isinstance(error, ValueError) else type(error).__name__
     return "returned"
 
 

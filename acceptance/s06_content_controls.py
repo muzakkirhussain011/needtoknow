@@ -182,7 +182,8 @@ def outcome(call: Callable[[], Any]) -> str:
     try:
         call()
     except Exception as error:  # the exception's type is what the checks compare
-        return type(error).__name__
+        # A ValueError subclass, such as InvalidQuery, is caught by `except ValueError` like its base.
+        return "ValueError" if isinstance(error, ValueError) else type(error).__name__
     return "returned"
 
 
@@ -310,7 +311,7 @@ def single(co: Company, document: Document, persona: Persona, redactor: Any) -> 
     try:
         hits = retriever.retrieve(MEDICAL, persona.subject, k=1).hits
     except Exception as error:  # the error's type is what the checks compare
-        return None, type(error).__name__
+        return None, "ValueError" if isinstance(error, ValueError) else type(error).__name__
     return (hits[0].text if hits else None), "returned"
 
 
@@ -413,9 +414,13 @@ def edge_cases(report: Report, co: Company, redactor: SpanRedactor, lenient: Spa
         **co.documents[one.id].metadata,
         SPANS: [{"start": 0, "end": len(one.text) + 5, "allowed_groups": ["hr"]}],
     }
+    # docs/redaction.md: a span past the end means the text changed after the spans were written,
+    # so the chunk is hidden whole, for everyone, rather than failing every retrieval that reaches it.
     text, how = single(co, Document(one.id, one.text, beyond), ivan, redactor)
     report.check(
-        "a span past the end of its text raises AuthorizationError", how == "AuthorizationError", f"{how}: {text!r}"
+        "a span past the end of its text hides the chunk whole",
+        how == "returned" and (text is None or (one.text[:40] not in text and not has_pii(text))),
+        f"{how}: {text!r}",
     )
 
 
