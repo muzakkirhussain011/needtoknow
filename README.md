@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/muzakkirhussain011/wardowl/main/docs/_static/brand/wardowl-logo.png" alt="The wardowl logo: a midnight and gold owl guarding a document" width="180">
+</p>
+
 <h1 align="center">wardowl</h1>
 
 <p align="center">
@@ -7,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/wardowl/"><img src="https://img.shields.io/pypi/v/wardowl?color=0e9f8e" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/wardowl/"><img src="https://img.shields.io/pypi/v/wardowl?color=1e2a5a" alt="PyPI version"></a>
   <a href="https://pypi.org/project/wardowl/"><img src="https://img.shields.io/pypi/pyversions/wardowl" alt="Python versions"></a>
   <a href="https://github.com/muzakkirhussain011/wardowl/actions/workflows/ci.yml"><img src="https://github.com/muzakkirhussain011/wardowl/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI"></a>
   <a href="https://muzakkirhussain011.github.io/wardowl/"><img src="https://github.com/muzakkirhussain011/wardowl/actions/workflows/docs.yml/badge.svg?branch=main&amp;event=push" alt="Docs"></a>

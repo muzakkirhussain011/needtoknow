@@ -22,6 +22,18 @@ description: Permission-aware retrieval for RAG. Every user gets only the chunks
 pip install wardowl
 ```
 
+```{raw} html
+<div class="wo-hero-visual">
+  <div class="wo-hero__stage" data-wo-hero tabindex="0" role="img"
+       aria-label="The wardowl logo: a midnight and gold owl guarding a document with a redacted line">
+    <img src="_static/brand/wardowl-poster.webp" alt="" width="640" height="640" fetchpriority="high">
+    <canvas></canvas>
+  </div>
+</div>
+<script type="importmap">{"imports": {"three": "./_static/vendor/three/three.module.js"}}</script>
+<script type="module" src="_static/hero.js"></script>
+```
+
 ## Built for production RAG
 
 A RAG assistant over company documents is only as safe as its retrieval step. If the search ignores

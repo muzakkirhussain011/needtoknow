@@ -1,4 +1,7 @@
 * text=auto eol=lf
 *.png binary
 *.webp binary
+*.glb binary
+*.wasm binary
 # Third-party code: excluded from GitHub language statistics.
+docs/_static/vendor/** linguist-vendored

@@ -6,6 +6,14 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- The README, PyPI page and documentation carry the wardowl logo, a midnight and gold owl guarding a
+  document, with a favicon and a social card. The documentation's front page shows it in 3D: the owl
+  watches, and every ten seconds the redaction bar on its document lifts for a grant or stays for a
+  denial. The model loads after the page, from a 1.5 MB file, and the still image stays for reduced
+  motion, saved data or browsers without WebGL.
+
 ## [2.0.0] - 2026-10-24
 
 The first release named wardowl: until 1.6.0 the project was needtoknow. It adds the Pinecone
